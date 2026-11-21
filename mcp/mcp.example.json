@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "vexa": {
+      "command": "node",
+      "args": ["D:/20533/deskbox/fangwork/Vexa/mcp/vexa-mcp.mjs"],
+      "env": { "VEXA_MCP_ROOT": "D:/20533/deskbox/fangwork/Vexa" }
+    }
+  }
+}

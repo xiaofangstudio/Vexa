@@ -1,0 +1,372 @@
+/** 路径几何：贝塞尔求值、扁平化、包围盒、命中、SVG d 互转。 */
+import type { Anchor, Node, PathNode, Pt, SubPath, TextNode } from "./types";
+
+export const TOL = 3;
+
+export function pt(x: number, y: number): Pt {
+  return { x, y };
+}
+
+export function dist(a: Pt, b: Pt): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** 三次贝塞尔在 t 处取值。 */
+export function cubicAt(p0: Pt, c1: Pt, c2: Pt, p1: Pt, t: number): Pt {
+  const mt = 1 - t;
+  const a = mt * mt * mt;
+  const b = 3 * mt * mt * t;
+  const c = 3 * mt * t * t;
+  const d = t * t * t;
+  return {
+    x: a * p0.x + b * c1.x + c * c2.x + d * p1.x,
+    y: a * p0.y + b * c1.y + c * c2.y + d * p1.y,
+  };
+}
+
+/** 段的两枚控制点：没有手柄就退化成端点，等价于直线。 */
+export function segmentControls(a: Anchor, b: Anchor): [Pt, Pt] {
+  return [
+    a.hOut ?? { x: a.x, y: a.y },
+    b.hIn ?? { x: b.x, y: b.y },
+  ];
+}
+
+export function isStraight(a: Anchor, b: Anchor): boolean {
+  return !a.hOut && !b.hIn;
+}
+
+/** 一条子路径扁平化成折线（闭合路径首尾相接）。 */
+export function flatten(sub: SubPath, steps = 14): Pt[] {
+  const out: Pt[] = [];
+  const { anchors } = sub;
+  if (anchors.length === 0) return out;
+  out.push({ x: anchors[0].x, y: anchors[0].y });
+  const count = sub.closed ? anchors.length : anchors.length - 1;
+  for (let i = 0; i < count; i++) {
+    const a = anchors[i];
+    const b = anchors[(i + 1) % anchors.length];
+    if (isStraight(a, b)) {
+      out.push({ x: b.x, y: b.y });
+      continue;
+    }
+    const [c1, c2] = segmentControls(a, b);
+    for (let s = 1; s <= steps; s++) out.push(cubicAt(a, c1, c2, b, s / steps));
+  }
+  return out;
+}
+
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export function boxOfPoints(points: Pt[]): Box {
+  if (!points.length) return { x: 0, y: 0, w: 0, h: 0 };
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+export function pathPoints(node: PathNode): Pt[] {
+  const pts: Pt[] = [];
+  for (const sub of node.subpaths) for (const p of flatten(sub)) pts.push(p);
+  return pts;
+}
+
+/** 单点文字的近似包围盒：字宽按 0.62em 估，字距、缩放、对齐一起算。 */
+export function textBox(node: TextNode): Box {
+  const lines = node.text.split("\n");
+  const lh = node.size * (node.lineHeight ?? 1.25);
+  const tracking = node.tracking ?? 0;
+  const hs = (node.hScale ?? 100) / 100;
+  const vs = (node.vScale ?? 100) / 100;
+  const longest = Math.max(1, ...lines.map((l) => l.length * node.size * 0.62 + Math.max(0, l.length - 1) * tracking));
+  const w = Math.max(1, longest * Math.abs(hs));
+  const h = Math.max(node.size, lh * lines.length) * Math.abs(vs);
+  const align = node.align ?? "left";
+  const x = node.x + (align === "center" ? -w / 2 : align === "right" ? -w : 0);
+  return { x, y: node.y - (node.baseline ?? 0) - node.size * 1.2, w, h };
+}
+
+export function nodeBox(node: Node): Box {
+  if (node.kind === "path") return boxOfPoints(pathPoints(node));
+  if (node.kind === "text") return textBox(node);
+  if (node.kind === "image") return { x: node.x, y: node.y, w: node.w, h: node.h };
+  return { x: 0, y: 0, w: 0, h: 0 };
+}
+
+export function unionBox(a: Box | null, b: Box): Box {
+  if (!a) return b;
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  const r = Math.max(a.x + a.w, b.x + b.w);
+  const bt = Math.max(a.y + a.h, b.y + b.h);
+  return { x, y, w: r - x, h: bt - y };
+}
+
+function segDist(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return dist(p, a);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/** 多子路径的环绕数判定。 */
+export function pointInPolys(polys: Pt[][], p: Pt): boolean {
+  let winding = 0;
+  for (const poly of polys) {
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      if (a.y <= p.y) {
+        if (b.y > p.y && (b.x - a.x) * (p.y - a.y) - (p.x - a.x) * (b.y - a.y) > 0) winding++;
+      } else if (b.y <= p.y && (b.x - a.x) * (p.y - a.y) - (p.x - a.x) * (b.y - a.y) < 0) {
+        winding--;
+      }
+    }
+  }
+  return winding !== 0;
+}
+
+export function hitPath(node: PathNode, p: Pt, tol = TOL): boolean {
+  const tolDoc = tol;
+  const polys = node.subpaths.map((s) => flatten(s));
+  if (node.fill.kind !== "none" && pointInPolys(polys, p)) return true;
+  const strokeTol = node.stroke.kind === "none" ? tolDoc : Math.max(tolDoc, node.stroke.width / 2 + 1);
+  const widthPad = node.stroke.kind === "none" || !node.stroke.widthPoints
+    ? 0
+    : Math.max(0, node.stroke.widthPoints.reduce((m, q) => Math.max(m, q.left, q.right), 1) - 1) * node.stroke.width / 2;
+  const reach = strokeTol + widthPad;
+  for (const poly of polys) {
+    for (let i = 0; i < poly.length - 1; i++) {
+      if (segDist(p, poly[i], poly[i + 1]) <= reach) return true;
+    }
+    if (poly.length > 2 && segDist(p, poly[0], poly[poly.length - 1]) <= reach) return true;
+  }
+  return false;
+}
+
+export function hitNode(node: Node, p: Pt): boolean {
+  if (node.kind === "path") return hitPath(node, p);
+  const b = nodeBox(node);
+  return p.x >= b.x - 2 && p.x <= b.x + b.w + 2 && p.y >= b.y - 2 && p.y <= b.y + b.h + 2;
+}
+
+/** 路径 → SVG d。数字保留 3 位小数，足够印刷又不臃肿。 */
+export function num(n: number): string {
+  const r = Math.round(n * 1000) / 1000;
+  return String(r);
+}
+
+export function subPathD(sub: SubPath): string {
+  const { anchors } = sub;
+  if (!anchors.length) return "";
+  const parts: string[] = [`M ${num(anchors[0].x)} ${num(anchors[0].y)}`];
+  const count = sub.closed ? anchors.length : anchors.length - 1;
+  for (let i = 0; i < count; i++) {
+    const a = anchors[i];
+    const b = anchors[(i + 1) % anchors.length];
+    if (isStraight(a, b)) {
+      parts.push(`L ${num(b.x)} ${num(b.y)}`);
+    } else {
+      const [c1, c2] = segmentControls(a, b);
+      parts.push(
+        `C ${num(c1.x)} ${num(c1.y)} ${num(c2.x)} ${num(c2.y)} ${num(b.x)} ${num(b.y)}`,
+      );
+    }
+  }
+  if (sub.closed) parts.push("Z");
+  return parts.join(" ");
+}
+
+export function pathD(node: PathNode): string {
+  return node.subpaths.map(subPathD).filter(Boolean).join(" ");
+}
+
+/** 把一段 d 解析成子路径。支持 M/L/C/Q/S/T/H/V/Z 及其相对形式；弧线以折线近似。 */
+export function parseD(d: string): SubPath[] {
+  const tokens = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
+  const subs: SubPath[] = [];
+  let cur: SubPath | null = null;
+  let x = 0;
+  let y = 0;
+  let sx = 0;
+  let sy = 0;
+  let cmd = "";
+  let i = 0;
+  const isNum = (s: string) => /^[-+]?\d*\.?\d+(?:e[-+]?\d+)?$/i.test(s);
+  const push = (ax: number, ay: number) => {
+    if (!cur) {
+      cur = { anchors: [], closed: false };
+      subs.push(cur);
+    }
+    cur.anchors.push({ x: ax, y: ay, hIn: null, hOut: null, smooth: false });
+  };
+
+  const readNum = (): number => {
+    const v = Number(tokens[i]);
+    i++;
+    return v;
+  };
+
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (isNum(t)) {
+      // 隐式重复上一个命令
+    } else {
+      cmd = t;
+      i++;
+    }
+    const rel = cmd === cmd.toLowerCase();
+    const c = cmd.toUpperCase();
+    if (c === "Z") {
+      if (cur) cur.closed = true;
+      x = sx;
+      y = sy;
+      cur = null;
+      continue;
+    }
+    if (c === "M") {
+      const nx = readNum();
+      const ny = readNum();
+      x = rel ? x + nx : nx;
+      y = rel ? y + ny : ny;
+      sx = x;
+      sy = y;
+      cur = { anchors: [{ x, y, hIn: null, hOut: null, smooth: false }], closed: false };
+      subs.push(cur);
+      cmd = rel ? "l" : "L";
+      continue;
+    }
+    if (c === "L") {
+      const nx = readNum();
+      const ny = readNum();
+      x = rel ? x + nx : nx;
+      y = rel ? y + ny : ny;
+      push(x, y);
+      continue;
+    }
+    if (c === "H") {
+      const nx = readNum();
+      x = rel ? x + nx : nx;
+      push(x, y);
+      continue;
+    }
+    if (c === "V") {
+      const ny = readNum();
+      y = rel ? y + ny : ny;
+      push(x, y);
+      continue;
+    }
+    if (c === "C" || c === "Q" || c === "S" || c === "T") {
+      let c1x: number;
+      let c1y: number;
+      let c2x: number;
+      let c2y: number;
+      let ex: number;
+      let ey: number;
+      const last = cur && cur.anchors.length ? cur.anchors[cur.anchors.length - 1] : null;
+      if (c === "C") {
+        c1x = readNum();
+        c1y = readNum();
+        c2x = readNum();
+        c2y = readNum();
+        ex = readNum();
+        ey = readNum();
+        if (rel) {
+          c1x += x; c1y += y; c2x += x; c2y += y; ex += x; ey += y;
+        }
+      } else if (c === "S") {
+        c2x = readNum();
+        c2y = readNum();
+        ex = readNum();
+        ey = readNum();
+        if (rel) { c2x += x; c2y += y; ex += x; ey += y; }
+        const ph = last?.hIn;
+        c1x = ph ? 2 * x - ph.x : x;
+        c1y = ph ? 2 * y - ph.y : y;
+      } else if (c === "Q") {
+        c1x = readNum();
+        c1y = readNum();
+        ex = readNum();
+        ey = readNum();
+        if (rel) { c1x += x; c1y += y; ex += x; ey += y; }
+        c2x = c1x;
+        c2y = c1y;
+      } else {
+        ex = readNum();
+        ey = readNum();
+        if (rel) { ex += x; ey += y; }
+        const ph = last?.hIn;
+        c1x = ph ? 2 * x - ph.x : x;
+        c1y = ph ? 2 * y - ph.y : y;
+        c2x = c1x;
+        c2y = c1y;
+      }
+      if (cur && last) {
+        last.hOut = { x: c1x, y: c1y };
+        cur.anchors.push({ x: ex, y: ey, hIn: { x: c2x, y: c2y }, hOut: null, smooth: false });
+      } else {
+        push(ex, ey);
+      }
+      x = ex;
+      y = ey;
+      continue;
+    }
+    if (c === "A") {
+      // 弧线：取终点，用直线补上（矢量化输出几乎不用弧线）
+      readNum(); readNum(); readNum(); readNum(); readNum();
+      const ex = readNum();
+      const ey = readNum();
+      x = rel ? x + ex : ex;
+      y = rel ? y + ey : ey;
+      push(x, y);
+      continue;
+    }
+    // 未知命令：跳过
+    i++;
+  }
+  // 相邻重合锚点去重
+  return subs
+    .map((s) => ({
+      ...s,
+      anchors: s.anchors.filter((a, idx, arr) => {
+        if (idx === 0) return true;
+        const p = arr[idx - 1];
+        return Math.abs(a.x - p.x) > 1e-9 || Math.abs(a.y - p.y) > 1e-9;
+      }),
+    }))
+    .filter((s) => s.anchors.length > 1);
+}
+
+export function moveNodePoints(node: Node, dx: number, dy: number): void {
+  if (node.kind === "path") {
+    for (const sub of node.subpaths) {
+      for (const a of sub.anchors) {
+        a.x += dx;
+        a.y += dy;
+        if (a.hIn) { a.hIn.x += dx; a.hIn.y += dy; }
+        if (a.hOut) { a.hOut.x += dx; a.hOut.y += dy; }
+      }
+    }
+    return;
+  }
+  if (node.kind === "text" || node.kind === "image") {
+    node.x += dx;
+    node.y += dy;
+  }
+}

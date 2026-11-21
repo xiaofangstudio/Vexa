@@ -1,0 +1,45 @@
+.about-modal {
+  width: min(460px, 88vw);
+}
+
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-5) var(--sp-3);
+}
+
+.about-mark {
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+}
+
+.about-title {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.about-ver {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.about-body {
+  margin: 0;
+  padding: 0 var(--sp-5) var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: 1.7;
+  color: var(--text-2);
+  white-space: pre-line;
+}
+
+.about-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 var(--sp-5) var(--sp-5);
+}

@@ -1,0 +1,591 @@
+/**
+ * 欢迎页：先给留白，再给内容。
+ * 结构 = 顶栏 / 主区（标题 + 双列卡片）/ 底栏。
+ * 参照 Strata 的节奏：1180–1240px 容器、24/32px 间距、卡片 1px 描边 + 扁平底色。
+ */
+
+.start {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: auto;
+}
+
+/* ---------- 顶栏 ---------- */
+.start-top {
+  flex: none;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-6);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 var(--fx-hi-soft);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.brand-name {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.brand-tag {
+  font-size: 11px;
+  color: var(--text-3);
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+
+/* ---------- 主区 ---------- */
+.start-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 20px 48px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.start-hero {
+  padding: 4px 2px 0;
+  animation: rise-in 420ms var(--ease-out) both;
+}
+
+.start-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--text-3);
+  margin-bottom: 14px;
+}
+
+.start-title {
+  margin: 0;
+  font-size: clamp(28px, 3.1vw, 36px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.22;
+}
+
+.start-sub {
+  margin: 12px 0 0;
+  font-size: var(--fs-md);
+  line-height: 1.72;
+  color: var(--text-2);
+  max-width: 720px;
+}
+
+.start-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: var(--sp-4);
+}
+
+.feature-pill {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  font-size: 11.5px;
+  color: var(--text-2);
+  letter-spacing: 0.01em;
+}
+
+/* ---------- 双列 ---------- */
+.start-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  gap: var(--sp-5);
+  align-items: stretch;
+  animation: rise-in 460ms 40ms var(--ease-out) both;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+.create-card {
+  padding: 22px;
+  gap: 16px;
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+
+.card-title {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.card-note {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+/* ---------- 预设 ---------- */
+.presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 9px 10px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease);
+}
+
+.chip:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+
+.chip.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.chip-glyph {
+  width: auto;
+  max-width: 100%;
+  height: 18px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.chip.is-on .chip-glyph {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.chip-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.chip.is-on .chip-label {
+  color: var(--accent);
+}
+
+.chip-note {
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+/* ---------- 尺寸字段 ---------- */
+.create-fields {
+  align-items: flex-end;
+  gap: var(--sp-3);
+}
+
+.create-fields .field {
+  flex: 0 0 104px;
+}
+
+.field-x {
+  flex: none;
+  padding-bottom: 9px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.create-name {
+  flex: 1 1 auto;
+}
+
+/* ---------- 预览 ---------- */
+.canvas-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preview-stage {
+  display: grid;
+  place-items: center;
+  height: 144px;
+  padding: 14px;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background-color: var(--surface-2);
+  background-image:
+    linear-gradient(45deg, var(--editor-mat) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--editor-mat) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--editor-mat) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--editor-mat) 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+}
+
+.preview-paper {
+  max-width: 100%;
+  max-height: 100%;
+  background: var(--paper);
+  box-shadow: var(--shadow-md);
+  animation: board-in 300ms var(--ease-out);
+}
+
+.preview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+/* ---------- 创建 ---------- */
+.create-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: auto;
+}
+
+.create-actions .btn-primary {
+  flex: 0 0 auto;
+  min-width: 176px;
+}
+
+.create-hint {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ---------- 右列 ---------- */
+.start-side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+  align-content: start;
+}
+
+.recent-card {
+  flex: 0 0 auto;
+  height: 322px;
+  padding: 20px 20px 16px;
+  gap: 12px;
+}
+
+.import-card {
+  flex: 0 0 auto;
+  padding: 20px;
+  gap: 12px;
+}
+
+/* ---------- 最近 ---------- */
+.recent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  border-radius: var(--r-sm);
+}
+
+.recent-item:hover {
+  background: var(--hover);
+}
+
+.recent-open {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex: 1;
+  min-width: 0;
+  padding: 8px 6px;
+  text-align: left;
+  border-radius: var(--r-sm);
+}
+
+.recent-thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 46px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  overflow: hidden;
+}
+
+.recent-thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+
+.recent-ph {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.recent-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.recent-name {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-path {
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+.recent-meta {
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.recent-remove {
+  opacity: 0;
+  width: 24px;
+  height: 24px;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.recent-item:hover .recent-remove {
+  opacity: 1;
+}
+
+/* ---------- 空状态 ---------- */
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: var(--sp-5) 0;
+  text-align: center;
+  color: var(--text-3);
+}
+
+.empty-mark {
+  color: var(--text-3);
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+
+.empty-title {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.empty-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  max-width: 260px;
+  line-height: 1.7;
+}
+
+/* ---------- 导入 ---------- */
+.import-hint {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  line-height: 1.7;
+}
+
+.import-ways {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-2);
+}
+
+.import-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ---------- 底栏 ---------- */
+.start-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 44px;
+  padding: 0 var(--sp-6);
+  font-size: 11px;
+  color: var(--text-3);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.foot-label {
+  letter-spacing: 0.02em;
+}
+
+.foot-sep {
+  width: 1px;
+  height: 12px;
+  background: var(--border);
+}
+
+.foot-keys {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-3);
+}
+
+.foot-keys code {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 10.5px;
+}
+
+.foot-note {
+  color: var(--text-3);
+}
+
+/* ---------- 弹层 ---------- */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  background: var(--mask);
+  animation: fade-in 140ms var(--ease);
+}
+
+.modal {
+  width: min(520px, 88vw);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  animation: rise-in 200ms var(--ease-out);
+  overflow: hidden;
+}
+
+.modal-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) var(--sp-2);
+}
+
+.modal-head h3 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.modal-body {
+  padding: 0 var(--sp-4) var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.modal-body p {
+  margin: 0;
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 1100px) {
+  .start-main {
+    padding: var(--sp-5) var(--sp-5) var(--sp-4);
+  }
+
+  .start-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .create-card {
+    padding: var(--sp-5);
+  }
+
+  .recent-card {
+    min-height: 300px;
+  }
+}
+

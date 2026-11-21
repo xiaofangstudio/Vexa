@@ -1,0 +1,147 @@
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  overflow: hidden;
+  background: #05070c;
+  color: #fff;
+  animation: sit-in 420ms var(--ease-out);
+}
+
+@keyframes sit-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.splash--fading {
+  animation: sit-out 600ms var(--ease) forwards;
+  pointer-events: none;
+}
+
+@keyframes sit-out {
+  to {
+    opacity: 0;
+    transform: scale(1.015);
+  }
+}
+
+.splash-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.04);
+  animation: bg-drift 9s var(--ease-out) both;
+}
+
+@keyframes bg-drift {
+  from {
+    transform: scale(1.1);
+    opacity: 0.6;
+  }
+}
+
+/* 左侧渐晕：保证白色文字在任何底图上都够读 */
+.splash-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(4, 6, 11, 0.94) 0%, rgba(4, 6, 11, 0.72) 42%, rgba(4, 6, 11, 0.12) 78%, rgba(4, 6, 11, 0) 100%),
+    linear-gradient(180deg, rgba(4, 6, 11, 0.3), rgba(4, 6, 11, 0.5));
+}
+
+.splash-inner {
+  position: absolute;
+  left: clamp(48px, 7vw, 120px);
+  bottom: clamp(64px, 12vh, 140px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 620px;
+}
+
+.splash-mark {
+  color: #6fc0ff;
+  margin-bottom: 18px;
+  opacity: 0;
+  animation: mark-in 700ms 200ms var(--ease-out) forwards;
+}
+
+@keyframes mark-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.splash-name {
+  font-size: clamp(64px, 9vw, 112px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 0.92;
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.55);
+}
+
+.splash-meta {
+  margin-top: 14px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.splash-slogan {
+  margin-top: 6px;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.splash-loading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  width: 300px;
+  margin-top: 40px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  min-height: 18px;
+}
+
+.splash-pct {
+  flex: none;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+}
+
+.splash-bar {
+  width: 300px;
+  height: 2px;
+  margin-top: 10px;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.splash-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #6fc0ff;
+  border-radius: 2px;
+  transition: width 560ms var(--ease-out);
+}
+
+.splash-foot {
+  position: absolute;
+  left: clamp(48px, 7vw, 120px);
+  bottom: 28px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.42);
+}

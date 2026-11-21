@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Vexa",
+  "version": "0.1.0",
+  "identifier": "studio.xiaofang.vexa",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1430",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Vexa",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true,
+        "resizable": true,
+        "decorations": true,
+        "dragDropEnabled": true,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "fileAssociations": [
+      {
+        "ext": ["vex"],
+        "name": "Vexa 工程文件",
+        "description": "小方工作室 Vexa 矢量图软件工程文件",
+        "role": "Editor"
+      }
+    ],
+    "publisher": "小方工作室",
+    "copyright": "小方工作室 · MIT License",
+    "category": "GraphicsAndDesign",
+    "shortDescription": "全中文、免费开源的矢量图软件（logo / 图标 / 插画）",
+    "longDescription": "Vexa 是小方工作室自研的全中文、永久免费开源（MIT）的矢量图软件，对标 Illustrator 的核心能力：钢笔、路径、布尔、画板、文字，导出 SVG / PNG / PDF。零联网、不上传数据、不带任何 AI 功能。",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "languages": ["SimpChinese"],
+        "displayLanguageSelector": false,
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

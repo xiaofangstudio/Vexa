@@ -1,0 +1,200 @@
+/**
+ * Vexa 设计令牌 —— 与 Strata 同一套语言（同栈、同品牌）。
+ *
+ * 约定：极度扁平、统一圆角（6 / 8 / 12 / 16 / 999）、浅色默认 + 深色可切、
+ * 全应用只有两味：中性黑 + 品牌蓝，品牌蓝为唯一强调色，
+ * 不用重阴影、不用强渐变、严禁紫色与第二强调色。
+ * 所有组件只允许引用这里的变量，不写死颜色。
+ */
+
+:root {
+  /* 圆角：小控件 6，输入与按钮 8，面板 12，大容器 16，胶囊 999 */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-full: 999px;
+
+  /* 间距节奏（4 的倍数） */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* 字号层级 */
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+  --fs-3xl: 34px;
+
+  /* 控件尺寸 */
+  --h-ctl: 34px;
+  --h-ctl-lg: 40px;
+  --h-bar: 44px;
+  --h-tabs: 34px;
+  --h-status: 30px;
+  --w-rail: 88px;
+  --w-dock: 304px;
+
+  /* 品牌蓝：取自 logo 外圈那抹亮蓝（rgb 111,192,255）。
+     浅色主题下压深一档，才能在白底上做文字与主按钮填充。 */
+  --accent: #0f76d6;
+  --accent-hover: #0b62b8;
+  --accent-active: #0a529c;
+  --accent-soft: rgba(15, 118, 214, 0.1);
+  --accent-ring: rgba(15, 118, 214, 0.35);
+  --accent-ink: #ffffff;
+
+  /**
+   * 数字字体。
+   * 不用 monospace：Windows 上会回落到 Courier New，和界面不是一套。
+   * 系统 UI 字体配 tabular-nums 已足够让数字列对齐。
+   */
+  --font-ui: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, -apple-system, sans-serif;
+  --font-num: var(--font-ui);
+  --font-mono: var(--font-ui);
+
+  /* 动效：三味缓动 + 分档时长 */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 280ms;
+  --dur-in: 220ms;
+  --dur-out: 150ms;
+}
+
+/* ---------- 浅色（默认） ---------- */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f4f4f6;
+  --bg-tint: rgba(15, 118, 214, 0.05);
+  --surface: #ffffff;
+  --surface-2: #f4f4f6;
+  --surface-3: #e8e8ec;
+
+  --border: #e6e6ea;
+  --border-strong: #d2d2d8;
+
+  --text: #17171c;
+  --text-2: #5c5c68;
+  --text-3: #8f8f9c;
+
+  --hover: rgba(20, 20, 30, 0.045);
+  --pressed: rgba(20, 20, 30, 0.09);
+
+  --canvas-bg: #ececf0;
+  --checker: #d8d8dc;
+  --danger: #cf4038;
+  --grid-line: rgba(0, 0, 0, 0.1);
+
+  /* 矢量画布：粘贴板点阵、锚点、选中框、辅助线 */
+  --mat-dot: rgba(24, 24, 32, 0.13);
+  --guide: #24a2ff;
+  --anchor: #ffffff;
+  --anchor-ink: #1c1c22;
+  --handle: #0f76d6;
+  --marquee: rgba(15, 118, 214, 0.12);
+
+  --editor-mat: rgba(128, 128, 140, 0.09);
+  --canvas-vignette: rgba(20, 20, 30, 0.07);
+  --toast-bg: rgba(28, 28, 33, 0.92);
+  --toast-ink: #ffffff;
+
+  --paper: #ffffff;
+  --mask: rgba(16, 16, 22, 0.42);
+
+  --shadow-xs: 0 1px 1px rgba(20, 20, 30, 0.04);
+  --shadow-sm: 0 1px 2px rgba(20, 20, 30, 0.05);
+  --shadow-md: 0 6px 20px rgba(20, 20, 30, 0.09);
+  --shadow-lg: 0 20px 56px rgba(20, 20, 30, 0.16);
+}
+
+/* ---------- 深色 ---------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #111114;
+  --bg-tint: rgba(111, 192, 255, 0.08);
+  --surface: #1a1a1f;
+  --surface-2: #232327;
+  --surface-3: #2d2d32;
+
+  --border: #2b2b2f;
+  --border-strong: #3c3c40;
+
+  --text: #eeeef2;
+  --text-2: #a4a4b0;
+  --text-3: #70707d;
+
+  --hover: rgba(255, 255, 255, 0.055);
+  --pressed: rgba(255, 255, 255, 0.1);
+
+  --canvas-bg: #0c0c0f;
+  --checker: #2a2a2e;
+  --danger: #e2766f;
+  --grid-line: rgba(255, 255, 255, 0.12);
+
+  --mat-dot: rgba(255, 255, 255, 0.16);
+  --guide: #4fb0ff;
+  --anchor: #f5f8ff;
+  --anchor-ink: #0e1117;
+  --handle: #6fc0ff;
+  --marquee: rgba(111, 192, 255, 0.14);
+
+  --editor-mat: rgba(255, 255, 255, 0.05);
+  --canvas-vignette: rgba(0, 0, 0, 0.32);
+  --toast-bg: rgba(238, 238, 242, 0.94);
+  --toast-ink: #17171c;
+
+  --paper: #ffffff;
+  --mask: rgba(0, 0, 0, 0.6);
+
+  /* 深色下直接用 logo 里那抹亮蓝本身，配深墨字 */
+  --accent: #6fc0ff;
+  --accent-hover: #8ed0ff;
+  --accent-active: #57aef2;
+  --accent-soft: rgba(111, 192, 255, 0.16);
+  --accent-ring: rgba(111, 192, 255, 0.4);
+  --accent-ink: #06121f;
+
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 20px 56px rgba(0, 0, 0, 0.6);
+}
+
+/* ---- 质感层：不随主题反相的固定观感令牌 ---- */
+:root {
+  --fx-hi: rgba(255, 255, 255, 0.55);
+  --fx-hi-soft: rgba(255, 255, 255, 0.12);
+  --fx-lo: rgba(0, 0, 0, 0.05);
+  --fx-lo-mid: rgba(0, 0, 0, 0.1);
+}
+
+/* ---------- 界面密度 ---------- */
+[data-density="compact"] {
+  --h-ctl: 30px;
+  --h-ctl-lg: 34px;
+  --h-bar: 40px;
+  --h-tabs: 30px;
+  --h-status: 27px;
+  --w-rail: 80px;
+  --w-dock: 272px;
+  --sp-4: 12px;
+  --sp-5: 18px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+}

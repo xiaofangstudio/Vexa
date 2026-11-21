@@ -1,0 +1,28 @@
+/* 画布容器：铺满中间列，指针事件全交给 CanvasView。 */
+
+.cv-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.cv-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  box-shadow:
+    inset 0 10px 28px -22px var(--canvas-vignette),
+    inset 0 -10px 28px -22px var(--canvas-vignette);
+}
+
+.cv-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

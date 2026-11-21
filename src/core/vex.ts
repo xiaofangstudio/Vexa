@@ -1,0 +1,75 @@
+/** .vex 工程文件：版本化 JSON，原子写入在 Rust 侧完成。 */
+import type { Node, VexaDoc } from "./types";
+import { BLEND_MODES } from "./types";
+import { normalizeWidthPoints } from "./width";
+
+export interface VexFile {
+  format: "vexa";
+  version: 1;
+  generator: string;
+  savedAt: string;
+  doc: VexaDoc;
+}
+
+export function serializeVex(doc: VexaDoc): string {
+  const file: VexFile = {
+    format: "vexa",
+    version: 1,
+    generator: "Vexa 0.1.0 · 小方工作室",
+    savedAt: new Date().toISOString(),
+    doc,
+  };
+  return JSON.stringify(file, null, 1);
+}
+
+export function parseVex(text: string): VexaDoc {
+  const data = JSON.parse(text) as Partial<VexFile>;
+  if (!data || data.format !== "vexa") throw new Error("不是 Vexa 工程文件");
+  const doc = data.doc as VexaDoc | undefined;
+  if (!doc || !Array.isArray(doc.root) || typeof doc.nodes !== "object") {
+    throw new Error("工程文件结构不完整");
+  }
+  // 修补缺字段，老版本也能打开
+  doc.artboards = (doc.artboards ?? []).filter((a) => a && a.w > 0 && a.h > 0);
+  if (!doc.artboards.length) doc.artboards = [{ id: "a1", name: "画板 1", x: 0, y: 0, w: 1000, h: 1000, bg: "#ffffff" }];
+  doc.seq = doc.seq ?? 1;
+  doc.name = doc.name ?? "未命名";
+  doc.unit = "px";
+  for (const [id, n] of Object.entries(doc.nodes as Record<string, Node>)) {
+    if (!n.id) n.id = id;
+    if (n.visible === undefined) n.visible = true;
+    if (n.locked === undefined) n.locked = false;
+    if (n.opacity === undefined) n.opacity = 1;
+    if (n.blend && !BLEND_MODES.includes(n.blend)) delete n.blend;
+    if (n.kind === "group" && n.clip && !doc.nodes[n.clip]) delete n.clip;
+    if (n.kind === "path" || n.kind === "text") {
+      if (!n.fill || typeof n.fill !== "object") n.fill = { kind: "none", color: "#000000", opacity: 1 };
+      if ((n.fill.kind === "linear" || n.fill.kind === "radial") && (!n.fill.grad || !Array.isArray(n.fill.grad.stops) || n.fill.grad.stops.length < 2)) {
+        n.fill = { kind: "solid", color: n.fill.color || "#000000", opacity: n.fill.opacity ?? 1 };
+      }
+      if (typeof n.fill.opacity !== "number") n.fill.opacity = 1;
+    }
+    if (n.kind === "text") {
+      if (typeof n.font !== "string" || !n.font) n.font = "Microsoft YaHei";
+      if (typeof n.size !== "number" || !(n.size > 0)) n.size = 28;
+      if (typeof n.text !== "string") n.text = "";
+      if (typeof n.lineHeight !== "number" || !(n.lineHeight > 0.3)) delete n.lineHeight;
+      if (typeof n.tracking !== "number" || !Number.isFinite(n.tracking)) delete n.tracking;
+      if (n.align !== "left" && n.align !== "center" && n.align !== "right") delete n.align;
+      if (typeof n.hScale !== "number" || !(n.hScale > 0)) delete n.hScale;
+      if (typeof n.vScale !== "number" || !(n.vScale > 0)) delete n.vScale;
+      if (typeof n.baseline !== "number" || !Number.isFinite(n.baseline)) delete n.baseline;
+    }
+    if (n.kind === "path" && n.stroke) {
+      if (!Array.isArray(n.stroke.dash)) n.stroke.dash = [];
+      if (typeof n.stroke.width !== "number") n.stroke.width = 1;
+      if (!n.stroke.arrow) n.stroke.arrow = "none";
+      if (n.stroke.widthPoints !== undefined) {
+        const points = normalizeWidthPoints(n.stroke.widthPoints);
+        if (points.length >= 2) n.stroke.widthPoints = points;
+        else delete n.stroke.widthPoints;
+      }
+    }
+  }
+  return doc;
+}

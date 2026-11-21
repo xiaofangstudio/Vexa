@@ -1,0 +1,37 @@
+[package]
+name = "vexa"
+version = "0.1.0"
+description = "Vexa · 小方工作室出品 · 全中文、永久免费开源（MIT）的矢量图软件"
+authors = ["小方工作室"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.77"
+
+# 主入口在 src/main.rs，业务逻辑收在 lib 里，便于单测
+[lib]
+name = "vexa_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# 位图解码：JPG / PNG / WEBP / BMP / GIF / TIFF，全部纯 Rust
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif", "tiff"] }
+# 位图转矢量：visioncortex VTracer（MIT），纯 Rust，无需外部进程
+vtracer = "0.6"
+# 与 vtracer 同源的几何 / 图像基元（PathSimplifyMode 等）
+visioncortex = "0.8"
+base64 = "0.22"
+
+# 体积优先
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

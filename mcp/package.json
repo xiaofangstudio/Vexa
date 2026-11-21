@@ -1,0 +1,17 @@
+{
+  "name": "vexa-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vexa 本地 MCP 服务：stdio 读写 .vex 工程，不联网、不调用任何 AI。",
+  "bin": { "vexa-mcp": "./vexa-mcp.mjs" },
+  "scripts": {
+    "start": "node vexa-mcp.mjs",
+    "selftest": "node vexa-mcp.mjs --selftest"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.5"
+  }
+}

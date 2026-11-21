@@ -1,0 +1,200 @@
+import { useEffect, useState, type ReactNode } from "react";
+import "../styles/tokens.css";
+import "../styles/global.css";
+
+export const zh = {
+  app: {
+    name: "Vexa",
+    tagline: "小方工作室 · 矢量图形",
+    slogan: "拉线成形，编排成图。",
+  },
+  splash: {
+    steps: [
+      "正在准备样式令牌",
+      "正在加载界面字体",
+      "正在初始化矢量引擎",
+      "正在载入工具与面板",
+      "正在打开工作台",
+    ],
+    meta: "小方工作室 · Fangwork 生态 · 全中文矢量图形工具",
+  },
+  start: {
+    title: "新建",
+    note: "选一个预设，或者直接填尺寸。单位：像素。",
+    presets: "常用预设",
+    size: "画板尺寸",
+    width: "宽",
+    height: "高",
+    name: "画板名称",
+    create: "创建画板",
+    recent: "最近工程",
+    recentEmpty: "还没有打开过工程",
+    recentEmptyHint: "新建一个，或者打开 .vex 工程文件。",
+    open: "打开工程",
+    import: "导入图片",
+    importHint: "JPG / PNG / WEBP / BMP / GIF / TIFF",
+    traceHint: "导入后可选择「图像描摹」，把位图转成可编辑矢量。",
+    remove: "从列表移除",
+    foot: "MIT 许可 · 永久免费 · 零联网 · 不上传任何数据",
+    custom: "自定义",
+    untitled: "未命名画板",
+  },
+  menu: {
+    file: "文件",
+    edit: "编辑",
+    object: "对象",
+    text: "文字",
+    view: "视图",
+    window: "窗口",
+    help: "帮助",
+  },
+  doc: {
+    untitled: "未命名",
+  },
+  tool: {
+    select: "选择",
+    direct: "直接选择",
+    pen: "钢笔",
+    line: "直线",
+    pencil: "铅笔",
+    width: "宽度",
+    eyedropper: "吸管",
+    gradient: "渐变",
+    eraser: "橡皮",
+    scissors: "剪刀",
+    smooth: "平滑",
+    rect: "矩形",
+    roundrect: "圆角矩形",
+    ellipse: "椭圆",
+    polygon: "多边形",
+    star: "星形",
+    text: "文字",
+    artboard: "画板",
+    hand: "抓手",
+    zoom: "缩放",
+  },
+  hint: {
+    select: "拖动框选，点击选中对象",
+    direct: "拖动锚点与手柄，双击路径加锚点",
+    pen: "点击加锚点，拖动拉手柄，点回合闭路径，回车结束",
+    line: "拖出一条直线，按住 Shift 锁定 15° 方向",
+    pencil: "按住自由绘制，松手后自动抽稀并平滑成可编辑曲线",
+    width: "在选中描边上拖出宽度点：拖两侧手柄单独调宽，拖中心两侧同时调宽，双击宽度点删除",
+    eyedropper: "点击对象取样：无选中时设为当前样式，有选中时套用其填充、描边与字符样式",
+    gradient: "在选中对象上拖动定义线性渐变方向，Shift 锁 15°；颜色停靠点在右侧属性栏调整",
+    eraser: "按住拖过图形擦除：有选中时只擦选中对象，无选中时擦画笔经过的未锁定路径；闭合填充走布尔减法，线条直接切开",
+    scissors: "点击路径轮廓切开：锚点直接切，点在线段中会先插入锚点",
+    smooth: "按住拖过路径：把经过的锚点向相邻中点收平，重复拖会更顺",
+    rect: "拖出矩形，按住 Shift 画正方形",
+    roundrect: "拖出圆角矩形，圆角半径见上方",
+    ellipse: "拖出椭圆，按住 Shift 画正圆",
+    polygon: "拖出正多边形，边数见上方",
+    star: "拖出星形，角数与内径比见上方",
+    text: "在画板上点击，输入文字",
+    artboard: "拖空白处新建画板；拖画板内部移动，拖边角改大小",
+    hand: "拖动画布，空格键临时切换",
+    zoom: "点击放大，Alt 点击缩小",
+  },
+  btn: {
+    export: "导出",
+    theme: "切换深浅色",
+    undo: "撤销",
+    redo: "重做",
+    close: "关闭",
+    cancel: "取消",
+    ok: "确定",
+    save: "保存",
+    newDoc: "新建",
+  },
+  dock: {
+    properties: "属性",
+    layers: "图层",
+    doc: "画板",
+    position: "位置",
+    size: "尺寸",
+    appearance: "外观",
+    fill: "填充",
+    stroke: "描边",
+    width: "粗细",
+    opacity: "不透明度",
+    none: "无",
+    solid: "纯色",
+    emptyHint: "未选中任何对象",
+    emptyHint2: "用选择工具点一下画板上的图形。",
+    layerName: "图层名称",
+    show: "显示",
+    hide: "隐藏",
+    lock: "锁定",
+    unlock: "解锁",
+    delete: "删除",
+    add: "新建图层",
+    objects: "对象",
+  },
+  trace: {
+    title: "图像描摹",
+    note: "把位图转成可编辑的矢量路径。全程本地计算，不上传任何像素。",
+    preset: "预设",
+    presets: ["高保真照片", "简洁插画", "黑白线稿", "像素画"],
+    colors: "色彩层数",
+    detail: "细节保留",
+    smooth: "曲线平滑",
+    speckle: "忽略碎块",
+    run: "开始描摹",
+    running: "正在描摹…",
+    importAsImage: "置入为图片对象",
+    importAsTrace: "导入并描摹",
+    done: "描摹完成，已插入 {n} 条路径",
+    fail: "描摹失败：{msg}",
+    source: "来源图片",
+  },
+  export: {
+    title: "导出",
+    svg: "SVG 矢量",
+    svgNote: "给开发、给印刷都能用，曲线原样保留",
+    png: "PNG 位图",
+    pngNote: "按画板尺寸渲染，透明背景",
+    scale: "倍率",
+    save: "导出到…",
+    done: "已导出：{path}",
+    fail: "导出失败：{msg}",
+  },
+  vex: {
+    saveTitle: "保存工程",
+    openTitle: "打开工程",
+    filter: "Vexa 工程",
+    imageFilter: "图片",
+    saved: "已保存：{path}",
+    opened: "已打开：{path}",
+    saveFail: "保存失败：{msg}",
+    openFail: "打开失败：{msg}",
+    unsaved: "未保存的改动",
+  },
+  status: {
+    ready: "就绪",
+    objects: "{n} 个对象",
+    zoom: "缩放",
+  },
+  about: {
+    title: "关于 Vexa",
+    body:
+      "Vexa 是小方工作室出品的矢量图软件：钢笔、路径、布尔、画板、文字，导出 SVG / PNG / PDF。\n永久免费、MIT 开源、零联网、不上传任何用户数据、不带任何 AI 功能。",
+    close: "知道了",
+  },
+};
+
+export function useTheme() {
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const saved = localStorage.getItem("vexa.theme");
+    return saved === "dark" ? "dark" : "light";
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("vexa.theme", theme);
+  }, [theme]);
+  const toggle = () => setTheme((t) => (t === "light" ? "dark" : "light"));
+  return { theme, setTheme, toggle };
+}
+
+export function Formatted({ text }: { text: string }): ReactNode {
+  return <>{text}</>;
+}
