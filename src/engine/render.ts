@@ -235,8 +235,8 @@ function drawNode(
       } else {
         ctx.strokeStyle = node.stroke.color;
         ctx.lineWidth = node.stroke.width;
-        ctx.lineJoin = "round";
-        ctx.lineCap = "butt";
+        ctx.lineJoin = node.stroke.join ?? "miter";
+        ctx.lineCap = node.stroke.cap ?? "butt";
         ctx.setLineDash(node.stroke.dash);
         ctx.stroke();
         ctx.setLineDash([]);

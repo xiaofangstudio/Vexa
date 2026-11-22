@@ -43,8 +43,8 @@ try {
     w: 320,
     h: 180,
     radius: 20,
-    fill: { color: "#0f76d6", to: "#9fd8ff", angle: 45 },
-    stroke: { color: "#17171c", width: 2, dash: [8, 4] },
+    fill: { color: "#0f76d6", stops: [{ offset: 0, color: "#0f76d6" }, { offset: 0.45, color: "#9fd8ff" }, { offset: 1, color: "#ffffff" }], angle: 45 },
+    stroke: { color: "#17171c", width: 2, dash: [8, 4], cap: "round", join: "bevel" },
   });
   console.log(`✓ 加圆角矩形 ${shape.id}，锚点 ${shape.anchors}`);
 
@@ -61,7 +61,7 @@ try {
 
   const out = await call("vexa_export_svg", { path: proj });
   const svg = await fs.readFile(out.svg, "utf8");
-  console.log(`✓ 导出 SVG ${out.bytes} 字节，渐变=${svg.includes("linearGradient")}，虚线=${svg.includes("stroke-dasharray")}`);
+  console.log(`✓ 导出 SVG ${out.bytes} 字节，渐变=${svg.includes("linearGradient")}，多色标=${(svg.match(/<stop /g) ?? []).length >= 3}，端帽/连接=${svg.includes('stroke-linecap="round"') && svg.includes('stroke-linejoin="bevel"')}，虚线=${svg.includes("stroke-dasharray")}`);
 
   const val = await call("vexa_validate", { path: proj });
   console.log(`✓ 校验：ok=${val.ok}，问题 ${val.issues.length} 条`);

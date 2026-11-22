@@ -1,6 +1,67 @@
 /** 渐变：画布与 SVG 共用同一套端点计算，保证导出与屏幕一致。 */
 import type { Box } from "./geom";
-import type { Paint } from "./types";
+import type { GradStop, Paint } from "./types";
+
+const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+function safeColor(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+/** 色标归一化：无效项剔除，offset 夹到 0..1，并按位置升序。 */
+export function normalizeGradStops(stops: readonly GradStop[] | undefined, fallback: string): GradStop[] {
+  const valid = (stops ?? [])
+    .filter((s): s is GradStop => !!s && Number.isFinite(s.offset))
+    .map((s) => ({
+      offset: Math.min(1, Math.max(0, s.offset)),
+      color: safeColor(s.color, fallback),
+    }))
+    .sort((a, b) => a.offset - b.offset);
+  if (valid.length >= 2) return valid;
+  if (valid.length === 1) {
+    return [
+      { offset: 0, color: valid[0].color },
+      { offset: 1, color: "#ffffff" },
+    ];
+  }
+  return [
+    { offset: 0, color: fallback },
+    { offset: 1, color: "#ffffff" },
+  ];
+}
+
+/** 取一个填充当前实际会画的色标；画布、面板预览、导出都用它。 */
+export function paintStops(p: Paint): GradStop[] {
+  return normalizeGradStops(p.grad?.stops, p.color || "#000000");
+}
+
+function parseHex(color: string): [number, number, number] | null {
+  if (!HEX.test(color)) return null;
+  let hex = color.slice(1);
+  if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+  if (hex.length === 8) hex = hex.slice(0, 6);
+  return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
+}
+
+/** 两个色标之间插入新色标：取最大空档，颜色按 RGB 中点混合，非 hex 色退回左端色。 */
+export function insertGradStop(p: Paint, stops: readonly GradStop[]): { stops: GradStop[]; index: number } {
+  const sorted = normalizeGradStops(stops, p.color || "#000000");
+  let gap = 0;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    gap = Math.max(gap, sorted[i + 1].offset - sorted[i].offset);
+  }
+  const from = sorted.findIndex((s, i) => i < sorted.length - 1 && Math.abs(sorted[i + 1].offset - s.offset - gap) < 1e-6);
+  const left = sorted[from] ?? sorted[0];
+  const right = sorted[from + 1] ?? sorted[sorted.length - 1];
+  const offset = Math.min(1, Math.max(0, (left.offset + right.offset) / 2));
+  const a = parseHex(left.color);
+  const b = parseHex(right.color);
+  const mix = a && b
+    ? `#${a.map((n, i) => Math.round(n + (b[i] - n) * 0.5).toString(16).padStart(2, "0")).join("")}`
+    : left.color;
+  const next = [...sorted, { offset, color: mix }].sort((x, y) => x.offset - y.offset);
+  return { stops: next, index: next.findIndex((s) => s.offset === offset && s.color === mix) };
+}
 
 /** 渐变轴端点（绝对坐标）：过 bbox 中心，长度投到 bbox 上再裁半。 */
 export function gradLine(angle: number, box: Box): { x1: number; y1: number; x2: number; y2: number } {
@@ -29,12 +90,12 @@ export function gradStops(p: Paint): { from: string; to: string; angle: number }
 export function paintPreview(p: Paint): string {
   if (p.kind === "none") return "transparent";
   if (p.kind === "linear") {
-    const { from, to, angle } = gradStops(p);
-    return `linear-gradient(${angle + 90}deg, ${from}, ${to})`;
+    const stops = paintStops(p).map((s) => `${s.color} ${Math.round(s.offset * 1000) / 10}%`).join(", ");
+    return `linear-gradient(${(p.grad?.angle ?? 90) + 90}deg, ${stops})`;
   }
   if (p.kind === "radial") {
-    const { from, to } = gradStops(p);
-    return `radial-gradient(circle at 50% 50%, ${from}, ${to})`;
+    const stops = paintStops(p).map((s) => `${s.color} ${Math.round(s.offset * 1000) / 10}%`).join(", ");
+    return `radial-gradient(circle at 50% 50%, ${stops})`;
   }
   return p.color;
 }
@@ -75,7 +136,7 @@ export function canvasPaint(ctx: CanvasRenderingContext2D, p: Paint, box: Box): 
     const { x1, y1, x2, y2 } = gradLine(p.grad.angle, box);
     g = ctx.createLinearGradient(x1, y1, x2, y2);
   }
-  const stops = p.grad.stops.length ? p.grad.stops : [{ offset: 0, color: p.color }, { offset: 1, color: p.color }];
-  for (const s of stops) g.addColorStop(Math.min(1, Math.max(0, s.offset)), s.color);
+  const stops = paintStops(p);
+  for (const s of stops) g.addColorStop(s.offset, s.color);
   return g;
 }

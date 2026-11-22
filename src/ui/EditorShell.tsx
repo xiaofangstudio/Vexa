@@ -21,8 +21,8 @@ import { docToSVG, svgToPathNodes } from "../core/svg";
 import { offsetPathNode, outlineStrokeNode, smoothPathNode } from "../core/pathfx";
 import { nodeBox, unionBox } from "../core/geom";
 import { groupBox } from "../engine/pick";
-import { noPaint, noStroke, solid, linearPaint, radialPaint, BLEND_MODES, type Artboard, type BlendMode, type GroupNode, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc } from "../core/types";
-import { gradStops, paintPreview } from "../core/paint";
+import { noPaint, noStroke, solid, BLEND_MODES, type Artboard, type BlendMode, type GroupNode, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc } from "../core/types";
+import { insertGradStop, paintPreview, paintStops } from "../core/paint";
 import { fitBoard, zoomAt, type View } from "../engine/view";
 import type { ToolId } from "../engine/render";
 import { useDocStore } from "../stores/docStore";
@@ -1550,6 +1550,9 @@ interface DockProps {
 
 function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBoardIndex, onAlign, onDistribute, onBool, onArrange, collapsed, onCollapse }: DockProps) {
   const single = ids.length === 1 ? doc.nodes[ids[0]] : undefined;
+  const fillStops = single && (single.kind === "path" || single.kind === "text") && (single.fill.kind === "linear" || single.fill.kind === "radial")
+    ? paintStops(single.fill)
+    : [];
   const box = bboxOf(doc, ids);
   const pathCount = ids.filter((id) => doc.nodes[id]?.kind === "path").length;
   const hasSel = ids.length > 0;
@@ -1815,12 +1818,16 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                           setNode((n) => {
                             if (!("fill" in n)) return;
                             const hadGrad = n.fill.kind === "linear" || n.fill.kind === "radial";
-                            const from = hadGrad ? gradStops(n.fill).from : n.fill.color;
-                            const to = hadGrad ? gradStops(n.fill).to : "#ffffff";
+                            const stops = hadGrad ? paintStops(n.fill) : [{ offset: 0, color: n.fill.color }, { offset: 1, color: "#ffffff" }];
+                            const first = stops[0]?.color ?? n.fill.color;
                             if (k === "none") n.fill = noPaint();
-                            else if (k === "solid") n.fill = solid(from, n.fill.opacity);
-                            else if (k === "radial") n.fill = radialPaint(from, to, n.fill.opacity);
-                            else n.fill = linearPaint(from, to, 90, n.fill.opacity);
+                            else if (k === "solid") n.fill = solid(first, n.fill.opacity);
+                            else n.fill = {
+                              kind: k,
+                              color: first,
+                              opacity: n.fill.opacity,
+                              grad: { angle: hadGrad ? (n.fill.grad?.angle ?? 90) : 90, stops: stops.map((s) => ({ ...s })) },
+                            };
                           })
                         }
                       >
@@ -1850,55 +1857,89 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                   )}
                   {(single.fill.kind === "linear" || single.fill.kind === "radial") && (
                     <div className="paint-grad">
-                      <div className="paint-row">
-                        <label className="paint-swatch" style={{ background: gradStops(single.fill).from }} title="起点色">
-                          <input
-                            type="color"
-                            value={gradStops(single.fill).from}
-                            onChange={(e) =>
-                              setNode((n) => {
-                                if (!("fill" in n)) return;
-                                const g = n.fill.grad ?? { angle: 90, stops: [] };
-                                const stops = [{ offset: 0, color: e.target.value }, { offset: 1, color: g.stops[g.stops.length - 1]?.color ?? "#ffffff" }];
-                                n.fill = { ...n.fill, kind: n.fill.kind, color: e.target.value, grad: { angle: g.angle, stops } };
-                              })
-                            }
-                          />
-                        </label>
-                        <label className="paint-swatch" style={{ background: gradStops(single.fill).to }} title="终点色">
-                          <input
-                            type="color"
-                            value={gradStops(single.fill).to}
-                            onChange={(e) =>
-                              setNode((n) => {
-                                if (!("fill" in n)) return;
-                                const g = n.fill.grad ?? { angle: 90, stops: [] };
-                                const stops = [{ offset: 0, color: g.stops[0]?.color ?? n.fill.color }, { offset: 1, color: e.target.value }];
-                                n.fill = { ...n.fill, kind: n.fill.kind, grad: { angle: g.angle, stops } };
-                              })
-                            }
-                          />
-                        </label>
-                        {single.fill.kind === "linear" && (
-                          <div className="grad-angle">
-                            <span className="faint">角度</span>
+                      <div className="grad-bar" style={{ background: paintPreview(single.fill) }} />
+                      <div className="grad-stop-list">
+                        {fillStops.map((stop, i) => (
+                          <div className="grad-stop" key={i}>
+                            <label className="paint-swatch" style={{ background: stop.color }} title={`色标 ${i + 1}`}>
+                              <input
+                                type="color"
+                                value={stop.color}
+                                onChange={(e) => setNode((n) => {
+                                  if (!("fill" in n)) return;
+                                  const g = n.fill.grad ?? { angle: 90, stops: [] };
+                                  const stops = paintStops(n.fill).map((s, j) => (j === i ? { ...s, color: e.target.value } : s));
+                                  n.fill = { ...n.fill, color: stops[0]?.color ?? n.fill.color, grad: { angle: g.angle, stops } };
+                                })}
+                              />
+                            </label>
                             <input
                               className="field-input num"
-                              value={Math.round(gradStops(single.fill).angle * 10) / 10}
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={1}
+                              value={Math.round(stop.offset * 1000) / 10}
                               onChange={(e) => {
                                 const v = Number(e.target.value);
                                 if (!Number.isFinite(v)) return;
                                 setNode((n) => {
                                   if (!("fill" in n)) return;
                                   const g = n.fill.grad ?? { angle: 90, stops: [] };
-                                  n.fill = { ...n.fill, kind: n.fill.kind, grad: { angle: v, stops: g.stops } };
+                                  const stops = paintStops(n.fill).map((s, j) => (j === i ? { ...s, offset: Math.min(1, Math.max(0, v / 100)) } : s));
+                                  n.fill = { ...n.fill, color: stops[0]?.color ?? n.fill.color, grad: { angle: g.angle, stops } };
                                 });
                               }}
                             />
+                            <span className="faint">%</span>
+                            <button
+                              className="grad-stop-del"
+                              disabled={fillStops.length <= 2}
+                              title="删除这个色标"
+                              onClick={() => setNode((n) => {
+                                if (!("fill" in n) || fillStops.length <= 2) return;
+                                const g = n.fill.grad ?? { angle: 90, stops: [] };
+                                const stops = paintStops(n.fill).filter((_, j) => j !== i);
+                                n.fill = { ...n.fill, color: stops[0]?.color ?? n.fill.color, grad: { angle: g.angle, stops } };
+                              })}
+                            >
+                              ×
+                            </button>
                           </div>
-                        )}
+                        ))}
+                        <div className="grad-stop-actions">
+                          <button
+                            className="btn btn-ghost btn-mini"
+                            onClick={() => setNode((n) => {
+                              if (!("fill" in n)) return;
+                              const g = n.fill.grad ?? { angle: 90, stops: [] };
+                              const stops = insertGradStop(n.fill, paintStops(n.fill)).stops;
+                              n.fill = { ...n.fill, color: stops[0]?.color ?? n.fill.color, grad: { angle: g.angle, stops } };
+                            })}
+                          >
+                            ＋ 添加色标
+                          </button>
+                          <span className="faint">{fillStops.length} 个色标</span>
+                        </div>
                       </div>
-                      <div className="grad-bar" style={{ background: paintPreview(single.fill) }} />
+                      {single.fill.kind === "linear" && (
+                        <div className="grad-angle">
+                          <span className="faint">角度</span>
+                          <input
+                            className="field-input num"
+                            value={Math.round((single.fill.grad?.angle ?? 90) * 10) / 10}
+                            onChange={(e) => {
+                              const v = Number(e.target.value);
+                              if (!Number.isFinite(v)) return;
+                              setNode((n) => {
+                                if (!("fill" in n)) return;
+                                const g = n.fill.grad ?? { angle: 90, stops: paintStops(n.fill) };
+                                n.fill = { ...n.fill, kind: n.fill.kind, grad: { angle: v, stops: g.stops } };
+                              });
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </section>
@@ -1945,6 +1986,50 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                         }
                       >
                         <span className="dash-line" style={{ backgroundImage: `repeating-linear-gradient(90deg, currentColor 0 ${dash[0] ?? 8}px, transparent ${dash[0] ?? 8}px ${(dash[0] ?? 8) + (dash[1] ?? 4)}px)` }} />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="dash-row arrow-row">
+                    <span className="faint">端点</span>
+                    {(
+                      [
+                        ["butt", "平头"],
+                        ["round", "圆头"],
+                        ["square", "方头"],
+                      ] as const
+                    ).map(([cap, label]) => (
+                      <button
+                        key={cap}
+                        className={"dash-chip" + ((single.stroke.cap ?? "butt") === cap ? " is-on" : "")}
+                        onClick={() =>
+                          setNode((n) => {
+                            if (n.kind === "path") n.stroke = { ...n.stroke, cap };
+                          })
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="dash-row arrow-row">
+                    <span className="faint">连接</span>
+                    {(
+                      [
+                        ["miter", "尖角"],
+                        ["round", "圆角"],
+                        ["bevel", "斜角"],
+                      ] as const
+                    ).map(([join, label]) => (
+                      <button
+                        key={join}
+                        className={"dash-chip" + ((single.stroke.join ?? "miter") === join ? " is-on" : "")}
+                        onClick={() =>
+                          setNode((n) => {
+                            if (n.kind === "path") n.stroke = { ...n.stroke, join };
+                          })
+                        }
+                      >
                         {label}
                       </button>
                     ))}

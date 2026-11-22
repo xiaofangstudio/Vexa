@@ -1,6 +1,7 @@
 /** .vex 工程文件：版本化 JSON，原子写入在 Rust 侧完成。 */
 import type { Node, VexaDoc } from "./types";
 import { BLEND_MODES } from "./types";
+import { normalizeGradStops } from "./paint";
 import { normalizeWidthPoints } from "./width";
 
 export interface VexFile {
@@ -46,6 +47,10 @@ export function parseVex(text: string): VexaDoc {
       if (!n.fill || typeof n.fill !== "object") n.fill = { kind: "none", color: "#000000", opacity: 1 };
       if ((n.fill.kind === "linear" || n.fill.kind === "radial") && (!n.fill.grad || !Array.isArray(n.fill.grad.stops) || n.fill.grad.stops.length < 2)) {
         n.fill = { kind: "solid", color: n.fill.color || "#000000", opacity: n.fill.opacity ?? 1 };
+      } else if ((n.fill.kind === "linear" || n.fill.kind === "radial") && n.fill.grad) {
+        n.fill.grad.stops = normalizeGradStops(n.fill.grad.stops, n.fill.color || "#000000");
+        if (!Number.isFinite(n.fill.grad.angle)) n.fill.grad.angle = 90;
+        n.fill.color = n.fill.grad.stops[0]?.color ?? n.fill.color;
       }
       if (typeof n.fill.opacity !== "number") n.fill.opacity = 1;
     }
@@ -64,6 +69,8 @@ export function parseVex(text: string): VexaDoc {
       if (!Array.isArray(n.stroke.dash)) n.stroke.dash = [];
       if (typeof n.stroke.width !== "number") n.stroke.width = 1;
       if (!n.stroke.arrow) n.stroke.arrow = "none";
+      if (n.stroke.cap !== "round" && n.stroke.cap !== "square") n.stroke.cap = "butt";
+      if (n.stroke.join !== "round" && n.stroke.join !== "bevel") n.stroke.join = "miter";
       if (n.stroke.widthPoints !== undefined) {
         const points = normalizeWidthPoints(n.stroke.widthPoints);
         if (points.length >= 2) n.stroke.widthPoints = points;

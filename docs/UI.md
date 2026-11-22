@@ -54,6 +54,8 @@
 - 每个 section 标题带 3px 品牌蓝标识，便于在长面板里扫读。
 - 标签条最右侧有收起按钮；收起时宽度过渡到 0，画布右侧出现“‹ 面板”恢复按钮。
 - 面板开合或窗口缩放时，画布保持视口中心对应的文档位置不变，不会把画板甩到一边。
+- 填充段：实色 / 线性 / 径向 / 无一排切换；渐变时给出预览条、色标行（颜色、百分比、删除）和“添加色标”；线性渐变另有角度输入。
+- 描边段：颜色、粗细、线型、端点（平头/圆头/方头）、连接（尖角/圆角/斜角）、箭头分组显示；端点/连接只对普通均匀描边生效。
 
 ## 画布右键
 
@@ -90,3 +92,14 @@
 - 主题：浅色 / 深色均完成截图检查。
 - 截图：`docs/shots/ux-v13-start4.png`、`ux-v13-editor4.png`、`ux-v13-collapsed4.png`、`ux-v13-textmenu2.png`、`ux-v13-ctx2.png`、`ux-v13-dark.png`、`ux-v13-start-dark.png`。
 - 真实 Tauri 窗口截图：`docs/shots/ux-v13-real-start.png`、`ux-v13-real-editor.png`（150% 系统缩放，欢迎页与编辑壳均完整可见）。
+
+## 验收记录（2026-11-22，第十四批）
+
+- `npx tsc --noEmit` 通过；`npm run build` 通过：77 modules，JS 435.30 kB，CSS 46.83 kB。
+- 画布实测：矩形切线性渐变后添加两次色标得到 4 行；四色分别设为 `#0f76d6 / #00d0f8 / #e5484d / #ffffff`，画布渐变条与预览一致。
+- 色标删除：4 行删除最后一行变 3 行，再次添加恢复 4 行；最少 2 行时删除按钮禁用。
+- 描边：选中路径后“端点”圆头、“连接”斜角均进入选中态；右侧面板文本顺序为“线型 → 端点 → 连接 → 箭头”。
+- SVG / `.vex`：冒烟输出 3 个 `<stop>`、`stroke-linecap="round"`、`stroke-linejoin="bevel"`，`.vex` 往返色标=3、cap=round、join=bevel。
+- MCP：`--selftest` 通过；端到端导出 SVG 同时含渐变、多色标、端帽/连接、虚线，校验 0 问题。
+- 截图：`docs/shots/v14-gradient.png`、`docs/shots/v14-stroke.png`。
+- 真实 Tauri/WebView2 窗口：四色标渐变 + 圆头/斜角见 `docs/shots/v14-real-editor.png`；开放直线设为 14px、圆头后画布确实显示粗线与圆端，见 `docs/shots/v14-real-line3.png`。

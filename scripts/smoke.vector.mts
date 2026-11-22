@@ -103,6 +103,7 @@ console.log(
 import { docToSVG, parseTransform } from "../src/core/svg";
 import { linearPaint, noStroke, solid } from "../src/core/types";
 import { gradLine } from "../src/core/paint";
+import { insertGradStop, paintStops } from "../src/core/paint";
 
 const d6 = createDoc("t6", 600, 400);
 const gp = rectPath("gp", "渐变矩形", 20, 20, 300, 180);
@@ -118,6 +119,45 @@ console.log(
   "url=" + svg.includes('fill="url(#g0)"'),
   "dash=" + svg.includes("stroke-dasharray"),
   "axis=" + [Math.round(line.x1), Math.round(line.y1), Math.round(line.x2), Math.round(line.y2)].join(","),
+);
+
+// 第十四批：多色标 / 描边端点与连接
+const d6b = createDoc("t6b", 600, 400);
+const ms = rectPath("ms", "多色渐变", 40, 40, 240, 140);
+ms.fill = {
+  kind: "linear",
+  color: "#0f76d6",
+  opacity: 1,
+  grad: {
+    angle: 45,
+    stops: [
+      { offset: 1, color: "#e5484d" },
+      { offset: 0, color: "#0f76d6" },
+      { offset: 0.45, color: "#ffffff" },
+    ],
+  },
+};
+ms.stroke = { kind: "solid", color: "#17171c", opacity: 1, width: 4, dash: [], cap: "round", join: "bevel" };
+d6b.nodes.ms = ms;
+d6b.root.push("ms");
+const msSvg = docToSVG(d6b);
+const sortedStops = paintStops(ms.fill);
+const inserted = insertGradStop(ms.fill, sortedStops);
+const msBack = parseVex(serializeVex(d6b));
+const msBackNode = msBack.nodes.ms;
+console.log(
+  "multi-stop svg:",
+  "stops=" + (msSvg.match(/<stop /g) ?? []).length,
+  "cap=" + msSvg.includes('stroke-linecap="round"'),
+  "join=" + msSvg.includes('stroke-linejoin="bevel"'),
+  "sorted=" + sortedStops.map((s) => s.offset).join(","),
+  "inserted=" + inserted.stops.length + "@" + inserted.stops[inserted.index]?.offset,
+);
+console.log(
+  "multi-stop vex:",
+  "stops=" + (msBackNode?.kind === "path" ? msBackNode.fill.grad?.stops.length : 0),
+  "cap=" + (msBackNode?.kind === "path" ? msBackNode.stroke.cap : "-"),
+  "join=" + (msBackNode?.kind === "path" ? msBackNode.stroke.join : "-"),
 );
 
 // 旧工程兼容：缺 grad 的 linear 填充要退回实色，不能崩

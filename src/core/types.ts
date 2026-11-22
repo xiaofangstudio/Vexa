@@ -29,12 +29,19 @@ export interface WidthPoint {
   right: number;
 }
 
+export type StrokeCap = "butt" | "round" | "square";
+export type StrokeJoin = "miter" | "round" | "bevel";
+
 export interface Stroke {
   kind: PaintKind;
   color: string;
   opacity: number;
   width: number;
   dash: number[];
+  /** 开放子路径两端端帽；默认 butt。 */
+  cap?: StrokeCap;
+  /** 子路径拐角连接；默认 miter。 */
+  join?: StrokeJoin;
   /** 端点箭头，仅对开放子路径的末端生效。 */
   arrow?: "none" | "triangle" | "open" | "diamond";
   /** 非均匀描边宽度点；缺省或少于 2 个时按均匀宽度绘制。 */
@@ -204,6 +211,8 @@ export const noStroke = (color = "#17171c"): Stroke => ({
   opacity: 1,
   width: 1,
   dash: [],
+  cap: "butt",
+  join: "miter",
 });
 
 export function anchorAt(x: number, y: number, smooth = false): Anchor {

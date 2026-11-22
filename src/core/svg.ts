@@ -1,6 +1,6 @@
 /** SVG 导出与 SVG → Vexa 节点解析（描摹结果走这里）。 */
 import { pathD, parseD, textBox } from "./geom";
-import { gradLine, radialGeom } from "./paint";
+import { gradLine, paintStops, radialGeom } from "./paint";
 import { widthOutline } from "./width";
 import {
   noPaint,
@@ -77,7 +77,7 @@ function nodeBBox(node: Node): BBox {
 /** 填充属性；渐变顺手把 defs 塞进收集器。 */
 function fillAttrs(fill: Paint, box: BBox, defs: string[], id: string): string {
   if (fill.kind === "none") return ` fill="none"`;
-  const stops = (fill.grad?.stops.length ? fill.grad.stops : [{ offset: 0, color: fill.color }, { offset: 1, color: fill.color }])
+  const stops = paintStops(fill)
     .map((s) => `      <stop offset="${round(s.offset)}" stop-color="${s.color}"/>`)
     .join("\n");
   if (fill.kind === "radial") {
@@ -116,6 +116,7 @@ function arrowMarker(stroke: Stroke, defs: string[], id: string): string {
 function strokeAttrs(stroke: Stroke, defs: string[], id: string): string {
   if (stroke.kind === "none") return ` stroke="none"`;
   let s = ` stroke="${stroke.color}" stroke-opacity="${round(stroke.opacity)}" stroke-width="${round(stroke.width)}"`;
+  s += ` stroke-linecap="${stroke.cap ?? "butt"}" stroke-linejoin="${stroke.join ?? "miter"}"`;
   if (stroke.dash.length) s += ` stroke-dasharray="${stroke.dash.map(round).join(" ")}"`;
   s += arrowMarker(stroke, defs, id);
   return s;

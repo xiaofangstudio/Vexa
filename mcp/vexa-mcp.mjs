@@ -281,12 +281,20 @@ function rotateNode(node, deg, cx, cy) {
 function paintArgOf(fill, fallback = "#0f76d6") {
   const f = fill ?? {};
   const from = color(f.color, fallback);
-  const stops = f.to
-    ? [
-        { offset: 0, color: from },
-        { offset: 1, color: color(f.to, "#ffffff") },
-      ]
-    : null;
+  const listed = Array.isArray(f.stops)
+    ? f.stops
+        .filter((s) => s && Number.isFinite(s.offset))
+        .map((s) => ({ offset: Math.min(1, Math.max(0, s.offset)), color: color(s.color, from) }))
+        .sort((a, b) => a.offset - b.offset)
+    : [];
+  const stops = listed.length >= 2
+    ? listed
+    : f.to
+      ? [
+          { offset: 0, color: from },
+          { offset: 1, color: color(f.to, "#ffffff") },
+        ]
+      : null;
   if (stops) {
     const kind = f.kind === "radial" ? "radial" : "linear";
     return { kind, color: from, opacity: num(f.opacity, 1), grad: { angle: num(f.angle, 90), stops } };
@@ -295,11 +303,13 @@ function paintArgOf(fill, fallback = "#0f76d6") {
 }
 
 function strokeOf(stroke) {
-  if (!stroke) return { kind: "none", color: "#17171c", opacity: 1, width: 1, dash: [], arrow: "none" };
+  if (!stroke) return { kind: "none", color: "#17171c", opacity: 1, width: 1, dash: [], cap: "butt", join: "miter", arrow: "none" };
   const dash = Array.isArray(stroke.dash) ? stroke.dash.filter((n) => Number.isFinite(n) && n >= 0) : [];
   const width = num(stroke.width, 1);
+  const cap = ["butt", "round", "square"].includes(stroke.cap) ? stroke.cap : "butt";
+  const join = ["miter", "round", "bevel"].includes(stroke.join) ? stroke.join : "miter";
   const arrow = ["none", "triangle", "open", "diamond"].includes(stroke.arrow) ? stroke.arrow : "none";
-  return { kind: width > 0 ? "solid" : "none", color: color(stroke.color, "#17171c"), opacity: num(stroke.opacity, 1), width, dash, arrow };
+  return { kind: width > 0 ? "solid" : "none", color: color(stroke.color, "#17171c"), opacity: num(stroke.opacity, 1), width, dash, cap, join, arrow };
 }
 
 function addShapeNode(doc, spec) {
@@ -507,6 +517,7 @@ function docToSVG(doc) {
       let stroke = ` stroke="none"`;
       if (n.stroke && n.stroke.kind !== "none" && n.stroke.width > 0) {
         stroke = ` stroke="${n.stroke.color}" stroke-opacity="${round(n.stroke.opacity ?? 1)}" stroke-width="${round(n.stroke.width)}"`;
+        stroke += ` stroke-linecap="${n.stroke.cap ?? "butt"}" stroke-linejoin="${n.stroke.join ?? "miter"}"`;
         if (n.stroke.dash?.length) stroke += ` stroke-dasharray="${n.stroke.dash.map(round).join(" ")}"`;
         const hasOpen = (n.subpaths ?? []).some((s) => !s.closed && s.anchors.length > 1);
         if (hasOpen) stroke += arrowAttrs(n.stroke, defs, `a${seq}`);
@@ -559,7 +570,12 @@ const pathArg = z.string().describe("工程绝对路径，必须以 .vex 结尾�
 const fillArg = z
   .object({
     color: z.string().optional().describe("#rrggbb 起点色/实色"),
-    to: z.string().optional().describe("填了就是渐变，作为终点色"),
+    to: z.string().optional().describe("两色渐变的终点色"),
+    stops: z
+      .array(z.object({ offset: z.number().min(0).max(1), color: z.string() }))
+      .min(2)
+      .optional()
+      .describe("多色渐变；优先于 to，offset 0..1"),
     kind: z.enum(["linear", "radial"]).optional().describe("渐变类型，默认 linear"),
     angle: z.number().optional().describe("线性渐变角度，0 向右、90 向下"),
     opacity: z.number().min(0).max(1).optional(),
@@ -570,6 +586,8 @@ const strokeArg = z
     color: z.string().optional(),
     width: z.number().min(0).optional(),
     dash: z.array(z.number().min(0)).optional().describe("虚线节奏，如 [6,4]"),
+    cap: z.enum(["butt", "round", "square"]).optional().describe("开放路径端帽"),
+    join: z.enum(["miter", "round", "bevel"]).optional().describe("拐角连接"),
     arrow: z.enum(["none", "triangle", "open", "diamond"]).optional().describe("开放路径末端箭头"),
     opacity: z.number().min(0).max(1).optional(),
   })
@@ -601,7 +619,7 @@ server.registerTool(
         },
         pathNode: { subpaths: [{ anchors: [{ x, y, hIn, hOut, smooth }], closed }], fill, stroke, blend, clip },
         paint: "none | solid{color,opacity} | linear{grad:{angle,stops[]},opacity} | radial{grad:{stops[]},opacity}",
-        stroke: "none | solid{color,width,dash[],arrow}",
+        stroke: "none | solid{color,width,dash[],cap,join,arrow}",
         extra: { blend: "16 档，同 CSS mix-blend-mode", clip: "组字段：裁切轮廓子节点 id" },
       },
       shapes: ["rect", "roundrect", "ellipse", "polygon", "star"],
@@ -737,7 +755,7 @@ server.registerTool(
   "vexa_set_paint",
   {
     title: "修改填充 / 描边",
-    description: "改指定对象的填充与描边；id 省略时改最上层对象。fill 给 to 即为线性渐变，stroke.width=0 等于去掉描边。",
+    description: "改指定对象的填充与描边；id 省略时改最上层对象。fill 给 to 或 stops 即为渐变，stroke.width=0 等于去掉描边；cap/join 控制端帽与拐角。",
     inputSchema: {
       path: pathArg,
       id: z.string().optional(),
@@ -905,8 +923,8 @@ server.registerTool(
 
 async function selftest() {
   const doc = newDoc("自检", 800, 600, "#ffffff");
-  addShapeNode(doc, { shape: "star", x: 100, y: 100, w: 300, h: 300, points: 5, inner: 0.5, fill: { color: "#0f76d6", to: "#ffffff" } });
-  addShapeNode(doc, { shape: "roundrect", x: 20, y: 20, w: 200, h: 120, radius: 18, stroke: { color: "#17171c", width: 2, dash: [6, 4] } });
+  addShapeNode(doc, { shape: "star", x: 100, y: 100, w: 300, h: 300, points: 5, inner: 0.5, fill: { color: "#0f76d6", stops: [{ offset: 0, color: "#0f76d6" }, { offset: 0.45, color: "#ffffff" }, { offset: 1, color: "#e5484d" }] } });
+  addShapeNode(doc, { shape: "roundrect", x: 20, y: 20, w: 200, h: 120, radius: 18, stroke: { color: "#17171c", width: 2, dash: [6, 4], cap: "round", join: "bevel" } });
   const node = pickNode(doc, undefined);
   translateNode(node, 5, 5);
   const svg = docToSVG(doc);
@@ -915,7 +933,9 @@ async function selftest() {
     ["文档结构", doc.format === "vexa" && doc.root.length === 2],
     ["星形锚点", doc.nodes[doc.root[0]].subpaths[0].anchors.length === 10],
     ["渐变写入", svg.includes("linearGradient")],
+    ["多色标", (svg.match(/<stop /g) ?? []).length >= 3],
     ["虚线写入", svg.includes("stroke-dasharray")],
+    ["端帽/连接", svg.includes('stroke-linecap="round"') && svg.includes('stroke-linejoin="bevel"')],
     ["摘要可序列化", JSON.stringify(summary).length > 100],
     ["路径守卫生效", (() => {
       try {
