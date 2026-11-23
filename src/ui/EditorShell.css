@@ -1192,6 +1192,23 @@
   opacity: 1;
 }
 
+.layer-caret {
+  flex: none;
+  width: 16px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+}
+.layer-caret svg { transition: transform .12s ease; transform: rotate(-90deg); }
+.layer-caret.is-open svg { transform: rotate(0deg); }
+.layer-caret:hover { color: var(--text); }
+.layer-caret-space { flex: none; width: 16px; }
+
 .layer-eye:hover,
 .layer-lock:hover {
   color: var(--text);
@@ -1424,15 +1441,19 @@
 /* 导出卡片 */
 .export-cards {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-2);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.modal.export-modal {
+  width: min(620px, 92vw);
 }
 
 .export-card {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 12px;
+  padding: 10px 11px;
   text-align: left;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1604,9 +1625,47 @@
 
 .grad-stop {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) 12px 22px;
+  grid-template-columns: 26px minmax(0, 1fr) 68px 22px;
   align-items: center;
-  gap: 5px;
+  gap: 4px 5px;
+}
+
+.grad-position,
+.grad-alpha {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.grad-alpha .field-input {
+  max-width: 44px;
+}
+
+.grad-position span,
+.grad-alpha span {
+  flex: none;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.grad-mid {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 31px;
+  padding-right: 26px;
+}
+
+.grad-mid .field-input {
+  width: 54px;
+  height: 22px;
+  flex: none;
+}
+
+.grad-mid span {
+  white-space: nowrap;
 }
 
 .grad-stop .paint-swatch {

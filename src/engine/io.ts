@@ -48,10 +48,10 @@ export async function pickImage(): Promise<string | null> {
   return typeof r === "string" ? r : null;
 }
 
-export async function pickExport(defaultName: string, ext: "svg" | "png"): Promise<string | null> {
+export async function pickExport(defaultName: string, ext: "svg" | "png" | "pdf"): Promise<string | null> {
   if (!isTauri()) return null;
   const r = await saveDialog({
-    title: ext === "svg" ? "导出 SVG" : "导出 PNG",
+    title: ext === "svg" ? "导出 SVG" : ext === "png" ? "导出 PNG" : "导出 PDF",
     defaultPath: `${defaultName || "未命名"}.${ext}`,
     filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
   });
@@ -62,12 +62,29 @@ export async function readTextFile(path: string): Promise<string> {
   return invoke<string>("read_text_file", { path });
 }
 
+export async function readBinaryBase64(path: string): Promise<string> {
+  return invoke<string>("read_binary_file", { path });
+}
+
 export async function writeTextFile(path: string, text: string): Promise<void> {
   await invoke("write_text_file", { path, text });
 }
 
 export async function writeBinaryFile(path: string, base64: string): Promise<void> {
   await invoke("write_binary_file", { path, base64 });
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let out = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    out += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(out);
+}
+
+export async function writeBinaryBytes(path: string, bytes: Uint8Array): Promise<void> {
+  await writeBinaryFile(path, bytesToBase64(bytes));
 }
 
 export interface TraceOptions {
@@ -150,7 +167,7 @@ export async function exportPNG(doc: VexaDoc, path: string, scale: number, board
 
 /** 读本地图片为 data URL（置入用）。 */
 export async function readImageDataURL(path: string): Promise<{ dataUrl: string; w: number; h: number }> {
-  const base64 = await invoke<string>("read_binary_file", { path });
+  const base64 = await readBinaryBase64(path);
   const mime = mimeOf(path);
   const dataUrl = `data:${mime};base64,${base64}`;
   const img = new Image();

@@ -7,6 +7,10 @@ export type PaintKind = "none" | "solid" | "linear" | "radial";
 export interface GradStop {
   offset: number;
   color: string;
+  /** 色标自身透明度 0..1；缺省为 1。与填充整体 opacity 相乘。 */
+  alpha?: number;
+  /** 与上一个色标之间的插值中点 0..1；缺省 0.5。首个色标忽略。 */
+  midpoint?: number;
 }
 
 /** 线性渐变：角度按数学方向（0° 向右，90° 向下）。径向渐变复用 stops，中心在 bbox 中心。 */

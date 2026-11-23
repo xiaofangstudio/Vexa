@@ -284,7 +284,12 @@ function paintArgOf(fill, fallback = "#0f76d6") {
   const listed = Array.isArray(f.stops)
     ? f.stops
         .filter((s) => s && Number.isFinite(s.offset))
-        .map((s) => ({ offset: Math.min(1, Math.max(0, s.offset)), color: color(s.color, from) }))
+        .map((s) => {
+          const stop = { offset: Math.min(1, Math.max(0, s.offset)), color: color(s.color, from) };
+          if (Number.isFinite(s.alpha)) stop.alpha = Math.min(1, Math.max(0, s.alpha));
+          if (Number.isFinite(s.midpoint)) stop.midpoint = Math.min(1, Math.max(0, s.midpoint));
+          return stop;
+        })
         .sort((a, b) => a.offset - b.offset)
     : [];
   const stops = listed.length >= 2
@@ -463,12 +468,72 @@ function pathD(node) {
   return parts.join(" ");
 }
 
+function gradStopsOf(fill) {
+  const fallback = color(fill?.color, "#000000");
+  const raw = Array.isArray(fill?.grad?.stops) ? fill.grad.stops : [];
+  const valid = raw
+    .filter((s) => s && Number.isFinite(s.offset))
+    .map((s) => {
+      const stop = { offset: Math.min(1, Math.max(0, s.offset)), color: color(s.color, fallback) };
+      if (Number.isFinite(s.alpha)) stop.alpha = Math.min(1, Math.max(0, s.alpha));
+      if (Number.isFinite(s.midpoint)) stop.midpoint = Math.min(1, Math.max(0, s.midpoint));
+      return stop;
+    })
+    .sort((a, b) => a.offset - b.offset);
+  return valid.length >= 2 ? valid : null;
+}
+
+const stopAlphaOf = (s) => (Number.isFinite(s.alpha) ? Math.min(1, Math.max(0, s.alpha)) : 1);
+
+function mixStop(a, b, t) {
+  const ca = a.color.slice(1).match(/../g)?.map((h) => parseInt(h, 16));
+  const cb = b.color.slice(1).match(/../g)?.map((h) => parseInt(h, 16));
+  const aa = stopAlphaOf(a);
+  const ab = stopAlphaOf(b);
+  const alpha = aa + (ab - aa) * t;
+  if (!ca || !cb) return { color: t < 0.5 ? a.color : b.color, alpha };
+  const rgb = ca.map((n, i) => Math.round(n + (cb[i] - n) * t));
+  return { color: `#${rgb.map((n) => n.toString(16).padStart(2, "0")).join("")}`, alpha };
+}
+
+function expandSvgStops(stops, steps = 16) {
+  const needs = stops.some((s, i) => i > 0 && Math.abs((s.midpoint ?? 0.5) - 0.5) > 1e-4);
+  if (!needs) return stops;
+  const out = [{ ...stops[0] }];
+  for (let i = 1; i < stops.length; i++) {
+    const a = stops[i - 1];
+    const b = stops[i];
+    const mid = b.midpoint ?? 0.5;
+    if (b.offset > a.offset && Math.abs(mid - 0.5) > 1e-4) {
+      const m = Math.min(0.999, Math.max(0.001, mid));
+      const exponent = Math.log(0.5) / Math.log(m);
+      for (let k = 1; k < steps; k++) {
+        const u = k / steps;
+        const t = Math.pow(u, exponent);
+        const mixed = mixStop(a, b, t);
+        out.push({
+          offset: a.offset + (b.offset - a.offset) * u,
+          color: mixed.color,
+          ...(Math.abs(mixed.alpha - 1) > 1e-6 ? { alpha: Math.round(mixed.alpha * 1000) / 1000 } : {}),
+        });
+      }
+    }
+    out.push({ ...b });
+  }
+  return out;
+}
+
 function fillAttrs(fill, box, defs, id) {
   if (!fill || fill.kind === "none") return ` fill="none"`;
-  const stops = fill.grad?.stops
-    ?.map((s) => `      <stop offset="${round(s.offset)}" stop-color="${s.color}"/>`)
-    .join("\n") ?? "";
-  if ((fill.kind === "linear" || fill.kind === "radial") && fill.grad) {
+  const baseStops = gradStopsOf(fill);
+  const stops = (baseStops ? expandSvgStops(baseStops) : [])
+    .map((s) => {
+      const alpha = stopAlphaOf(s);
+      const op = alpha < 0.999 ? ` stop-opacity="${round(alpha)}"` : "";
+      return `      <stop offset="${round(s.offset)}" stop-color="${s.color}"${op}/>`;
+    })
+    .join("\n");
+  if ((fill.kind === "linear" || fill.kind === "radial") && fill.grad && baseStops) {
     if (fill.kind === "radial") {
       const cx = box.x + box.w / 2;
       const cy = box.y + box.h / 2;
@@ -572,10 +637,15 @@ const fillArg = z
     color: z.string().optional().describe("#rrggbb 起点色/实色"),
     to: z.string().optional().describe("两色渐变的终点色"),
     stops: z
-      .array(z.object({ offset: z.number().min(0).max(1), color: z.string() }))
+      .array(z.object({
+        offset: z.number().min(0).max(1),
+        color: z.string(),
+        alpha: z.number().min(0).max(1).optional().describe("色标透明度，缺省 1"),
+        midpoint: z.number().min(0).max(1).optional().describe("到上一个色标的插值中点，缺省 0.5"),
+      }))
       .min(2)
       .optional()
-      .describe("多色渐变；优先于 to，offset 0..1"),
+      .describe("多色渐变；优先于 to，offset 0..1，可带 alpha / midpoint"),
     kind: z.enum(["linear", "radial"]).optional().describe("渐变类型，默认 linear"),
     angle: z.number().optional().describe("线性渐变角度，0 向右、90 向下"),
     opacity: z.number().min(0).max(1).optional(),
@@ -618,7 +688,7 @@ server.registerTool(
           seq: "number（下一个可用序号）",
         },
         pathNode: { subpaths: [{ anchors: [{ x, y, hIn, hOut, smooth }], closed }], fill, stroke, blend, clip },
-        paint: "none | solid{color,opacity} | linear{grad:{angle,stops[]},opacity} | radial{grad:{stops[]},opacity}",
+        paint: "none | solid{color,opacity} | linear{grad:{angle,stops[]},opacity} | radial{grad:{stops[]},opacity}；stops 支持 alpha/midpoint",
         stroke: "none | solid{color,width,dash[],cap,join,arrow}",
         extra: { blend: "16 档，同 CSS mix-blend-mode", clip: "组字段：裁切轮廓子节点 id" },
       },
@@ -755,7 +825,7 @@ server.registerTool(
   "vexa_set_paint",
   {
     title: "修改填充 / 描边",
-    description: "改指定对象的填充与描边；id 省略时改最上层对象。fill 给 to 或 stops 即为渐变，stroke.width=0 等于去掉描边；cap/join 控制端帽与拐角。",
+    description: "改指定对象的填充与描边；id 省略时改最上层对象。fill 给 to 或 stops 即为渐变，stops 可带 alpha 与 midpoint；stroke.width=0 等于去掉描边；cap/join 控制端帽与拐角。",
     inputSchema: {
       path: pathArg,
       id: z.string().optional(),
@@ -923,7 +993,7 @@ server.registerTool(
 
 async function selftest() {
   const doc = newDoc("自检", 800, 600, "#ffffff");
-  addShapeNode(doc, { shape: "star", x: 100, y: 100, w: 300, h: 300, points: 5, inner: 0.5, fill: { color: "#0f76d6", stops: [{ offset: 0, color: "#0f76d6" }, { offset: 0.45, color: "#ffffff" }, { offset: 1, color: "#e5484d" }] } });
+  addShapeNode(doc, { shape: "star", x: 100, y: 100, w: 300, h: 300, points: 5, inner: 0.5, fill: { color: "#0f76d6", stops: [{ offset: 0, color: "#0f76d6" }, { offset: 0.45, color: "#ffffff", alpha: 0.35, midpoint: 0.2 }, { offset: 1, color: "#e5484d" }] } });
   addShapeNode(doc, { shape: "roundrect", x: 20, y: 20, w: 200, h: 120, radius: 18, stroke: { color: "#17171c", width: 2, dash: [6, 4], cap: "round", join: "bevel" } });
   const node = pickNode(doc, undefined);
   translateNode(node, 5, 5);
@@ -934,6 +1004,8 @@ async function selftest() {
     ["星形锚点", doc.nodes[doc.root[0]].subpaths[0].anchors.length === 10],
     ["渐变写入", svg.includes("linearGradient")],
     ["多色标", (svg.match(/<stop /g) ?? []).length >= 3],
+    ["色标透明度", svg.includes('stop-opacity="0.35"')],
+    ["中点展开", (svg.match(/<stop /g) ?? []).length > 3],
     ["虚线写入", svg.includes("stroke-dasharray")],
     ["端帽/连接", svg.includes('stroke-linecap="round"') && svg.includes('stroke-linejoin="bevel"')],
     ["摘要可序列化", JSON.stringify(summary).length > 100],

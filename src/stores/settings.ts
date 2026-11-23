@@ -12,7 +12,7 @@ export interface VexaSettings {
   /** 新工程默认背景 */
   defaultBg: string;
   /** 默认导出格式 */
-  exportFmt: "svg" | "png";
+  exportFmt: "svg" | "png" | "pdf";
   /** 默认导出倍率 */
   exportScale: number;
   /** 界面密度 */
@@ -53,7 +53,7 @@ function sanitize(s: VexaSettings): VexaSettings {
     grid: !!s.grid,
     snap: !!s.snap,
     defaultBg: /^#[0-9a-f]{6}$/i.test(s.defaultBg) ? s.defaultBg : "#ffffff",
-    exportFmt: s.exportFmt === "png" ? "png" : "svg",
+    exportFmt: s.exportFmt === "png" ? "png" : s.exportFmt === "pdf" ? "pdf" : "svg",
     exportScale: clamp(Number(s.exportScale) || 1, 1, 4),
     density: s.density === "compact" ? "compact" : "comfortable",
     welcomeHints: !!s.welcomeHints,

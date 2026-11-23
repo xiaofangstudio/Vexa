@@ -1,6 +1,6 @@
 /** 画面渲染：粘贴板点阵、画板、矢量对象、选择框与锚点手柄。 */
 import { flatten, nodeBox, textBox, unionBox, type Box } from "../core/geom";
-import { canvasPaint } from "../core/paint";
+import { canvasPaint, gradAxis, gradHandlePoints, paintStops, stopAlpha, stopCssColor } from "../core/paint";
 import { widthHandles, widthOutline, widthPreview } from "../core/width";
 import { groupBox } from "./pick";
 import { handleLayout } from "./handles";
@@ -53,6 +53,8 @@ export interface RenderState {
   eraser?: { points: Pt[]; r: number } | null;
   /** 宽度工具悬停位置：节点 id + 弧长比例 */
   widthHover?: { nodeId: string; t: number } | null;
+  /** 渐变工具悬停的色标 */
+  gradientHover?: { nodeId: string; index: number } | null;
 }
 
 const imageCache = new Map<string, HTMLImageElement>();
@@ -362,6 +364,56 @@ function drawOverlay(
       }
     }
     ctx.restore();
+  }
+
+  // 渐变工具：选中单个渐变对象时显示轴线与色标手柄，可直接拖动
+  if (state.tool === "gradient" && state.selected.length === 1) {
+    const n = doc.nodes[state.selected[0]];
+    if (n?.kind === "path" && (n.fill.kind === "linear" || n.fill.kind === "radial") && n.fill.grad) {
+      const box = nodeBox(n);
+      const axis = gradAxis(n.fill, box);
+      if (axis) {
+        const points = gradHandlePoints(n.fill, box);
+        const stops = paintStops(n.fill);
+        const hoverIndex = state.gradientHover?.nodeId === n.id ? state.gradientHover.index : -1;
+        ctx.save();
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 1.1 / view.zoom;
+        ctx.globalAlpha = 0.85;
+        ctx.setLineDash(n.fill.kind === "radial" ? [4 / view.zoom, 4 / view.zoom] : [6 / view.zoom, 4 / view.zoom]);
+        ctx.beginPath();
+        ctx.moveTo(axis.x1, axis.y1);
+        ctx.lineTo(axis.x2, axis.y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+        points.forEach((q, i) => {
+          const s = stops[i];
+          if (!s) return;
+          const hovered = i === hoverIndex;
+          const r = (hovered ? 7.4 : 5.6) / view.zoom;
+          ctx.beginPath();
+          ctx.arc(q.x, q.y, r, 0, Math.PI * 2);
+          ctx.fillStyle = css("--paper", "#fff");
+          ctx.fill();
+          ctx.strokeStyle = hovered ? css("--accent", "#0f76d6") : css("--anchor-ink", "#1c1c22");
+          ctx.lineWidth = (hovered ? 2 : 1) / view.zoom;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(q.x, q.y, 2.9 / view.zoom, 0, Math.PI * 2);
+          ctx.fillStyle = stopCssColor(s);
+          ctx.fill();
+          if (stopAlpha(s) < 0.25) {
+            ctx.beginPath();
+            ctx.arc(q.x, q.y, 5.2 / view.zoom, 0, Math.PI * 2);
+            ctx.strokeStyle = css("--anchor-ink", "#1c1c22");
+            ctx.lineWidth = 0.7 / view.zoom;
+            ctx.stroke();
+          }
+        });
+        ctx.restore();
+      }
+    }
   }
 
   // 宽度工具：宽度点的左右手柄与悬停预览

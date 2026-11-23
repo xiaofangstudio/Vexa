@@ -42,11 +42,11 @@ cd mcp && npm install
 | `vexa_create_project` | 新建空白 `.vex`（已存在会拒绝覆盖） |
 | `vexa_add_shape` | 矩形 / 圆角矩形 / 椭圆 / 多边形 / 星形 |
 | `vexa_add_text` | 加文字 |
-| `vexa_set_paint` | 改填充（实色或线性渐变）、描边（含虚线） |
+| `vexa_set_paint` | 改填充（实色 / 线性 / 径向，多色标可带透明度与中点）、描边（含虚线、端帽、连接） |
 | `vexa_transform` | 平移 / 旋转 / 缩放 / 翻转 |
 | `vexa_arrange` | 顶层 / 底层 / 上移 / 下移 |
 | `vexa_delete` | 删除对象（组连同子节点） |
-| `vexa_export_svg` | 导出 SVG，保留渐变与虚线 |
+| `vexa_export_svg` | 导出 SVG，保留渐变（含透明度/中点）、虚线、端帽与连接 |
 | `vexa_validate` | 结构自检：悬垂引用、孤儿节点、非法颜色 |
 
 ## 安全边界

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>PDF 位图导出测试</title>
+  <style>body{font:14px/1.5 system-ui;margin:24px;background:#f5f6f8}canvas{border:1px solid #ddd;background:#fff}code{white-space:pre-wrap}</style>
+</head>
+<body>
+  <h3>PDF 位图嵌入测试</h3>
+  <p id="state">准备中…</p>
+  <canvas id="source" width="260" height="180"></canvas>
+  <pre id="log"></pre>
+  <script type="module">
+    const log = (s) => { document.getElementById('log').textContent += s + '\n'; console.log(s); };
+    const state = document.getElementById('state');
+    const stage = (s) => { window.__stage = s; state.textContent = s; log(s); };
+    function makePng(alpha) {
+      const c = document.createElement('canvas');
+      c.width = 160; c.height = 110;
+      const g = c.getContext('2d');
+      if (alpha) g.clearRect(0, 0, c.width, c.height);
+      else { g.fillStyle = '#f3f5f7'; g.fillRect(0, 0, c.width, c.height); }
+      const grad = g.createLinearGradient(0, 0, 160, 110);
+      grad.addColorStop(0, 'rgba(229,72,77,0.85)');
+      grad.addColorStop(0.5, 'rgba(0,208,248,0.55)');
+      grad.addColorStop(1, 'rgba(15,45,90,0.35)');
+      g.fillStyle = grad;
+      g.beginPath(); g.arc(80, 55, 48, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#17171c'; g.font = 'bold 20px sans-serif'; g.fillText(alpha ? 'ALPHA' : 'OPAQUE', 38, 62);
+      return c.toDataURL('image/png');
+    }
+    try {
+      stage('导入模块…');
+      const { createDoc } = await import('/src/core/docOps.ts');
+      const { exportPDF } = await import('/src/core/pdf.ts?v=' + Date.now());
+      stage('导入完成');
+      const doc = createDoc('PDF 位图', 800, 600);
+      doc.nodes.imgA = { kind: 'image', id: 'imgA', name: '不透明', src: makePng(false), x: 70, y: 70, w: 320, h: 220, opacity: 1, visible: true, locked: false };
+      doc.nodes.imgB = { kind: 'image', id: 'imgB', name: '透明', src: makePng(true), x: 420, y: 70, w: 320, h: 220, opacity: 0.9, visible: true, locked: false };
+      doc.root.push('imgA', 'imgB');
+      stage('生成源图');
+      const src = document.getElementById('source').getContext('2d');
+      src.fillStyle = '#fff'; src.fillRect(0, 0, 260, 180);
+      const a = await fetch(doc.nodes.imgA.src).then(r => r.blob()).then(b => createImageBitmap(b));
+      const b = await fetch(doc.nodes.imgB.src).then(r => r.blob()).then(b => createImageBitmap(b));
+      src.drawImage(a, 10, 10, 120, 82); src.drawImage(b, 135, 10, 120, 82);
+      src.fillStyle = '#17171c'; src.font = '12px sans-serif'; src.fillText('PDF 源图预览：左不透明 / 右透明', 10, 110); src.fillText('透明图应有 RGB + SMask', 10, 128);
+      stage('导出 PDF…');
+      const result = await exportPDF(doc, { images: true });
+      window.__pdfBase64 = btoa(String.fromCharCode(...result.bytes));
+      window.__pdfWarnings = result.warnings;
+      window.__pdfBytes = result.bytes.length;
+      state.textContent = `完成：${result.bytes.length} 字节，警告 ${result.warnings.length}`;
+      log(`warnings: ${JSON.stringify(result.warnings)}`);
+      log(`pdf head: ${new TextDecoder().decode(result.bytes.slice(0, 8))}`);
+      log('IMAGE_OK');
+    } catch (e) {
+      state.textContent = '失败：' + e.message;
+      log('ERROR ' + (e.stack || e.message));
+      window.__pdfError = String(e.stack || e.message);
+    }
+  </script>
+</body>
+</html>

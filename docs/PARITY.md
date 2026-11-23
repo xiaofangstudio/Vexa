@@ -66,7 +66,7 @@
 | 径向渐变填充 | 径向渐变 | `Paint.kind = "radial"`，圆心为 bbox 中心、半径取半对角线；画布 `createRadialGradient` 与 SVG `<radialGradient gradientUnits="userSpaceOnUse">` 同一几何 | 面板“径向”档可调起止色；导出 SVG 含 `<radialGradient>`（冒烟 `radial=true`） |
 | 描边端点箭头 | 箭头/终点样式 | `Stroke.arrow`：无 / 实心三角 / 空心 / 菱形；画布按末段切线绘制，SVG 用 `<marker orient="auto">`，只对开放子路径生效 | 冒烟：闭合矩形不产生箭头，开放线产生 1 个 marker |
 | 图层面板拖动排序 | 图层面板 | 行可拖动，落点重排 `doc.root`（列表按视觉从上到下，写回时反转）；拖动中有半透明反馈 | 实机拖动后画布叠放顺序变化，可撤销 |
-| SVG 导入（基础图形） | `svg` 导入 | 文件 → 导入 SVG…：支持 `path` / `rect` / `circle` / `ellipse` / `polygon` / `polyline` / `line`，解析 `transform`（translate/scale/rotate/matrix）与分组继承的 fill/stroke/opacity，导入后等比放进画板 | 结构化 SVG 导入后成为可编辑路径节点 |
+| SVG 导入（基础图形） | `svg` 导入 | 文件 → 导入 SVG…：支持 `path` / `rect` / `circle` / `ellipse` / `polygon` / `polyline` / `line`，解析 `transform`（translate/scale/rotate/matrix）与分组继承的 fill/stroke/opacity，导入后等比放进画板；第十六批起同时导入线性/径向渐变与 `fill-opacity` / `stroke-opacity` | 结构化 SVG 导入后成为可编辑路径节点；渐变矩形/圆形导入后填充类型、色标与透明度保留 |
 | MCP 同步扩展 | — | `vexa-mcp` 的 `fill.kind=radial`、`stroke.arrow` 与 `set_paint` 描述、SVG 导出同步 | `--selftest` 仍 11/11；`smoke.mjs` 端到端通过 |
 
 ## 1.4 第四批已对齐（多画板 / 剪切蒙版 / 混合模式）
@@ -193,6 +193,95 @@
 
 发布验收：`release\Vexa.exe` 已用第十四批源码重新构建（7,552,512 B，SHA256 `6F7FB068716D92F032E54CC7C6407904A98F4D1A282181011C35544B44B795B8`），真实 Windows WebView2 窗口启动正常；四色标渐变截图见 `docs/shots/v14-real-editor.png`，14px 圆头开放直线截图见 `docs/shots/v14-real-line3.png`。
 
+## 1.15 第十五批已对齐（渐变透明度 / 中点 / 画布直拖）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 色标透明度 | Stop opacity | `GradStop.alpha?: 0..1`；画布用 rgba、SVG 输出 `stop-opacity`、`.vex` 往返保留；与填充整体 opacity 相乘 | 冒烟半透明中点 alpha=0.7，SVG `stop-opacity="0.7"`，`.vex` 读回 0.4 |
+| 色标中点 | Gradient midpoint | `GradStop.midpoint?: 0..1`，表示到上一个色标的插值中点，默认 0.5；共用 `expandGradStops()` 把非 0.5 区间展开成中间色阶，Canvas 与 SVG 观感一致 | 中点 0.25、两端黑白时，25% 位置实测 `#808080 / alpha 0.7`；SVG 由 2 个作者色标展开为 17 个 `<stop>` |
+| 面板控件 | Gradient editor | 每个色标行新增“透明”百分比；非首色标新增“中点”百分比；颜色、位置、透明度、中点都可键盘输入；最少保留 2 色标 | 面板实测行值为 `0/100`、`45/35/20`、`100/100/50`；删除按钮仍受 2 色标下限保护 |
+| 画布直拖 | On-canvas gradient annotator | 渐变工具选中单个渐变路径时显示轴线与色标手柄；线性沿角度轴拖，径向沿半径拖；拖动时夹在相邻色标之间，整次拖动合并为一步撤销 | 线性拖拽 45% → 28.3%、径向 50% → 66.4%，角度均保持 90°；真实 Tauri 窗口 45% → 30% |
+| 全链路同步 | SVG / .vex / MCP | SVG 与画布共用展开算法和 rgba；MCP `fill.stops` 支持 `alpha`、`midpoint`，导出端展开并输出 `stop-opacity` | MCP 自检新增“色标透明度 / 中点展开”全过；端到端 SVG 2617 B，校验 0 问题 |
+
+发布验收：`release\Vexa.exe` 已用第十五批源码重新构建（7,554,048 B，SHA256 `7247BB22D2C69A4D43CB8E84BA13A9234C9825831A47B6F4D9B03050E051854B`），真实 Windows WebView2 窗口启动正常；色标透明度/中点面板与画布拖动见 `docs/shots/v15-real-panel.png`、`v15-real-drag.png`。
+
+## 1.16 第十六批已对齐（SVG 渐变导入 / 透明度保真）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| SVG 线性渐变导入 | SVG import → linear gradient | `src/core/svg.ts` 在导入文档里解析 `linearGradient`：`x1/y1/x2/y2` 推角度，`gradientUnits=userSpaceOnUse` 与 `objectBoundingBox` 都接受；结果转成 `Paint.kind="linear"` + `GradStop[]`，仍按 Vexa 的 bbox 几何铺开 | 浏览器 `DOMParser` 实测 `x1=0,y1=0,x2=0,y2=1` → angle=90；Vexa 导出 SVG 后再导入角度仍为 90 |
+| SVG 径向渐变导入 | SVG import → radial gradient | `radialGradient` 转为 `Paint.kind="radial"`，色标（含 `stop-opacity`）原样保存；圆心/半径按 Vexa 规则重新按 bbox 计算 | 径向白→黑 50% 透明导入后 `kind=radial`、2 个色标、末色标 alpha=0.5 |
+| 色标透明度与颜色 | Stop color / opacity | `stop-color` 支持 hex、rgb/rgba、百分比 rgb、命名色和 HSL（浏览器端用 2D 上下文归一化）；`stop-opacity` 支持 `0.35` 与 `35%`，与 `stop-color` 自带 alpha 相乘 | 三色标 `#ff0000/0.8`、`rgb(0,128,255)`、`#0000ff/35%` 导入为 `#ff0000 alpha .8`、`#0080ff`、`#0000ff alpha .35` |
+| 渐变引用与继承 | `xlink:href` / `href` | 渐变自身没有 `stop` 时沿 `href`/`xlink:href` 最多追 4 层；失效 `url(#missing)` 回退为无填充，不生成黑块 | `xlink:href="#lg"` 的别名渐变导入后 3 个色标完整；缺失引用节点 `fill=none` |
+| 填充/描边透明度 | fill-opacity / stroke-opacity | 导入时把 `fill-opacity` 写进 Paint.opacity（与渐变 alpha 相乘）、`stroke-opacity` 写进 Stroke.opacity；节点 `opacity` 只留元素自身透明度，不再误乘到描边 | 组 `fill-opacity=.5` + 渐变首标 alpha .8 → paint.opacity=.5；`stroke-opacity=70%` → 描边 opacity=.7 |
+| 单色标与容错 | Gradient fallback | 单色标渐变退化为同色实色（保留透明度）；非 SVG、XML 解析失败、无图形都返回空结果由界面提示，不抛异常 | Node 冒烟：单色标 `#abcdef/0.6` → 实色；坏 XML → 0 节点；空 SVG → 0 节点 |
+| 命名与选择 | Import UX | SVG 导入的节点命名为“导入路径 N”，与位图描摹的“描摹路径 N”区分；导入后全选并等比放进当前画板 | 实机六对象导入后状态栏“已选 6 · 6 个对象”，属性坞显示“导入路径 1” |
+
+验收记录：`npx tsx scripts/smoke.svg-import.mts` 断言 6 个节点、线性 3 色标、径向 2 色标、alpha .8/.35、`href` 继承、单色标退实色、坏 XML/空 SVG 均 0；`npx tsc --noEmit`、`npm run build` 通过。开发页导入截图 `docs/shots/v16-dev-import.png`、`v16-dev-single.png`、`v16-dev-stops.png`；发布构建见 `docs/BUILD.md`。
+
+发布验收：`release\Vexa.exe` 已用第十六批源码重新构建（7,555,584 B，SHA256 `C7C50C414571853A0CDEBCEF14FCF915E9796D6AB3F36CD7467712DEECE3A75B`），真实 Windows WebView2 窗口通过系统“导入 SVG”对话框导入 6 个渐变对象，状态栏“已选 6 · 6 个对象”，单选后色标为 `0/100`、`45/90`、`100/35`、角度 90°；截图 `docs/shots/v16-native-imported.png`、`v16-native-single.png`。
+
+## 1.17 第十七批已对齐（原生矢量 PDF 导出）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| PDF 导出入口 | PDF export | 顶栏“导出”弹窗新增 **PDF 文档** 卡片；文件菜单提供“导出 SVG / PNG / PDF”；默认导出格式设置可保存 PDF；PDF 模块按需懒加载，不拖慢启动 | 实机导出弹窗三卡片、PDF 选中态与“当前画板 / 全部 2 页 / 2 页 · 矢量”切换正常；见 `docs/shots/v17-ui-export-modal2.png`、`v17-ui-export-pdf2.png` |
+| 多画板分页 | Artboards to pages | 每个画板独立一页，页面尺寸等于画板尺寸；可选当前画板或全部画板 | 发布版选中“全部 2 页”导出，PDF 为 2 页 `900×640` + `520×360`，页面内容与画板对应；见 `docs/shots/v17-final-export-p1.png`、`v17-final-export-p2.png` |
+| 路径与描边 | Vector paths / strokes | 纯本地 PDF writer：路径、矩形、多边形、线宽、端帽、拐角连接、虚线、实色填充；箭头仍按基础线宽输出 | Node 冒烟两页 46,588 B、warnings 0；渐变矩形、虚线描边、星形轮廓与实色文字完整 |
+| 原生渐变 | Linear / radial gradients | 线性用 Type 2 轴向 shading，径向用 Type 3 径向 shading；色标采样为 Type 0 函数（256 样本）；逐色标透明度用 `/SMask` 软遮罩；不再用色带近似 | 冒烟 PDF 38–47 KB，径向渐变无白楔缺口、线性渐变无可见色带；渲染 `docs/shots/v17-pdf-p1.png`、`v17-pdf-p2.png` |
+| 文字轮廓 | Text outlines | fontkit 读取本机字体并转成 PDF 路径，支持对齐、字距、横纵缩放、基线、合成粗斜体、渐变文字裁剪；文字保持矢量但不可选中/搜索 | 真实发布版导出“Vexa PDF 导出 / 文字轮廓保持矢量 / 实色文字 · 零联网 · 本地导出”字形完整，渐变文字未被裁切 |
+| 透明位图 | Raster images with alpha | 图片解码为 RGB + `/DeviceGray` SMask（带 `/Decode [0 1]`）；data URL 在 Tauri CSP 下不再走 `fetch`，直接 base64 → `Blob` → `createImageBitmap` | 发布版导出含 180×120 透明 PNG：PDF 39,722 B（修复前 31,978 B 且位图缺失），渲染右下角 ALPHA 圆图正常；`docs/shots/v17-native-export2-recheck-p1.png` |
+| 保存链路 | Native save dialog | 使用 Tauri 原生保存对话框；默认文件名跟随工程名；全路径可直接粘贴到文件名框保存 | 发布版真实 UI：打开 `pdf-export.vex` → 导出 → PDF → 全部 2 页 → 原生保存框粘贴 `D:\20533\deskbox\fangwork\Vexa\docs\shots\v17-final-export.pdf` → 回车写盘 77,615 B；渲染两页均正常 |
+
+验收记录：`npx tsc --noEmit`、`npm run build`、`npx tsx scripts/smoke.pdf.mts` 均通过；浏览器 `scripts/pdf-browser-test.html` 的 data URL 透明/不透明位图均正确（16,013 B、warnings 0）；真实发布版通过 UI 完整写盘并渲染（`v17-final-export.pdf`）。已知边界：PDF 文字为轮廓，不可选中/搜索；渐变描边、图案填充、渐变网格未做；组透明度按节点复合 alpha 近似，重叠子节点可能重复压暗；字体只读本机文件，不打包不联网。
+
+发布验收：`release\Vexa.exe` 已用第十七批源码重新构建（7,714,304 B，SHA256 `74D970B9C8BC6D191408A17594C14B8F9445A7A8D3CA8548826BE55FC598F87F`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,304,703 B（SHA256 `E4AF6A4485ED4FCE0100F288F7494EFBABDCA63F4DDCA1FF7222FAC77AC5AB13`）。
+
+## 1.18 第十八批已对齐（SVG 文本与引用导入）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| SVG 文本导入 | Editable SVG text | `<text>` 转为可编辑文本节点：保留 x/y 基线、字号、字体族、粗体/斜体、`text-anchor`、字距、填充实色/渐变、`fill-opacity` 与组透明度；`dominant-baseline` 映射为基线偏移 | Node 冒烟 4 段文字；浏览器渲染标题、渐变行、第二行、缩放文字、居中文字全部正确，见 `docs/shots/v18-svg-text-render.png` |
+| tspan 多行 | Text spans | 支持 `tspan` 的 `x/y/dy` 与独立 `transform/fill/font-size`；按叠放顺序拆成独立可编辑文本节点，字距与透明度逐段继承 | 渐变行一与第二行保持可编辑，第二行 y=82；属性坞字号、行距、字距、水平/垂直缩放、基线均可改 |
+| `<use>` 引用 | SVG instances | 支持 `href` / `xlink:href` 引用组与 symbol，叠加 `x/y` 位移；支持嵌套 use（深度上限 12，拒绝循环引用）；引用元素继承 use 的填充/透明度 | 引用矩形在 (100,100)，圆在 (122..)，嵌套 use 位移 (20,20)；Node 冒烟 `nodes=8 text=4 usePaths=4` |
+| 基础变换 | Basic transforms | 文本/引用支持 `translate`、`scale` 与非均匀缩放；文本旋转/斜切暂不旋转字形，只映射位置与缩放比例 | 缩放文字 `scale(1.5 1)` → 字号 10、水平缩放 150%；真实 app 属性坞读取 `Arial / 73.05px / 水平 100%` |
+| 导入落位 | Fit imported group | `fitNodes` 扩展文本与图片，导入 9 个对象整体缩放并居中到当前画板 86% 区域 | 真实发布版导入 9 个对象（5 段文字 + 4 个路径），状态“已选 9”，画布可继续编辑 |
+
+发布验收：`release\Vexa.exe` 已用第十八批源码重新构建（7,715,840 B，SHA256 `E42244D2A0A8D531369053D42A93A72D114ABE600D9F55D2FB75B2867DB1D3D6`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,306,366 B（SHA256 `E57927CB8855B981E0083302D5972030355EC5ECE65C0194FA4CFD50C64E2C97`）。真实 Windows WebView2 窗口从“文件 → 导入 SVG…”打开系统对话框，导入 `scripts/fixtures/import-text-use.svg`，画布出现 5 段文字 + 2 组图标，属性坞显示“导入文字 1 / SVG 文本导入 / Arial / 73.05px”；截图 `docs/shots/v18-native-final-import.png`、`v18-native-final-props.png`。
+
+## 1.19 第十九批已对齐（SVG clipPath 与 symbol 缩放导入）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| clipPath 组裁切 | SVG clipping paths | `src/core/svg.ts` 读取元素的 `clip-path`（属性或内联 style），支持路径、矩形、圆、椭圆、多边形、折线，以及 clipPath 内的组与 `<use>`；clipPath 自身 transform 与引用元素的矩阵都参与换算 | `scripts/fixtures/import-clip-symbol.svg` 导入得到卡片矩形+圆 2 条子路径（bbox 90..580 / 60..340），底部色带组 3 个孩子；冒烟 `cardSubs=2` |
+| 剪裁组数据模型 | Clip group | 每个裁切范围写成顶层 `GroupNode`：`children[0]` 是隐藏剪裁路径（`visible:false`、`locked:true`、无填充），`clip` 指向该路径；同前缀后代复用同一组，嵌套 clip 用组套组表达交集 | 2 个剪裁组、7 个顶层根；组首孩子均为剪裁路径；嵌套用例 5 个节点、外层/内层都带 clip |
+| symbol viewBox 缩放 | SVG symbol instances | `<use>` 引用 `<symbol>` 或 `<svg>` 时读取目标 `viewBox`，以 use 的 `width/height`（缺省用 symbol 尺寸）建 viewport；默认 `preserveAspectRatio` 按 meet 等比缩放并居中，`none` 支持非均匀拉伸；引用普通组/形状仍只做 x/y 位移 | 96×96 星星实际 76.8×74，48×96 星星按 meet 缩到 38.4×37 且垂直居中；`preserveAspectRatio="none"` 纳入冒烟 |
+| 导入落位与根层 | Fit imported root | `svgToNodes` 返回 `{ nodes, roots, nextSeq }`；`fitNodes` 递归组内所有孩子（含隐藏剪裁路径）统一缩放；只有 roots 进入根层，组内孩子不再重复出现 | 真实发布版干净画板导入：7 个顶层对象、14 个总节点、2 个剪裁组、4 段文字，状态“已选 7 · 7 个对象” |
+| 剪裁内对象可选可改 | Direct selection inside clip | 拾取尊重剪裁范围：点落在 clip 外时整组跳过，避免底层整张画布矩形挡住上方内容；同时把中文文字包围盒从 0.62em 修为按字符宽度估算 | 直接选择工具点裁切标题：选中“导入文字 1”，165×52 px，属性坞 Arial / 41.28px；改成“裁切标题 · 已改”后画布即时更新、包围盒变 296×52 |
+| 导出与容错 | SVG round-trip | `docToSVG` 为剪裁组写出 `<clipPath>` / `clip-path`，文字仍是可编辑 `<text>`；缺失 clip 引用、`objectBoundingBox` 不建组但保留原图形；`svgToPathNodes` 过滤隐藏剪裁轮廓 | 冒烟断言导出含 `<clipPath id="cN">`、`clip-path="url(#cN)"`、`<text transform="translate(130 170)">` 与“裁切标题”；坏引用 0 组、objectBoundingBox 保留 2 条可见路径 |
+
+验收记录：`npx tsc --noEmit` 通过；`npx tsx scripts/smoke.svg-clip.mts` 输出 `clip nodes=14 roots=7 groups=2 text=4 cardSubs=2 bigStar=76.8 smallStar=38.4 nested=5 badGroups=0`，并新增 clip 命中测试（点在标题上 deep=true 得到文字、普通选择得到卡片组、色带整张画布矩形不得截胡）；`smoke.svg-text.mts`、`smoke.svg-import.mts`、`smoke.vector.mts` 回归通过。浏览器渲染 `docs/shots/v19-svg-clip-render.png` 中卡片矩形+圆形并集裁切、裁切内文字、底部色带、两枚星星尺寸均正确。真实 Tauri 窗口从“文件 → 导入 SVG…”导入同一 fixture：14 个节点、2 个剪裁组、4 段文字；直接选择裁切标题并改字见 `docs/shots/v19c-native-direct.png`、`v19c-text-edited.png`。
+
+已知边界：`clipPathUnits="objectBoundingBox"` 暂不建组；clipPath 的 even-odd 孔洞未专门保留；`preserveAspectRatio="slice"` 与显式 `xMin/xMid/xMax` 对齐未细分；clipPath 内文本不参与剪裁轮廓；图案、滤镜、`mask` 仍未导入。
+
+发布验收：`release\Vexa.exe` 已用第十九批最终源码重新构建（7,717,376 B，SHA256 `7C9CD4F00F6E1A837C24BBC5689A64A2E333B424E83E3CCEACFCE637E0179A7E`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,312,360 B（SHA256 `A9CB45DD4E525F2C088EB8115BD742346515D36823C12EE4B6DCF9EB940EDAED`）。
+
+## 1.20 第二十批已对齐（图层面板组展开）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 组图层展开 | Layer hierarchy | 图层列表从只列顶层改为递归树：组前出现展开箭头，子图层按实际叠放顺序倒序列出并缩进；展开状态按组 id 记住，收起后选中关系不变 | 真实发布版导入 clip 验收文件后，展开“导入剪裁组 1”得到“导入文字 2 / 导入文字 1 / 导入路径 1”三行；收起箭头、展开箭头方向正确 |
+| 内部剪裁路径不打扰 | Clip implementation hidden | 组的 `clip` 路径是渲染内部实现，图层树里跳过；用户只看到背景、文字等真实内容，仍可用直接选择工具改剪裁内的文字 | 展开组后子行只有 3 条，不出现隐藏且锁定的“导入剪裁路径 1” |
+| 子图层可选中 | Direct layer selection | 点子图层名称直接 `onSelect([id])`，不需要先选组再进组；选中后属性坞切到该文字节点 | 点“导入文字 1”后状态“已选 1 · 165 × 52 px”，属性坞显示图层名“导入文字 1”、Arial、41.28px、文本“裁切标题” |
+| 组行交互 | Group row | 单击组名选中整组；双击组名或点箭头展开/收起；组内子行也带显隐与锁定，操作作用于子节点本身 | 双击“导入剪裁组 1”可展开/收起；眼睛与锁按钮点击不改变当前选择 |
+| 顶层排序保留 | Layer reorder | 拖拽仍只对顶层行生效，避免把子图层拖到根层造成结构破坏；底部提示改为“组可展开；拖动顶层行调整层级” | 顶层 7 行仍可拖动排序；子行不设 draggable |
+
+验收记录：`npx tsc --noEmit` 通过；`npx tauri:build` 通过（139 modules，`index-CIZP0VR_.js` 459.59 kB、`index-T9he_bYd.css` 47.62 kB）。真实 Tauri 窗口新建 `900×600` 画板“图层终验”，导入 `scripts/fixtures/import-clip-symbol.svg` 后切到图层面板：顶层 7 行、展开“导入剪裁组 1”后增加 3 个子行，箭头方向正确；点子行“导入文字 1”选中 165×52 的文字节点，属性坞 Arial 41.28px。截图 `docs/shots/v20-final-layers.png`、`v20-final-select-text.png`、`v20-final-text-props.png`。
+
+已知边界：组内子图层暂不支持拖动排序，也不能把子图层拖出组；导入后的组默认收起，需要点箭头或双击组名展开。
+
+发布验收：`release\Vexa.exe` 已用第二十批源码重新构建（7,717,888 B，SHA256 `880F8BAEA9461EE9E9928D1DD7F299D901F6CA977281E5482C272B30BF009C91`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,308,381 B（SHA256 `8B617959EF85FB269BF8506A5B6DCA6737A0522FC0548574AF671D1DAD9A9650`）。
+
 ## 2. 部分对齐
 
 | 能力 | 现状 | 差什么 |
@@ -201,11 +290,12 @@
 | 钢笔 / 直接选择 | 加锚点、拖手柄、双击插入锚点 | 连接、锚点对齐、方向键推锚点、多选锚点 |
 | 文字 | 单点文字 + 字符面板（字体/字号/行距/字距/粗斜体/三档对齐/横纵缩放） | 段落/区域/路径文字、段落面板（避头尾、首行缩进、段间距）、文字转路径 |
 | 可变宽度描边 | 画布与 SVG 轮廓填充、宽度点编辑、余弦过渡 | 虚线不随宽度轮廓走（有宽度点时按实线轮廓输出）；箭头仍按基础线宽绘制；端帽 / 连接类型目前只作用于普通均匀描边，宽度轮廓仍是平头外框；宽度点手柄只画在第一条子路径，复合路径各子路径共用同一 `t` 轮廓 |
-| 渐变 | 线性/径向均支持多色标、画布与 SVG 同步、`.vex` 往返、MCP `fill.stops` | 网格渐变、自由渐变、色标中点/透明度色标、渐变描边尚未做；色标位置只支持百分比输入，没有在画布上直接拖色标 |
-| SVG | 导出（组、线性/径向渐变、虚线、箭头、混合模式、剪切蒙版）；导入基础图形与变换 | 导入不含渐变、图案、`<use>`、`<clipPath>`、滤镜、文字转路径 |
+| 渐变 | 线性/径向均支持多色标、透明度、中点、画布轴线与色标直拖、`.vex` 往返、MCP `fill.stops` | 网格渐变、自由渐变、渐变描边尚未做；径向渐变的画布手柄只沿一条半径显示，不能改圆心位置/半径 |
+| SVG | 导出（组、线性/径向渐变、虚线、箭头、混合模式、剪切蒙版）；导入基础图形、变换、线性/径向渐变、色标透明度、`href` 继承、`fill/stroke-opacity`、`<text>` 可编辑文字、`<use>` 引用、`<clipPath>` 组裁切与 symbol viewBox 缩放 | 导入仍不含 `objectBoundingBox` 剪裁、图案、滤镜、`mask`；clipPath 的 even-odd 孔洞与 `slice` 对齐未细分；文本旋转/斜切只映射位置与缩放、不旋转字形；`gradientTransform`、`spreadMethod` 径向的 `cx/cy/r` 暂按 Vexa 的 bbox 规则近似 |
+| PDF 导出 | 多画板分页、原生线性/径向渐变、渐变文字、实色/虚线/端帽/连接、透明位图、文字轮廓 | 文字不可选中/搜索；渐变描边、图案填充、渐变网格未做；组透明度按节点复合 alpha 近似；字体只读本机文件 |
 | .vex 文档 | 保存/读取、撤销栈 200 步、多画板、混合模式、剪切蒙版往返 | 画板级导出（单板 PNG）与文档设置面板尚未全流程实测 |
 | 描摹 | Rust VTracer：预设/颜色数/细节/平滑/杂色，单测 3 项通过 | 分层输出、调色板编辑、实时预览、批量 |
-| 面板 | 属性面板（位置/尺寸/填充/描边/不透明度/混合模式/画板） | 显隐/锁定批量、色板、样式、符号、变换面板仍缺 |
+| 面板 | 属性面板（位置/尺寸/填充/描边/不透明度/混合模式/画板）+ 可展开组图层树 | 批量显隐/锁定、组内拖动排序、色板、样式、符号、变换面板仍缺 |
 
 ## 3. 未实现（按批次规划）
 
@@ -218,9 +308,9 @@
 
 **P3 · 文档与绘制**
 - 画板预设导入、单画板 PNG 导出
-- 图层作为真实对象（组内拖动、批量显隐/锁定、组嵌套显示）
+- 图层作为真实对象：组嵌套显示已做，还缺组内拖动排序、把子层拖出组、批量显隐/锁定
 - 色板、全局色、专色、CMYK（参考 `doc/cmyk.rs`）
-- 图案填充、网格渐变、色标中点/透明度色标（线性/径向多色标已支持）
+- 图案填充、渐变网格/自由渐变、渐变描边
 - 符号、样式、画笔（参考 `brush` crate）
 
 **P4 · 文字**
@@ -228,7 +318,7 @@
 - 字符/段落面板、OpenType 特性、竖排
 
 **P5 · 导入导出**
-- PDF 导出与 PDF 导入（`pdf` 2.1 MB）
+- PDF 导入（`pdf` 2.1 MB）；PDF 导出已完成第十七批
 - EPS 导出（`eps` 5.6 MB）
 - AI/SVG 高保真导入、打印与出血
 

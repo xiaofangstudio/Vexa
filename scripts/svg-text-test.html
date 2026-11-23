@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>SVG 文本 / use 导入测试</title>
+  <style>
+    :root{--paper:#fff;--accent:#0f76d6;--grid-line:rgba(0,0,0,.08);--text-3:#8f8f9c;--font-ui:"Microsoft YaHei"}
+    body{font:14px/1.5 system-ui;margin:20px;background:#f5f6f8}
+    canvas{border:1px solid #ddd;background:#fff;max-width:100%}
+    pre{white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <h3>SVG 文本 / use 导入测试</h3>
+  <p id="state">准备中…</p>
+  <canvas id="cv" width="1200" height="880" style="width:600px"></canvas>
+  <pre id="log"></pre>
+  <script type="module">
+    const log = (s) => { document.getElementById('log').textContent += s + '\n'; console.log(s); };
+    const state = document.getElementById('state');
+    try {
+      const { createDoc } = await import('/src/core/docOps.ts');
+      const { svgToNodes } = await import('/src/core/svg.ts?v=' + Date.now());
+      const { renderScene } = await import('/src/engine/render.ts');
+      const svg = await fetch('/scripts/fixtures/import-text-use.svg?v=' + Date.now()).then(r => r.text());
+      const { nodes, nextSeq } = svgToNodes(svg, 1, '导入路径');
+      const doc = createDoc('SVG 文本导入', 300, 220);
+      doc.nodes = {};
+      doc.root = [];
+      for (const n of nodes) { doc.nodes[n.id] = n; doc.root.push(n.id); }
+      doc.seq = nextSeq;
+      const texts = nodes.filter(n => n.kind === 'text');
+      log(`nodes=${nodes.length} paths=${nodes.length - texts.length} texts=${texts.length}`);
+      log(`names=${nodes.map(n => n.name).join(' / ')}`);
+      log(`texts=${texts.map(n => `${n.text}@${Math.round(n.x)},${Math.round(n.y)} size ${Math.round(n.size)} ${n.fill.kind}`).join(' | ')}`);
+      const cv = document.getElementById('cv');
+      renderScene(cv, doc, { panX: 0, panY: 0, zoom: 2 }, {
+        selected: [], tool: 'select', pen: null, marquee: null, hoverId: null,
+        snapGuides: [], widthHover: null, gradientHover: null, eraser: null,
+        activeBoardId: doc.artboards[0].id,
+      }, 2, { w: 600, h: 440 });
+      window.__svgTextPng = cv.toDataURL('image/png').split(',')[1];
+      window.__svgTextNodes = nodes.length;
+      window.__svgTextWords = texts.length;
+      state.textContent = `完成：${nodes.length} 个节点，${texts.length} 段文字`;
+    } catch (e) {
+      state.textContent = '失败：' + e.message;
+      log('ERROR ' + (e.stack || e.message));
+      window.__svgTextError = String(e.stack || e.message);
+    }
+  </script>
+</body>
+</html>

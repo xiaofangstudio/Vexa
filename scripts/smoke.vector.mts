@@ -160,7 +160,50 @@ console.log(
   "join=" + (msBackNode?.kind === "path" ? msBackNode.stroke.join : "-"),
 );
 
-// 旧工程兼容：缺 grad 的 linear 填充要退回实色，不能崩
+// 第十五批：色标透明度 + 中点展开 + 画布手柄坐标
+import { expandGradStops, gradHandlePoints, paintPreview, renderGradStops, stopAlpha, stopCssColor } from "../src/core/paint";
+
+const d6c = createDoc("t6c", 400, 240);
+const mg = rectPath("mg", "透明中点", 20, 20, 200, 120);
+mg.fill = {
+  kind: "linear",
+  color: "#000000",
+  opacity: 1,
+  grad: {
+    angle: 0,
+    stops: [
+      { offset: 0, color: "#000000" },
+      { offset: 1, color: "#ffffff", alpha: 0.4, midpoint: 0.25 },
+    ],
+  },
+};
+d6c.nodes.mg = mg;
+d6c.root.push("mg");
+const authored = paintStops(mg.fill);
+const rendered = renderGradStops(mg.fill);
+const quarter = rendered.find((s) => Math.abs(s.offset - 0.25) < 1e-6);
+const handles = gradHandlePoints(mg.fill, { x: 20, y: 20, w: 200, h: 120 });
+const preview = paintPreview(mg.fill);
+const svgG = docToSVG(d6c);
+const vexG = parseVex(serializeVex(d6c));
+const vexStop = vexG.nodes.mg?.kind === "path" ? vexG.nodes.mg.fill.grad?.stops[1] : undefined;
+console.log(
+  "gradient alpha/midpoint:",
+  "authored=" + authored.length,
+  "expanded=" + rendered.length,
+  "quarter=" + (quarter ? quarter.color : "-"),
+  "alpha=" + (quarter ? stopAlpha(quarter) : "-"),
+  "css=" + (quarter ? stopCssColor(quarter) : "-"),
+  "handles=" + handles.map((h) => Math.round(h.x)).join(","),
+  "previewRgba=" + preview.includes("rgba"),
+  "svgStops=" + (svgG.match(/<stop /g) ?? []).length,
+  "svgOpacity=" + svgG.includes('stop-opacity="0.7"'),
+  "vexAlpha=" + vexStop?.alpha,
+  "vexMid=" + vexStop?.midpoint,
+);
+const expandedCheck = expandGradStops(authored);
+console.log("expanded stable:", expandedCheck.length === rendered.length, "midpointOff=" + expandedCheck[Math.floor(expandedCheck.length / 4)]?.offset);
+
 const legacy = parseVex(JSON.stringify({ format: "vexa", version: 1, doc: { name: "old", artboards: [{ id: "a1", name: "a", x: 0, y: 0, w: 100, h: 100, bg: "#ffffff" }], nodes: { p1: { kind: "path", id: "p1", name: "p", subpaths: [], fill: { kind: "linear", color: "#123456", opacity: 1 }, stroke: noStroke(), opacity: 1 } }, root: ["p1"], seq: 2 } }));
 console.log("legacy paint fallback:", legacy.nodes.p1?.kind === "path" ? legacy.nodes.p1.fill.kind : "missing", "solid=" + solid("#123456").kind);
 

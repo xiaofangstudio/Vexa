@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="300" height="220" viewBox="0 0 300 220">
+  <defs>
+    <linearGradient id="tg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e5484d"/>
+      <stop offset="0.5" stop-color="#7a5cff"/>
+      <stop offset="1" stop-color="#00d0f8"/>
+    </linearGradient>
+    <g id="icon">
+      <rect x="0" y="0" width="28" height="18" rx="4" fill="#336699"/>
+      <circle cx="42" cy="10" r="10" fill="#00d0f8"/>
+    </g>
+  </defs>
+  <g font-family="Arial" font-size="20" fill="#17171c">
+    <text x="16" y="34" font-weight="bold" text-anchor="start" letter-spacing="1">SVG 文本导入</text>
+    <text x="16" y="66">
+      <tspan x="16" y="66" fill="url(#tg)">渐变行一</tspan>
+      <tspan x="16" dy="24">第二行保持可编辑</tspan>
+    </text>
+  </g>
+  <use href="#icon" x="16" y="100"/>
+  <g id="alias"><use xlink:href="#icon" x="16" y="140"/></g>
+  <text transform="translate(180 120) scale(1.2 1)" fill="#0f76d6" font-size="12" font-weight="bold">缩放文字</text>
+  <text x="180" y="160" fill="#e5484d" font-size="14" text-anchor="middle">居中文字</text>
+</svg>

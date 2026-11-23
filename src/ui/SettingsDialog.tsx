@@ -136,8 +136,9 @@ export default function SettingsDialog({ settings, theme, onChange, onTheme, onR
                   options={[
                     ["svg", "SVG"],
                     ["png", "PNG"],
+                    ["pdf", "PDF"],
                   ]}
-                  onPick={(v) => onChange({ exportFmt: v as "svg" | "png" })}
+                  onPick={(v) => onChange({ exportFmt: v as "svg" | "png" | "pdf" })}
                 />
               </Row>
               <Row label="PNG 倍率" note="1x 为画板原始像素">

@@ -5,7 +5,7 @@ import { addNode, dragAnchor, dragHandle, ellipsePath, findAnchor, findSegment, 
 import { shapeFromDrag } from "../core/shapes";
 import { translateNode, scaleNodes, rotateNodesAround, splitPathAtPoint, segmentPoint, smoothPathNear, makeSmoothLimits, freehandAnchors, type SmoothLimit } from "../core/vectorOps";
 import { boxOfPoints, nodeBox, unionBox, type Box } from "../core/geom";
-import { toLinearGradient } from "../core/paint";
+import { gradAxis, gradHandlePoints, paintStops, toLinearGradient } from "../core/paint";
 import { erasePathNode } from "../core/eraser";
 import { nearestOnNode, normalizeWidthPoints, removeWidthPoint, setWidthPoint, widthHandles } from "../core/width";
 import { pickTop, boxSelect, groupBox } from "../engine/pick";
@@ -59,6 +59,7 @@ type Drag =
   | { kind: "pencil"; before: string; id: string; points: Pt[]; last: Pt }
   | { kind: "width"; before: string; id: string; t: number; side: "left" | "right" | "both"; normal: Pt; center: Pt; base: number }
   | { kind: "gradient"; before: string; start: Pt; ids: string[] }
+  | { kind: "grad-stop"; before: string; id: string; index: number; box: Box; axis: { x1: number; y1: number; x2: number; y2: number } }
   | { kind: "eraser"; before: string; points: Pt[]; last: Pt; r: number; targets: string[] }
   | { kind: "smooth"; before: string; last: Pt; limits: Map<string, SmoothLimit> }
   | { kind: "board-move"; before: string; last: Pt; index: number }
@@ -91,6 +92,7 @@ export default function CanvasView(props: Props) {
   const penRef = useRef<PenState | null>(null);
   const eraserRef = useRef<RenderState["eraser"]>(null);
   const widthHoverRef = useRef<RenderState["widthHover"]>(null);
+  const gradientHoverRef = useRef<RenderState["gradientHover"]>(null);
   const guidesRef = useRef<RenderState["snapGuides"]>([]);
   const propsRef = useRef(props);
   const rafRef = useRef(0);
@@ -113,6 +115,7 @@ export default function CanvasView(props: Props) {
       activeBoardId: p.activeBoardId,
       eraser: eraserRef.current,
       widthHover: widthHoverRef.current,
+      gradientHover: gradientHoverRef.current,
     };
     renderScene(cv, p.doc, p.view, state, s.dpr, { w: s.w, h: s.h });
   }, []);
@@ -159,6 +162,7 @@ export default function CanvasView(props: Props) {
   useEffect(() => {
     hoverRef.current = null;
     widthHoverRef.current = null;
+    gradientHoverRef.current = null;
   }, [tool]);
 
   // 滚轮：Ctrl 缩放、其余平移
@@ -310,6 +314,19 @@ export default function CanvasView(props: Props) {
       if (dc <= 6 / zoom && (!best || dc < best.dist)) {
         best = { t: h.t, side: "both", normal: h.normal, center: h.center, dist: dc };
       }
+    }
+    return best;
+  };
+
+  const gradientHandleAt = (n: PathNode, p: Pt, zoom: number) => {
+    if (!(n.fill.kind === "linear" || n.fill.kind === "radial") || !n.fill.grad) return null;
+    const box = nodeBox(n);
+    const axis = gradAxis(n.fill, box);
+    if (!axis) return null;
+    let best: { index: number; box: Box; axis: { x1: number; y1: number; x2: number; y2: number }; dist: number } | null = null;
+    for (const [index, q] of gradHandlePoints(n.fill, box).entries()) {
+      const d = Math.hypot(p.x - q.x, p.y - q.y);
+      if (d <= 8 / zoom && (!best || d < best.dist)) best = { index, box, axis, dist: d };
     }
     return best;
   };
@@ -613,6 +630,23 @@ export default function CanvasView(props: Props) {
     }
 
     if (prev.tool === "gradient") {
+      const selectedNode = prev.selected.length === 1 ? prev.doc.nodes[prev.selected[0]] : undefined;
+      if (selectedNode?.kind === "path") {
+        const hit = gradientHandleAt(selectedNode, p, prev.view.zoom);
+        if (hit) {
+          gradientHoverRef.current = { nodeId: selectedNode.id, index: hit.index };
+          dragRef.current = {
+            kind: "grad-stop",
+            before: store.snapshot(),
+            id: selectedNode.id,
+            index: hit.index,
+            box: hit.box,
+            axis: hit.axis,
+          };
+          draw();
+          return;
+        }
+      }
       const collect = (id: string): string[] => {
         const n = prev.doc.nodes[id];
         if (!n) return [];
@@ -797,6 +831,20 @@ export default function CanvasView(props: Props) {
 
     if (!drag) {
       const current = propsRef.current;
+      if (current.tool === "gradient") {
+        const selectedNode = current.selected.length === 1 ? current.doc.nodes[current.selected[0]] : undefined;
+        const hit = selectedNode?.kind === "path" ? gradientHandleAt(selectedNode, p, current.view.zoom) : null;
+        if (hit) {
+          gradientHoverRef.current = { nodeId: selectedNode!.id, index: hit.index };
+          if (wrapRef.current) wrapRef.current.style.cursor = "grab";
+          draw();
+          return;
+        }
+        if (gradientHoverRef.current) {
+          gradientHoverRef.current = null;
+          draw();
+        }
+      }
       if (current.tool === "width") {
         const hit = widthTargetAt(current.doc, p, current.view.zoom);
         widthHoverRef.current = hit ? { nodeId: hit.id, t: hit.t } : null;
@@ -874,6 +922,29 @@ export default function CanvasView(props: Props) {
         const n = d.nodes[drag.id];
         if (!n || n.kind !== "path") return;
         n.stroke.widthPoints = setWidthPoint(n.stroke.widthPoints, drag.t, drag.side, factor);
+      });
+      draw();
+      return;
+    }
+
+    if (drag.kind === "grad-stop") {
+      const dx = drag.axis.x2 - drag.axis.x1;
+      const dy = drag.axis.y2 - drag.axis.y1;
+      const len2 = dx * dx + dy * dy;
+      if (len2 <= 1e-6) return;
+      const u = ((p.x - drag.axis.x1) * dx + (p.y - drag.axis.y1) * dy) / len2;
+      store.live((d) => {
+        const n = d.nodes[drag.id];
+        if (!n || n.kind !== "path" || !n.fill.grad) return;
+        const stops = paintStops(n.fill);
+        if (!stops[drag.index]) return;
+        const prev = drag.index > 0 ? stops[drag.index - 1].offset : 0;
+        const next = drag.index < stops.length - 1 ? stops[drag.index + 1].offset : 1;
+        const lo = Math.min(1, Math.max(0, drag.index > 0 ? prev + 0.002 : 0));
+        const hi = Math.min(1, Math.max(0, drag.index < stops.length - 1 ? next - 0.002 : 1));
+        const offset = lo <= hi ? Math.min(hi, Math.max(lo, u)) : stops[drag.index].offset;
+        stops[drag.index] = { ...stops[drag.index], offset };
+        n.fill = { ...n.fill, color: stops[0]?.color ?? n.fill.color, grad: { angle: n.fill.grad.angle, stops } };
       });
       draw();
       return;
@@ -1201,6 +1272,13 @@ export default function CanvasView(props: Props) {
       return;
     }
 
+    if (drag.kind === "grad-stop") {
+      store.finish(drag.before);
+      gradientHoverRef.current = null;
+      draw();
+      return;
+    }
+
     if (drag.kind === "gradient") {
       store.finish(drag.before);
       draw();
@@ -1355,6 +1433,10 @@ export default function CanvasView(props: Props) {
         props.onCursor(null);
         if (widthHoverRef.current) {
           widthHoverRef.current = null;
+          draw();
+        }
+        if (gradientHoverRef.current) {
+          gradientHoverRef.current = null;
           draw();
         }
         if (wrapRef.current) wrapRef.current.style.cursor = "";

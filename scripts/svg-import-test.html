@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>SVG 渐变导入自检</title></head>
+<body>
+<div id="out">running</div>
+<script type="module">
+import { svgToPathNodes, docToSVG } from "/src/core/svg.ts";
+import { createDoc } from "/src/core/docOps.ts";
+import { renderScene } from "/src/engine/render.ts";
+
+const SVG = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="240" height="160">
+  <defs>
+    <linearGradient id="lg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff0000" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="rgb(0, 128, 255)"/>
+      <stop offset="1" stop-color="#0000ff" stop-opacity="35%"/>
+    </linearGradient>
+    <radialGradient id="rg">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.5"/>
+    </radialGradient>
+    <linearGradient id="alias" xlink:href="#lg"/>
+  </defs>
+  <g fill-opacity="0.5" opacity="0.9">
+    <rect x="0" y="0" width="120" height="60" fill="url(#lg)" stroke="url(#rg)" stroke-opacity="0.7"/>
+    <circle cx="160" cy="40" r="24" fill="url(#rg)"/>
+    <path d="M10 120 L70 120 L40 80 Z" fill="url(#alias)"/>
+    <rect x="110" y="100" width="100" height="40" fill="#ff0000" fill-opacity="0.2"/>
+    <rect x="110" y="140" width="100" height="10" fill="url(#missing)"/>
+  </g>
+  <g transform="rotate(90)">
+    <rect x="0" y="0" width="40" height="40" fill="url(#lg)"/>
+  </g>
+</svg>`;
+
+const { nodes } = svgToPathNodes(SVG, 7);
+const summary = nodes.map((n) => ({
+  fill: n.fill.kind,
+  color: n.fill.color,
+  fillOpacity: n.fill.opacity,
+  stops: n.fill.grad?.stops ?? [],
+  angle: n.fill.grad?.angle ?? null,
+  stroke: { kind: n.stroke.kind, color: n.stroke.color, opacity: n.stroke.opacity },
+  nodeOpacity: n.opacity,
+  first: n.subpaths[0]?.anchors[0] ? [n.subpaths[0].anchors[0].x, n.subpaths[0].anchors[0].y] : null,
+}));
+const bad = svgToPathNodes("<svg><g>", 1);
+const empty = svgToPathNodes("<svg xmlns='http://www.w3.org/2000/svg'><g></g></svg>", 1);
+
+const doc = createDoc("导入渐变自检", 240, 160, "#ffffff");
+for (const n of nodes) {
+  doc.nodes[n.id] = n;
+  doc.root.push(n.id);
+}
+const roundSvg = docToSVG(doc);
+const roundNodes = svgToPathNodes(roundSvg, 100).nodes;
+const cv = document.createElement("canvas");
+cv.id = "preview";
+cv.width = 520;
+cv.height = 360;
+cv.style.width = "260px";
+cv.style.height = "180px";
+cv.style.display = "block";
+cv.style.margin = "12px 0";
+document.body.append(cv);
+renderScene(cv, doc, { panX: 10, panY: 10, zoom: 1 }, {
+  selected: [],
+  tool: "select",
+  pen: null,
+  marquee: null,
+  hoverId: null,
+  snapGuides: [],
+  showGrid: false,
+  activeBoardId: doc.artboards[0].id,
+  gradientHover: null,
+}, 2, { w: 260, h: 180 });
+
+const result = {
+  count: nodes.length,
+  seq: nodes.at(-1)?.id,
+  summary,
+  bad: bad.nodes.length,
+  empty: empty.nodes.length,
+  roundCount: roundNodes.length,
+  round: roundNodes.map((n) => ({
+    fill: n.fill.kind,
+    angle: n.fill.grad?.angle ?? null,
+    stops: n.fill.grad?.stops.length ?? 0,
+    opacity: n.fill.opacity,
+    stroke: n.stroke.kind,
+  })),
+};
+window.__svgImportResult = result;
+document.getElementById("out").textContent = JSON.stringify(result, null, 2);
+</script>
+</body>
+</html>

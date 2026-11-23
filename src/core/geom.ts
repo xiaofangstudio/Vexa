@@ -84,14 +84,42 @@ export function pathPoints(node: PathNode): Pt[] {
   return pts;
 }
 
-/** 单点文字的近似包围盒：字宽按 0.62em 估，字距、缩放、对齐一起算。 */
+/** 估算单行文字的 em 宽度：CJK 全角按 1em，拉丁按字符类别分档，空格更窄。 */
+function textEmWidth(line: string): number {
+  let w = 0;
+  for (const ch of Array.from(line)) {
+    const c = ch.codePointAt(0) ?? 0;
+    if (
+      (c >= 0x2e80 && c <= 0x9fff) ||
+      (c >= 0xf900 && c <= 0xfaff) ||
+      (c >= 0xff00 && c <= 0xffef) ||
+      (c >= 0x3000 && c <= 0x303f)
+    ) {
+      w += 1;
+    } else if (ch === " " || ch === "\t") {
+      w += 0.3;
+    } else if (/[A-Z]/.test(ch)) {
+      w += 0.68;
+    } else if (/[ilI.,'`|]/.test(ch)) {
+      w += 0.3;
+    } else {
+      w += 0.56;
+    }
+  }
+  return Math.max(0.3, w);
+}
+
+/** 单点文字的近似包围盒：按字符宽度估，字距、缩放、对齐一起算。 */
 export function textBox(node: TextNode): Box {
   const lines = node.text.split("\n");
   const lh = node.size * (node.lineHeight ?? 1.25);
   const tracking = node.tracking ?? 0;
   const hs = (node.hScale ?? 100) / 100;
   const vs = (node.vScale ?? 100) / 100;
-  const longest = Math.max(1, ...lines.map((l) => l.length * node.size * 0.62 + Math.max(0, l.length - 1) * tracking));
+  const longest = Math.max(
+    1,
+    ...lines.map((l) => textEmWidth(l) * node.size + Math.max(0, Array.from(l).length - 1) * tracking),
+  );
   const w = Math.max(1, longest * Math.abs(hs));
   const h = Math.max(node.size, lh * lines.length) * Math.abs(vs);
   const align = node.align ?? "left";

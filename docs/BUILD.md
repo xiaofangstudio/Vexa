@@ -21,8 +21,10 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 不要把工具按钮重新塞回单列直排。
 
 填充与描边的公共数据在 `src/core/types.ts`：
-- `Paint.grad.stops` 是 `GradStop[]`，不再固定两色；新增或读取后用 `src/core/paint.ts` 的
-  `normalizeGradStops` / `paintStops` 排序并夹到 `0..1`，画布、SVG 和面板预览都走同一份。
+- `Paint.grad.stops` 是 `GradStop[]`，不再固定两色；每个色标有 `offset`、`color`，可选 `alpha` 与
+  `midpoint`。新增或读取后用 `src/core/paint.ts` 的 `normalizeGradStops` / `paintStops` 排序并夹到
+  `0..1`；画布、SVG 和面板预览都先经 `expandGradStops()`，非 0.5 中点会展开成中间色阶，透明度写成
+  `rgba` / `stop-opacity`。
 - `Stroke.cap` 为 `butt / round / square`，`Stroke.join` 为 `miter / round / bevel`，默认
   `butt / miter`；画布写 `lineCap/lineJoin`，SVG 写 `stroke-linecap/stroke-linejoin`。
 - `.vex` 读取时会给旧描边补默认值，非法 cap/join 回退默认；渐变少于 2 个有效色标时退回实色。
@@ -41,7 +43,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 | `src/core/shapes.ts` | 圆角矩形 / 正多边形 / 星形（参数化生成贝塞尔路径） |
 | `src/core/bool.ts` | 路径查找器：拍平 → polygon-clipping 布尔 → Douglas–Peucker 简化 |
 | `src/core/vectorOps.ts` | 对象级操作：排列、对齐、分布、旋转/翻转/平移、编组/取消编组 |
-| `src/core/svg.ts` | 导出 SVG；把描摹 SVG 解析回可编辑节点 |
+| `src/core/svg.ts` | 导出 SVG；把描摹/导入 SVG 解析回可编辑节点（含线性/径向渐变、色标透明度、href 继承） |
 | `src/core/vex.ts` | `.vex` 序列化 / 解析（版本 1，向后兼容兜底） |
 | `src/engine/view.ts` | 屏幕 ↔ 文档坐标、适配画板、以光标为中心缩放 |
 | `src/engine/render.ts` | 画布渲染（点阵粘贴板、画板、路径、选择框、锚点手柄、钢笔预览、智能参考线） |
@@ -63,6 +65,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - **撤销**：每次提交前把整篇文档 JSON 压栈（上限 200）。拖拽过程走 `live()` 不进栈，抬指后再 `finish()` 补一次。
 - **渲染**：Canvas 2D 自绘，DOM 只做面板；任何改文档的动作都会 bump 版本号触发重绘。
 - **描摹**：Rust 用 `image` 解码 → `vtracer` 输出 SVG 字符串 → 前端 `parseD` 成 Vexa 路径 → 等比放进画板中央。
+- **SVG 导入**：`svgToPathNodes()` 用 `DOMParser` 解析；`collectPaths()` 逐层继承 fill/stroke/`fill-opacity`/`stroke-opacity`/opacity 与 transform。`gradientPaint()` 读取 `<linearGradient>` / `<radialGradient>` 的 stop（颜色支持 hex/rgb/rgba/命名色/HSL，透明度支持小数与百分比），沿 `href` / `xlink:href` 追最多 4 层；线性用 `x1/y1 → x2/y2` 经当前矩阵推角度，径向按 Vexa 的 bbox 圆心/半径重建。单色标退化为实色，缺失引用变 `none`；解析异常返回空结果，由界面提示。
 - **编组**：`GroupNode.children` 存子 id，`drawNode` 递归绘制；选择工具命中组时返回**组 id**（Illustrator 语义），直接选择工具才钻进子节点。组内成员位置照常存绝对坐标，组只做层级与整体操作。
 - **路径布尔**：先 `flatten` 拍平（16 段/曲线）→ 规整环（去自闭合点、Douglas–Peucker 0.32px）→ polygon-clipping → 外环正向、洞反向（nonzero 填充）。曲线会退化为折线，属已知取舍（见 `docs/PARITY.md`）。
 - **渐变**：`Paint.kind` 支持 `linear` / `radial`；线性用「过包围盒中心、按角度投影裁半」算端点，径向以中心 + 半对角线为半径；画布与 SVG 共用同一几何。
@@ -82,7 +85,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - **直线工具**：按下即建两点开放路径（fill=none，继承当前描边），拖动只更新第二锚点；`Shift` 把方向锁到 15° 步进；松开长度 <2px 时 `removeNode` 丢弃，否则 `finish()` 记一步撤销。
 - **自由铅笔**：`vectorOps.simplifyPoints()` 用 Douglas–Peucker 抽稀，`freehandAnchors()` 按 Catmull-Rom 切线（前后差 /6）补对称手柄。画布按 2 CSS px 采样折线实时预览，松手抽稀 + 补手柄；笔画总长 <3px 直接丢弃。
 - **吸管**：`pickTop(..., deep=true)` 取最上层叶子；路径复制 `fill/stroke`，文字额外复制 8 项字符字段。无选中时通过 `onSamplePaint` 回写当前填充/描边并选中源对象；有选中时一次 `commit` 递归套到选中组内所有路径/文字。
-- **渐变工具**：`toLinearGradient()` 把任意填充转线性（已有 stops 直接复用，实色用本色→白）。拖动按 `atan2` 得角度，`Shift` 锁 15°；每个选中的路径各自保留停靠点，只同步 `grad.angle`，一次拖动 `snapshot/finish` 合成一步撤销。
+- **渐变工具**：`toLinearGradient()` 把任意填充转线性（已有 stops 直接复用，实色用本色→白）。拖动按 `atan2` 得角度，`Shift` 锁 15°；每个选中的路径各自保留停靠点，只同步 `grad.angle`，一次拖动 `snapshot/finish` 合成一步撤销。选中单个线性/径向渐变路径时，`gradAxis` / `gradHandlePoints` 给出轴线与色标手柄：线性沿角度轴、径向沿右侧半径拖动 `offset`，夹在相邻色标之间，不改变渐变类型或角度。
 - **橡皮**：`core/eraser.ts`。闭合填充路径把每个笔刷采样点做成 24 边形圆，`booleanSubpaths([node, ...circles], "subtract")` 一次性挖掉；纯描边/开口路径先按 ≤3px 加密，再按“笔刷内/外”切成多段开口子路径并用 `freehandAnchors` 平滑。画布 4px 采样、`eraserRef` 画半透明笔刷胶囊 + 当前圆轮廓，松开后一次 `live` 批量替换、一次 `finish` 记撤销。
 - **宽度工具**：`core/width.ts`。`Stroke.widthPoints` 每点存 `{ t, left, right }`，左右是相对 `stroke.width` 的倍数；`normalizeWidthPoints` 补 0/1 端点并按 `t` 排序，`widthAtSorted` 用余弦插值 `(1-cos(pi*k))/2` 过渡（同 `t` 两点保持台阶），`setWidthPoint` 按 `left/right/both` 只改指定侧，`removeWidthPoint` 删内部点、端点保留，若只剩全 1 端点则直接清空。`widthOutline` 将每条子路径按 4px 加密，按逐点法线偏移两侧：开放路径 1 条闭合环，闭合路径外环 + 反向内环，非零填充成空心描边；画布有轮廓时改填轮廓，SVG 原路径 `stroke="none"` 并另出轮廓 `<path>`，`.vex` 读取时归一化。`widthHandles` / `widthPreview` 在第一个子路径上给出中心、左右柄与悬停预览，拖中心 `both`、拖方块柄单侧、双击内部点删除。轮廓采样前只归一化一次宽度点，避免逐点排序拖慢拖动重绘。
 - **设置**：`src/stores/settings.ts` 是唯一来源，写 localStorage（`vexa.settings.v1`）；主题仍走 `vexa.theme`，与设置面板联动。网格 / 吸附 / 自动保存 / 导出默认值都从这里读。
@@ -105,19 +108,30 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 - 路径布尔是**多边形级**（曲线先拍平），曲线级保真布尔还没做；偏移/描边轮廓是折线近似（尖角斜接、平头端帽），路径效果生成的轮廓尚未支持圆头/方头端帽与曲线保真
 - 可变宽度描边已支持宽度点、单侧加宽、余弦过渡与 SVG/`.vex` 往返；均匀描边已支持平/圆/方端帽与尖角/圆角/斜角连接，但可变宽度轮廓不跟随这些设置，仍按平头外框绘制；虚线暂不随轮廓走（有宽度点时按实线轮廓输出），箭头仍按基础线宽；宽度手柄只画在第一条子路径，复合路径各子路径共用同一 `t` 轮廓
-- 渐变支持线性/径向多色标与位置调整；尚无色标中点、透明度色标、渐变网格/自由渐变、画布直接拖色标，图案填充、符号、画笔、图形样式未做
+- 渐变支持线性/径向多色标、独立透明度、插值中点与画布轴线/色标直拖；径向渐变的圆心固定在 bbox 中心、半径固定为半对角线，画布手柄只沿右侧半径显示；尚缺网格/自由渐变、渐变描边、图案填充、符号、画笔、图形样式
+- SVG 导入已覆盖基础图形、变换、线性/径向渐变、色标透明度、`href` 继承与 `fill/stroke-opacity`；尚缺 `<use>`、`<clipPath>`、图案、滤镜、`<text>` 转可编辑文字；`gradientTransform`、`spreadMethod` 与径向 `cx/cy/r` 目前按 bbox 规则近似
 - 文字已支持单点文字 + 字符面板（字重/字形/行距/字距/对齐/横纵缩放/基线），但还没有段落文字、区域文字、沿路径排版、避头尾、文字转路径
 - 旋转/翻转对文本与位图只做位置级变换（没有旋转属性，见 `docs/PARITY.md`）
 - 拖拽撤销粒度较粗（一次拖拽一步）
 - 文件关联已注册，但双击 `.vex` 启动并载入还需接 argv 处理
 - 自动保存只在已有路径时生效；未保存过的新工程仍需手动 `Ctrl+S`
+- PDF 导出已支持多画板、原生线性/径向渐变、渐变文字、实色/虚线/端帽/连接、透明位图与文字轮廓；文字是路径、不可选中/搜索，渐变描边、图案填充、渐变网格未做，组透明度按节点复合 alpha 近似；字体只读本机文件，不打包不联网
+- SVG 导入现支持 `<text>` / `<tspan>` 可编辑文字、`<use>` / `xlink:href` 引用与嵌套 use、`<clipPath>` 组裁切（含嵌套交集）、symbol viewBox/width 缩放；`objectBoundingBox` 剪裁、图案、滤镜、`mask` 仍未处理，文本旋转/斜切只映射位置与缩放、不旋转字形
 
 ## 发布构建
 
-- 版本：`0.1.0`（第十四批：多色渐变 / 描边端帽与连接）
+- 版本：`0.1.0`（第二十批：图层面板组展开）
 - 文件：`release\Vexa.exe`
-- 大小：`7,552,512 B`
-- SHA256：`6F7FB068716D92F032E54CC7C6407904A98F4D1A282181011C35544B44B795B8`
-- 构建时间：`2026-11-22 11:25:30`
-- 命令：`npm run build` → `npx tauri build --no-bundle` → 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
+- 大小：`7,717,888 B`
+- SHA256：`880F8BAEA9461EE9E9928D1DD7F299D901F6CA977281E5482C272B30BF009C91`
+- 构建时间：`2026-11-23 19:34:04`
+- 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,308,381 B`，SHA256 `8B617959EF85FB269BF8506A5B6DCA6737A0522FC0548574AF671D1DAD9A9650`
+- 前端产物：`dist/assets/pdf-D7J_EnSR.js` 407.16 kB / gzip 169.22；`dist/assets/index-CIZP0VR_.js` 459.59 kB / gzip 145.16；`dist/assets/index-T9he_bYd.css` 47.62 kB
+- 真实原生验收（第二十批）：新建 `900×600` 画板“图层终验”，从“文件 → 导入 SVG…”导入 `scripts/fixtures/import-clip-symbol.svg`，切到图层面板：顶层 7 行，展开“导入剪裁组 1”后出现 3 个子行（导入文字 2 / 导入文字 1 / 导入路径 1），内部剪裁路径不显示；点子行“导入文字 1”后状态“已选 1 · 165 × 52 px”，属性坞显示 Arial / 41.28px / 文本“裁切标题”。截图 `docs/shots/v20-final-layers.png`、`v20-final-select-text.png`、`v20-final-text-props.png`。
+- 第十九批发布验收保留：导入 clip/symbol fixture 得到 7 个顶层对象、14 个节点、2 个剪裁组、4 段文字；直接选择裁切标题 165×52、Arial 41.28px，改字后 296×52。冒烟 `nodes=14 roots=7 groups=2 text=4 cardSubs=2 bigStar=76.8 smallStar=38.4 nested=5 badGroups=0`。
+- 第十八批发布验收保留：`Vexa.exe` 7,715,840 B，SHA256 `E42244D2A0A8D531369053D42A93A72D114ABE600D9F55D2FB75B2867DB1D3D6`；导入 `import-text-use.svg` 得到 9 个对象（5 段文字 + 4 个路径），属性坞 `Arial / 73.05px`。
+- 第十七批发布验收保留：`release\Vexa.exe`（7,714,304 B，SHA256 `74D970B9C8BC6D191408A17594C14B8F9445A7A8D3CA8548826BE55FC598F87F`）通过“导出 → PDF → 全部 2 页”原生保存写盘 `docs/shots/v17-final-export.pdf`（77,615 B，2 页），渐变、渐变文字、透明位图与第二画板星形均正常；截图 `v17-final-export-p1.png`、`v17-final-export-p2.png`、`v17-ui-export-done.png`。
+- 原生保存/打开对话框自动化注记：前置的测试 Edge 窗口会抢走前台，需先最小化；文件名框是 `ComboBox` 子 `Edit`，UIA 不暴露，必须物理点击文件名框、`Ctrl+A` 后粘贴完整路径，再回车提交；`SetWindowText` 只改内部文本、可见框不刷新，不要依赖。文件列表项本身由 UIA 暴露（`ListItem` + `InvokePattern`），目录已停在 `scripts\fixtures` 时可直接 `Invoke` 目标文件，无需模拟点击；重复点“导出到…”或“导入 SVG…”会堆叠多个 `#32770`，操作前先清理多余对话框。
+
 

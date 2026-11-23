@@ -1,5 +1,5 @@
 /** 主编辑壳：顶栏 + 文档标签 + 三栏（工具轨 / 选项栏+画布 / 面板坞）+ 状态栏。 */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { zh } from "../i18n/zh";
 import { addNode, newId, removeNode } from "../core/docOps";
 import { booleanSubpaths, type BoolOp } from "../core/bool";
@@ -17,17 +17,18 @@ import {
   type AlignMode,
   type ArrangeMode,
 } from "../core/vectorOps";
-import { docToSVG, svgToPathNodes } from "../core/svg";
+import { docToSVG, svgToNodes, svgToPathNodes } from "../core/svg";
+import { loadSystemFont } from "../engine/fonts";
 import { offsetPathNode, outlineStrokeNode, smoothPathNode } from "../core/pathfx";
 import { nodeBox, unionBox } from "../core/geom";
 import { groupBox } from "../engine/pick";
-import { noPaint, noStroke, solid, BLEND_MODES, type Artboard, type BlendMode, type GroupNode, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc } from "../core/types";
-import { insertGradStop, paintPreview, paintStops } from "../core/paint";
+import { noPaint, noStroke, solid, BLEND_MODES, type Artboard, type BlendMode, type GradStop, type GroupNode, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc } from "../core/types";
+import { insertGradStop, paintPreview, paintStops, stopAlpha, stopCssColor } from "../core/paint";
 import { fitBoard, zoomAt, type View } from "../engine/view";
 import type { ToolId } from "../engine/render";
 import { useDocStore } from "../stores/docStore";
 import type { VexaSettings } from "../stores/settings";
-import { exportPNG, fileNameOf, pickExport, pickImage, pickSVGOpen, pickVexSave, readImageDataURL, readTextFile, traceImage, writeTextFile, type TraceOptions } from "../engine/io";
+import { exportPNG, fileNameOf, pickExport, pickImage, pickSVGOpen, pickVexSave, readImageDataURL, readTextFile, traceImage, writeBinaryBytes, writeTextFile, type TraceOptions } from "../engine/io";
 import { serializeVex } from "../core/vex";
 import CanvasView from "./CanvasView";
 import Icon, { type IconName } from "./Icon";
@@ -167,16 +168,61 @@ function scaleInBox(doc: VexaDoc, id: string, box: { x: number; y: number; w: nu
   }
 }
 
-/** 把描摹结果等比放进画板中央。 */
-function fitNodes(nodes: Node[], board: Artboard): void {
+/** 把导入结果等比放进画板中央；组按内部叶子统一缩放，剪裁路径也随内容缩放。 */
+function fitNodes(nodes: Node[], board: Artboard, roots?: string[]): void {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const childIds = new Set<string>();
+  for (const n of nodes) if (n.kind === "group") for (const c of n.children) childIds.add(c);
+  const tops = (roots ?? nodes.filter((n) => !childIds.has(n.id)).map((n) => n.id))
+    .map((id) => byId.get(id))
+    .filter((n): n is Node => !!n);
+
+  const boxOf = (n: Node): ReturnType<typeof unionBox> | null => {
+    if (n.kind !== "group") return nodeBox(n);
+    let box: ReturnType<typeof unionBox> | null = null;
+    for (const id of n.children) {
+      if (id === n.clip) continue;
+      const child = byId.get(id);
+      if (child) {
+        const b = boxOf(child);
+        if (b) box = unionBox(box, b);
+      }
+    }
+    return box;
+  };
+
   let box = null as ReturnType<typeof unionBox> | null;
-  for (const n of nodes) box = unionBox(box, nodeBox(n));
+  for (const n of tops) {
+    const b = boxOf(n);
+    if (b) box = unionBox(box, b);
+  }
   if (!box || box.w < 1 || box.h < 1) return;
   const s = Math.min((board.w * 0.86) / box.w, (board.h * 0.86) / box.h);
   const offX = board.x + (board.w - box.w * s) / 2 - box.x * s;
   const offY = board.y + (board.h - box.h * s) / 2 - box.y * s;
-  for (const n of nodes) {
-    if (n.kind !== "path") continue;
+
+  const apply = (n: Node): void => {
+    if (n.kind === "group") {
+      for (const id of n.children) {
+        const child = byId.get(id);
+        if (child) apply(child);
+      }
+      return;
+    }
+    if (n.kind === "text") {
+      n.x = n.x * s + offX;
+      n.y = n.y * s + offY;
+      n.size = Math.round(n.size * s * 100) / 100;
+      if (n.tracking) n.tracking = Math.round(n.tracking * s * 100) / 100;
+      return;
+    }
+    if (n.kind === "image") {
+      n.x = n.x * s + offX;
+      n.y = n.y * s + offY;
+      n.w *= s;
+      n.h *= s;
+      return;
+    }
     for (const sub of n.subpaths) {
       for (const a of sub.anchors) {
         a.x = a.x * s + offX;
@@ -185,7 +231,8 @@ function fitNodes(nodes: Node[], board: Artboard): void {
         if (a.hOut) { a.hOut.x = a.hOut.x * s + offX; a.hOut.y = a.hOut.y * s + offY; }
       }
     }
-  }
+  };
+  for (const n of tops) apply(n);
 }
 
 export default function EditorShell(props: Props) {
@@ -336,13 +383,25 @@ export default function EditorShell(props: Props) {
     return () => window.clearInterval(timer);
   }, [props.settings.autoSave, fileName, savedVersion, store.version, doSave]);
 
-  const doExport = useCallback(    async (fmt: "svg" | "png", scale: number) => {
+  const doExport = useCallback(    async (fmt: "svg" | "png" | "pdf", scale: number, pdfAll: boolean) => {
       try {
         const name = fileName ? fileNameOf(fileName) : doc.name;
         const path = await pickExport(name, fmt);
         if (!path) return;
         if (fmt === "svg") await writeTextFile(path, docToSVG(doc, { boardId: board.id }));
-        else await exportPNG(doc, path, scale, board.id);
+        else if (fmt === "png") await exportPNG(doc, path, scale, board.id);
+        else {
+          const { exportPDF } = await import("../core/pdf");
+          const result = await exportPDF(doc, {
+            boardId: pdfAll ? undefined : board.id,
+            fontLoader: loadSystemFont,
+          });
+          await writeBinaryBytes(path, result.bytes);
+          setExportOpen(false);
+          const done = zh.export.done.replace("{path}", path);
+          say(result.warnings.length ? `${done}（${result.warnings[0]}）` : done);
+          return;
+        }
         setExportOpen(false);
         say(zh.export.done.replace("{path}", path));
       } catch (e) {
@@ -422,18 +481,25 @@ export default function EditorShell(props: Props) {
     if (!path) return;
     try {
       const svg = await readTextFile(path);
-      const { nodes, nextSeq } = svgToPathNodes(svg, doc.seq);
+      const { nodes, roots, nextSeq } = svgToNodes(svg, doc.seq, "导入路径");
       if (!nodes.length) {
-        say("没有在 SVG 里识别到可导入的图形");
+        say("没有在 SVG 里识别到可导入的图形或文字");
         return;
       }
-      fitNodes(nodes, board);
+      fitNodes(nodes, board, roots);
       store.commit((d) => {
         d.seq = nextSeq;
-        for (const n of nodes) addNode(d, n);
+        for (const n of nodes) d.nodes[n.id] = n;
+        for (const id of roots) d.root.push(id);
       });
-      setSelected(nodes.map((n) => n.id));
-      say(`已导入 ${nodes.length} 个图形（矩形/圆/多边形/路径，支持基本变换）`);
+      setSelected(roots);
+      const texts = nodes.filter((n) => n.kind === "text").length;
+      const shapes = nodes.filter((n) => n.kind === "path" && n.visible).length;
+      const groups = roots.filter((id) => nodes.find((n) => n.id === id)?.kind === "group").length;
+      say(
+        `已导入 ${roots.length} 个顶层对象（内含 ${shapes} 个图形${texts ? ` · ${texts} 段文字` : ""}` +
+          `${groups ? ` · ${groups} 个剪裁组` : ""}，支持渐变、引用、剪裁与基本变换）`,
+      );
     } catch (e) {
       say(`SVG 导入失败：${String((e as Error).message ?? e)}`);
     }
@@ -940,7 +1006,7 @@ export default function EditorShell(props: Props) {
         { label: "导入 SVG…", run: () => void doImportSVG() },
         { label: "图像描摹…", run: () => setTracePath("") },
         { label: "", sep: true },
-        { label: "导出 SVG / PNG", key: "Ctrl+E", run: () => setExportOpen(true) },
+        { label: "导出 SVG / PNG / PDF", key: "Ctrl+E", run: () => setExportOpen(true) },
         { label: "", sep: true },
         { label: "关闭工程", run: props.onExit },
       ],
@@ -1511,10 +1577,11 @@ export default function EditorShell(props: Props) {
       {exportOpen && (
         <ExportModal
           board={board}
+          boardCount={doc.artboards.length}
           defaultFmt={props.settings.exportFmt}
           defaultScale={props.settings.exportScale}
           onClose={() => setExportOpen(false)}
-          onRun={(fmt, scale) => void doExport(fmt, scale)}
+          onRun={(fmt, scale, pdfAll) => void doExport(fmt, scale, pdfAll)}
         />
       )}
       {tracePath !== null && (
@@ -1557,6 +1624,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
   const pathCount = ids.filter((id) => doc.nodes[id]?.kind === "path").length;
   const hasSel = ids.length > 0;
   const [dragLayer, setDragLayer] = useState<string | null>(null);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
   const textBeforeRef = useRef<string | null>(null);
 
   const reorderLayer = (fromId: string, toId: string) => {
@@ -1579,6 +1647,15 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
       if (n) fn(n);
     });
   };
+
+  /** 渐变面板的公共写回：保证 stops 排序、首色同步、角度不丢。 */
+  const updateFillStops = (fn: (stops: GradStop[]) => GradStop[]) => setNode((n) => {
+    if (!("fill" in n)) return;
+    const angle = n.fill.grad?.angle ?? 90;
+    const stops = fn(paintStops(n.fill));
+    if (stops.length < 2) return;
+    n.fill = { ...n.fill, color: stops[0]?.color ?? n.fill.color, grad: { angle, stops } };
+  });
 
 
   const [offsetAmt, setOffsetAmt] = useState(6);
@@ -1604,6 +1681,90 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
       n.name = next.name;
     });
     if (missing) onToast("没有可转换的描边");
+  };
+
+  const toggleOpenGroup = (id: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  /** 组可展开；剪裁路径是内部实现，不混进用户图层。 */
+  const renderLayerRow = (id: string, depth: number): ReactNode => {
+    const n = doc.nodes[id];
+    if (!n) return <Fragment key={id} />;
+    const childIds = n.kind === "group" ? n.children.filter((c) => c !== n.clip && doc.nodes[c]) : [];
+    const open = n.kind === "group" && openGroups.has(id);
+    return (
+      <Fragment key={id}>
+        <li
+          className={"layer-row" + (ids.includes(id) ? " is-on" : "") + (dragLayer === id ? " is-dragging" : "")}
+          style={{ paddingLeft: 5 + depth * 14 }}
+          draggable={depth === 0}
+          onDragStart={(e) => {
+            if (depth !== 0) return;
+            setDragLayer(id);
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", id);
+          }}
+          onDragOver={(e) => { if (depth === 0) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }}
+          onDrop={(e) => {
+            if (depth !== 0) return;
+            e.preventDefault();
+            const from = e.dataTransfer.getData("text/plain") || dragLayer;
+            if (from) reorderLayer(from, id);
+            setDragLayer(null);
+          }}
+          onDragEnd={() => setDragLayer(null)}
+        >
+          {n.kind === "group" ? (
+            <button
+              className={"layer-caret" + (open ? " is-open" : "")}
+              title={open ? "收起组" : "展开组"}
+              aria-expanded={open}
+              onClick={(e) => { e.stopPropagation(); toggleOpenGroup(id); }}
+            >
+              <Icon name="chevron" size={12} />
+            </button>
+          ) : (
+            <span className="layer-caret-space" />
+          )}
+          <button
+            className="layer-eye"
+            title={n.visible ? zh.dock.hide : zh.dock.show}
+            onClick={(e) => {
+              e.stopPropagation();
+              store.commit((d) => { const nn = d.nodes[id]; if (nn) nn.visible = !nn.visible; });
+            }}
+          >
+            <Icon name={n.visible ? "eye" : "eye-off"} size={14} />
+          </button>
+          <button
+            className="layer-lock"
+            title={n.locked ? zh.dock.unlock : zh.dock.lock}
+            onClick={(e) => {
+              e.stopPropagation();
+              store.commit((d) => { const nn = d.nodes[id]; if (nn) nn.locked = !nn.locked; });
+            }}
+          >
+            <Icon name={n.locked ? "lock" : "unlock"} size={13} />
+          </button>
+          <button
+            className="layer-name"
+            onClick={() => onSelect([id])}
+            onDoubleClick={() => { if (n.kind === "group") toggleOpenGroup(id); }}
+            title={n.kind === "group" ? `${n.name}（双击展开/收起）` : n.name}
+          >
+            {n.name}
+          </button>
+          <span className="layer-kind faint">{kindGlyph(n)}</span>
+        </li>
+        {open && [...childIds].reverse().map((c) => renderLayerRow(c, depth + 1))}
+      </Fragment>
+    );
   };
 
   return (
@@ -1861,61 +2022,92 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       <div className="grad-stop-list">
                         {fillStops.map((stop, i) => (
                           <div className="grad-stop" key={i}>
-                            <label className="paint-swatch" style={{ background: stop.color }} title={`色标 ${i + 1}`}>
+                            <label className="paint-swatch" style={{ background: stopCssColor(stop) }} title={`色标 ${i + 1}`}>
                               <input
                                 type="color"
                                 value={stop.color}
-                                onChange={(e) => setNode((n) => {
-                                  if (!("fill" in n)) return;
-                                  const g = n.fill.grad ?? { angle: 90, stops: [] };
-                                  const stops = paintStops(n.fill).map((s, j) => (j === i ? { ...s, color: e.target.value } : s));
-                                  n.fill = { ...n.fill, color: stops[0]?.color ?? n.fill.color, grad: { angle: g.angle, stops } };
-                                })}
+                                onChange={(e) => updateFillStops((stops) => stops.map((s, j) => (j === i ? { ...s, color: e.target.value } : s)))}
                               />
                             </label>
-                            <input
-                              className="field-input num"
-                              type="number"
-                              min={0}
-                              max={100}
-                              step={1}
-                              value={Math.round(stop.offset * 1000) / 10}
-                              onChange={(e) => {
-                                const v = Number(e.target.value);
-                                if (!Number.isFinite(v)) return;
-                                setNode((n) => {
-                                  if (!("fill" in n)) return;
-                                  const g = n.fill.grad ?? { angle: 90, stops: [] };
-                                  const stops = paintStops(n.fill).map((s, j) => (j === i ? { ...s, offset: Math.min(1, Math.max(0, v / 100)) } : s));
-                                  n.fill = { ...n.fill, color: stops[0]?.color ?? n.fill.color, grad: { angle: g.angle, stops } };
-                                });
-                              }}
-                            />
-                            <span className="faint">%</span>
+                            <div className="grad-position">
+                              <input
+                                className="field-input num"
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={Math.round(stop.offset * 1000) / 10}
+                                onChange={(e) => {
+                                  const v = Number(e.target.value);
+                                  if (!Number.isFinite(v)) return;
+                                  updateFillStops((stops) => stops.map((s, j) => (j === i ? { ...s, offset: Math.min(1, Math.max(0, v / 100)) } : s)));
+                                }}
+                              />
+                              <span className="faint">%</span>
+                            </div>
+                            <div className="grad-alpha">
+                              <input
+                                className="field-input num"
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={1}
+                                title="色标透明度"
+                                value={Math.round(stopAlpha(stop) * 100)}
+                                onChange={(e) => {
+                                  const v = Number(e.target.value);
+                                  if (!Number.isFinite(v)) return;
+                                  updateFillStops((stops) => stops.map((s, j) => {
+                                    if (j !== i) return s;
+                                    const next = { ...s };
+                                    if (v >= 100) delete next.alpha;
+                                    else next.alpha = Math.min(1, Math.max(0, v / 100));
+                                    return next;
+                                  }));
+                                }}
+                              />
+                              <span className="faint">透明</span>
+                            </div>
                             <button
                               className="grad-stop-del"
                               disabled={fillStops.length <= 2}
                               title="删除这个色标"
-                              onClick={() => setNode((n) => {
-                                if (!("fill" in n) || fillStops.length <= 2) return;
-                                const g = n.fill.grad ?? { angle: 90, stops: [] };
-                                const stops = paintStops(n.fill).filter((_, j) => j !== i);
-                                n.fill = { ...n.fill, color: stops[0]?.color ?? n.fill.color, grad: { angle: g.angle, stops } };
-                              })}
+                              onClick={() => updateFillStops((stops) => stops.filter((_, j) => j !== i))}
                             >
                               ×
                             </button>
+                            {i > 0 && (
+                              <div className="grad-mid">
+                                <span className="faint">中点</span>
+                                <input
+                                  className="field-input num"
+                                  type="number"
+                                  min={1}
+                                  max={99}
+                                  step={1}
+                                  title="到上一个色标的插值中点，50% 为线性"
+                                  value={Math.round((stop.midpoint ?? 0.5) * 100)}
+                                  onChange={(e) => {
+                                    const v = Number(e.target.value);
+                                    if (!Number.isFinite(v)) return;
+                                    updateFillStops((stops) => stops.map((s, j) => {
+                                      if (j !== i) return s;
+                                      const next = { ...s };
+                                      if (v === 50) delete next.midpoint;
+                                      else next.midpoint = Math.min(0.99, Math.max(0.01, v / 100));
+                                      return next;
+                                    }));
+                                  }}
+                                />
+                                <span className="faint">%</span>
+                              </div>
+                            )}
                           </div>
                         ))}
                         <div className="grad-stop-actions">
                           <button
                             className="btn btn-ghost btn-mini"
-                            onClick={() => setNode((n) => {
-                              if (!("fill" in n)) return;
-                              const g = n.fill.grad ?? { angle: 90, stops: [] };
-                              const stops = insertGradStop(n.fill, paintStops(n.fill)).stops;
-                              n.fill = { ...n.fill, color: stops[0]?.color ?? n.fill.color, grad: { angle: g.angle, stops } };
-                            })}
+                            onClick={() => updateFillStops((stops) => insertGradStop(single.fill, stops).stops)}
                           >
                             ＋ 添加色标
                           </button>
@@ -2183,46 +2375,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
             <span className="faint num">{doc.root.length}</span>
           </div>
           <ul className="layer-list">
-            {[...doc.root].reverse().map((id) => {
-              const n = doc.nodes[id];
-              if (!n) return null;
-              return (
-                <li
-                  key={id}
-                  className={"layer-row" + (ids.includes(id) ? " is-on" : "") + (dragLayer === id ? " is-dragging" : "")}
-                  draggable
-                  onDragStart={(e) => { setDragLayer(id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", id); }}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
-                  onDrop={(e) => { e.preventDefault(); const from = e.dataTransfer.getData("text/plain") || dragLayer; if (from) reorderLayer(from, id); setDragLayer(null); }}
-                  onDragEnd={() => setDragLayer(null)}
-                >
-                  <button
-                    className="layer-eye"
-                    title={n.visible ? zh.dock.hide : zh.dock.show}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      store.commit((d) => { const nn = d.nodes[id]; if (nn) nn.visible = !nn.visible; });
-                    }}
-                  >
-                    <Icon name={n.visible ? "eye" : "eye-off"} size={14} />
-                  </button>
-                  <button
-                    className="layer-lock"
-                    title={n.locked ? zh.dock.unlock : zh.dock.lock}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      store.commit((d) => { const nn = d.nodes[id]; if (nn) nn.locked = !nn.locked; });
-                    }}
-                  >
-                    <Icon name={n.locked ? "lock" : "unlock"} size={13} />
-                  </button>
-                  <button className="layer-name" onClick={() => onSelect([id])} title={n.name}>
-                    {n.name}
-                  </button>
-                  <span className="layer-kind faint">{kindGlyph(n)}</span>
-                </li>
-              );
-            })}
+            {[...doc.root].reverse().map((id) => renderLayerRow(id, 0))}
           </ul>
           {doc.root.length === 0 && (
             <div className="dock-empty">
@@ -2234,8 +2387,8 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
             <button className="btn btn-ghost btn-mini" onClick={() => { if (ids.length) { store.commit((d) => { for (const id of ids) removeNode(d, id); }); onSelect([]); } }} disabled={!ids.length}>
               <Icon name="trash" size={14} /> {zh.dock.delete}
             </button>
-            <span className="faint layer-tip">拖动行可调整层级</span>
-            <button className="btn btn-ghost btn-mini" onClick={() => onToast("拖动图层行可调整叠放顺序；组内子层请在画布上用菜单排列")}>
+            <span className="faint layer-tip">组可展开；拖动顶层行调整层级</span>
+            <button className="btn btn-ghost btn-mini" onClick={() => onToast("组前的箭头可展开子图层；双击组名也能收起/展开，拖动顶层行调整叠放顺序")}>
               提示
             </button>
           </div>
@@ -2371,22 +2524,25 @@ function NumField({ label, value, unit, min, onCommit, inline }: { label: string
 
 function ExportModal({
   board,
+  boardCount = 1,
   defaultFmt = "svg",
   defaultScale = 1,
   onClose,
   onRun,
 }: {
   board: Artboard;
-  defaultFmt?: "svg" | "png";
+  boardCount?: number;
+  defaultFmt?: "svg" | "png" | "pdf";
   defaultScale?: number;
   onClose: () => void;
-  onRun: (fmt: "svg" | "png", scale: number) => void;
+  onRun: (fmt: "svg" | "png" | "pdf", scale: number, pdfAll: boolean) => void;
 }) {
-  const [fmt, setFmt] = useState<"svg" | "png">(defaultFmt);
+  const [fmt, setFmt] = useState<"svg" | "png" | "pdf">(defaultFmt);
   const [scale, setScale] = useState(defaultScale);
+  const [pdfAll, setPdfAll] = useState(true);
   return (
     <div className="modal-mask" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal export-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{zh.export.title}</h3>
           <span className="faint num">{board.w} × {board.h}</span>
@@ -2400,6 +2556,10 @@ function ExportModal({
             <button className={"export-card" + (fmt === "png" ? " is-on" : "")} onClick={() => setFmt("png")}>
               <span className="export-title">{zh.export.png}</span>
               <span className="export-note">{zh.export.pngNote}</span>
+            </button>
+            <button className={"export-card" + (fmt === "pdf" ? " is-on" : "")} onClick={() => setFmt("pdf")}>
+              <span className="export-title">{zh.export.pdf}</span>
+              <span className="export-note">{zh.export.pdfNote}</span>
             </button>
           </div>
           {fmt === "png" && (
@@ -2417,10 +2577,20 @@ function ExportModal({
               </span>
             </div>
           )}
+          {fmt === "pdf" && (
+            <div className="export-scale">
+              <span className="field-label">页面</span>
+              <div className="segmented">
+                <button className={"seg-btn" + (!pdfAll ? " is-on" : "")} onClick={() => setPdfAll(false)}>当前画板</button>
+                <button className={"seg-btn" + (pdfAll ? " is-on" : "")} onClick={() => setPdfAll(true)}>全部 {boardCount} 页</button>
+              </div>
+              <span className="faint num">{pdfAll ? `${boardCount} 页 · 矢量` : "1 页 · 矢量"}</span>
+            </div>
+          )}
         </div>
         <div className="modal-foot">
           <button className="btn" onClick={onClose}>{zh.btn.cancel}</button>
-          <button className="btn btn-primary" onClick={() => onRun(fmt, scale)}>{zh.export.save}</button>
+          <button className="btn btn-primary" onClick={() => onRun(fmt, scale, pdfAll)}>{zh.export.save}</button>
         </div>
       </div>
     </div>

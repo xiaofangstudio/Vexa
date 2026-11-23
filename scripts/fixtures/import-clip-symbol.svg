@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600">
+  <defs>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f76d6"/>
+      <stop offset="0.55" stop-color="#00a6c8"/>
+      <stop offset="1" stop-color="#0b2a4a"/>
+    </linearGradient>
+    <clipPath id="card">
+      <rect x="90" y="60" width="380" height="280"/>
+      <circle cx="470" cy="200" r="110"/>
+    </clipPath>
+    <clipPath id="band">
+      <rect x="90" y="430" width="720" height="110"/>
+    </clipPath>
+    <symbol id="star" viewBox="0 0 24 24">
+      <path d="M12 2 L14.9 8.2 L21.6 9.1 L16.7 13.8 L17.9 20.5 L12 17.4 L6.1 20.5 L7.3 13.8 L2.4 9.1 L9.1 8.2 Z" fill="#ffd166"/>
+      <circle cx="12" cy="13" r="3.2" fill="#102a43"/>
+    </symbol>
+  </defs>
+
+  <g clip-path="url(#card)">
+    <rect x="0" y="0" width="900" height="600" fill="url(#hero)"/>
+    <text x="130" y="170" font-family="Arial" font-size="48" font-weight="bold" fill="#ffffff">裁切标题</text>
+    <text x="130" y="220" font-family="Arial" font-size="22" fill="#d9f6ff">clipPath 里的文字仍可编辑</text>
+  </g>
+
+  <text x="90" y="390" font-family="Arial" font-size="18" fill="#5c6b7a">裁切之外说明文字</text>
+
+  <use href="#star" x="610" y="90" width="96" height="96"/>
+  <use href="#star" x="730" y="90" width="48" height="96"/>
+
+  <g clip-path="url(#band)">
+    <rect x="0" y="0" width="900" height="600" fill="#102a43"/>
+    <text x="130" y="500" font-family="Arial" font-size="28" fill="#00d0f8">底部色带 · clipPath</text>
+  </g>
+</svg>

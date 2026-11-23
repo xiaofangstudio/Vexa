@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>SVG clipPath / symbol 导入测试</title>
+  <style>
+    :root{--paper:#fff;--accent:#0f76d6;--grid-line:rgba(0,0,0,.08);--text-3:#8f8f9c;--font-ui:"Microsoft YaHei"}
+    body{font:14px/1.5 system-ui;margin:20px;background:#f5f6f8}
+    canvas{border:1px solid #ddd;background:#fff;max-width:100%}
+    pre{white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <h3>SVG clipPath / symbol 导入测试</h3>
+  <p id="state">准备中…</p>
+  <canvas id="cv" width="1800" height="1200" style="width:900px"></canvas>
+  <pre id="log"></pre>
+  <script type="module">
+    const log = (s) => { document.getElementById('log').textContent += s + '\n'; console.log(s); };
+    const state = document.getElementById('state');
+    try {
+      const { createDoc } = await import('/src/core/docOps.ts');
+      const { svgToNodes } = await import('/src/core/svg.ts?v=' + Date.now());
+      const { renderScene } = await import('/src/engine/render.ts');
+      const svg = await fetch('/scripts/fixtures/import-clip-symbol.svg?v=' + Date.now()).then(r => r.text());
+      const { nodes, roots, nextSeq } = svgToNodes(svg, 1, '导入路径');
+      const doc = createDoc('SVG 剪裁导入', 900, 600);
+      doc.nodes = {};
+      doc.root = roots.slice();
+      for (const n of nodes) doc.nodes[n.id] = n;
+      doc.seq = nextSeq;
+      const groups = nodes.filter(n => n.kind === 'group');
+      const texts = nodes.filter(n => n.kind === 'text');
+      const clipPaths = nodes.filter(n => n.kind === 'path' && !n.visible);
+      log(`nodes=${nodes.length} roots=${roots.length} groups=${groups.length} texts=${texts.length} clips=${clipPaths.length}`);
+      log(`roots=${roots.map(id => doc.nodes[id]?.name).join(' / ')}`);
+      log(`clips=${clipPaths.map(n => `${n.name}:${n.subpaths.length}`).join(' | ')}`);
+      const cv = document.getElementById('cv');
+      renderScene(cv, doc, { panX: 0, panY: 0, zoom: 1 }, {
+        selected: roots, tool: 'select', pen: null, marquee: null, hoverId: null,
+        snapGuides: [], widthHover: null, gradientHover: null, eraser: null,
+        activeBoardId: doc.artboards[0].id,
+      }, 2, { w: 900, h: 600 });
+      window.__svgClipPng = cv.toDataURL('image/png').split(',')[1];
+      window.__svgClipDoc = doc;
+      window.__svgClipNodes = nodes.length;
+      window.__svgClipGroups = groups.length;
+      window.__svgClipTexts = texts.length;
+      state.textContent = `完成：${nodes.length} 个节点，${groups.length} 个剪裁组，${texts.length} 段文字`;
+    } catch (e) {
+      state.textContent = '失败：' + e.message;
+      log('ERROR ' + (e.stack || e.message));
+      window.__svgClipError = String(e.stack || e.message);
+    }
+  </script>
+</body>
+</html>

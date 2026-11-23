@@ -103,3 +103,65 @@
 - MCP：`--selftest` 通过；端到端导出 SVG 同时含渐变、多色标、端帽/连接、虚线，校验 0 问题。
 - 截图：`docs/shots/v14-gradient.png`、`docs/shots/v14-stroke.png`。
 - 真实 Tauri/WebView2 窗口：四色标渐变 + 圆头/斜角见 `docs/shots/v14-real-editor.png`；开放直线设为 14px、圆头后画布确实显示粗线与圆端，见 `docs/shots/v14-real-line3.png`。
+
+## 验收记录（2026-11-23，第十五批）
+
+- `npx tsc --noEmit` 通过；`npm run build` 通过：77 modules，JS 440.04 kB，CSS 47.22 kB。
+- 渐变色标行：颜色、位置、透明度、中点四类输入均可键盘输入；位置行显示百分比，透明显示 0..100，非首色标才出现“中点”。
+- 中点语义：`50%` 为线性；低于 50% 时前半段更慢、后半段更快，画布与 SVG 使用同一份展开结果。
+- 画布渐变工具：选中单个渐变路径后显示虚线轴与色标圆柄；色标悬停出现放大环与 `grab` 光标。
+- 线性直拖：中点色标从 45% 拖到 28.3%，角度保持 90°。
+- 径向直拖：中点色标从 50% 拖到 66.4%，填充仍保持径向，未误切成线性。
+- 真实 Tauri/WebView2 窗口（150% 缩放）：三色标设 `0/100`、`45/35/20`、`100/100/50`；拖中间色标到 30% 后，右侧面板位置同步，角度保持 90°。
+- 截图：`docs/shots/v15-panel.png`（无头浏览器面板）、`v15-canvas-drag.png`（线性直拖）、`v15-radial-handles.png`（径向轴线）、`v15-real-panel.png`、`v15-real-drag.png`（真实 Tauri）。
+
+## 验收记录（2026-11-23，第十六批）
+
+- `npx tsc --noEmit` 通过；`npm run build` 通过：77 modules，JS 444.79 kB，CSS 47.22 kB。
+- 开发页 `DOMParser` 测试：线性渐变三色标 `#ff0000 alpha .8 / #0080ff / #0000ff alpha .35`、角度 90、`fill-opacity .5` 全部保留；径向白→黑 50% 透明正确；`xlink:href` 别名继承 3 个色标；缺失引用回退 `none`；命名色/HSL/rgba 归一化正确。
+- 开发页真实导入 `scripts/fixtures/import-gradients.svg`：6 个对象、自动全选，状态栏“已选 6 · 6 个对象”；渐变渲染与 fixture 一致；属性坞显示“导入路径 1”，三行色标为 `0/100`、`45/90`、`100/35`，中点均 50，角度 90。
+- 真实发布版（Tauri/WebView2，150% 缩放）：从“文件 → 导入 SVG…”调起系统文件对话框，选择同一 fixture 后成功导入；对话框关闭、无报错，画布显示渐变矩形/径向圆/渐变三角/紫色渐变条/半透明块/描边曲线，状态栏“已选 6 · 6 个对象”；从图层面板单选“导入路径 1”后属性坞显示 3 个色标与角度 90。
+- 原生对话框：文件名框的可见文本属于 `ComboBox`，直接 `SetWindowText` 子 `Edit` 不可靠；需先点击文件名框再用剪贴板粘贴，最后点“打开(O)”。另需确认没有前置测试窗口遮挡对话框，否则物理点击会落到覆盖窗口。
+- 截图：`docs/shots/v16-dev-import.png`、`v16-dev-single.png`、`v16-dev-stops.png`、`v16-import-render.png`、`v16-native-dialog.png`、`v16-native-imported.png`、`v16-native-single.png`。
+
+## 验收记录（2026-11-23，第十七批）
+
+- `npx tsc --noEmit` 通过；`npm run tauri:build` 通过：139 modules，`pdf-Bv5Z9TuM.js` 407.16 kB（懒加载）、`index-DepRFTcP.js` 449.46 kB、CSS 47.27 kB。
+- 导出弹窗：三张卡片 SVG / PNG / PDF 等宽排列，弹窗宽 620px；选择 PDF 后出现“当前画板 / 全部 2 页”分段控件与“2 页 · 矢量”提示。
+- 真实发布版：顶栏“导出”打开弹窗 → PDF → 全部 2 页 → 原生保存框，文件名框用 `Ctrl+A` + 剪贴板粘贴完整路径 `D:\...\v17-final-export.pdf` 后回车，2 秒内写盘；无错误框、无重复模态。
+- 输出核验：导出的 77,615 B PDF 为 2 页；渲染第一页渐变矩形、径向圆角、两行渐变标题、实色小字与右下角 ALPHA 透明位图均正常；第二页黄色星形正常。
+- 位图修复：Tauri 生产 CSP 拦截 `fetch(data:)`；改为 data URL 直接 base64 → `Blob` → `createImageBitmap`。修复后同一 fixture 的 PDF 从 31,978 B（位图缺失）变为 39,722 B（位图完整）。
+- 原生保存框：前置 Edge 会抢前台，需先最小化；UIA 不暴露文件名框，必须物理点击后粘贴；重复点“导出到…”会堆 `#32770`，先关错误框再清理。
+- 截图：`docs/shots/v17-ui-export-modal2.png`、`v17-ui-export-pdf2.png`、`v17-ui-export-done.png`、`v17-final-export-p1.png`、`v17-final-export-p2.png`、`v17-native-save-dialog4.png`、`v17-native-save-pasted.png`。
+
+## 验收记录（2026-11-23，第十八批）
+
+- `npx tsc --noEmit` 通过；`npm run tauri:build` 通过：139 modules，`pdf-DDEkuYgI.js` 407.16 kB、`index-CdbjTig7.js` 454.50 kB、CSS 47.27 kB；release `Vexa.exe` 7,715,840 B。
+- SVG 文本：`scripts/fixtures/import-text-use.svg` 导入 9 个对象（标题、两行 tspan、缩放文字、居中文字共 5 段文字；两处 `<use>` 展开 4 条路径）。标题保留粗体/左对齐；渐变行保留 `url(#tg)` 三色标渐变；`tspan dy=24` 生成第二行可编辑文本；`scale(1.2 1)` 映射为水平缩放 120%。
+- 浏览器渲染页 `scripts/svg-text-test.html`：`nodes=9 paths=4 texts=5`，全画板截图 `docs/shots/v18-svg-text-render.png` 中文字、渐变、两处引用图标均正确。
+- 真实发布版（Tauri/WebView2）：从“文件 → 导入 SVG…”导入同一 fixture，画布出现 5 段文字 + 2 组图标；图层面板选中“导入文字 1”，属性坞显示“SVG 文本导入 / Arial / 73.05px / 行距 91 / 字距 1 / 水平 100% / 垂直 100%”，文本仍可编辑。
+- 导入定位：`fitNodes` 现在同时缩放路径、文本与图片；文本字号缩放后保留 2 位小数，避免属性坞出现一长串浮点。
+- 已知边界：文本旋转/斜切暂不旋转字形；`<clipPath>` 组裁切、图案、滤镜、`<use>` 的 symbol viewBox/width 缩放未处理。
+- 截图：`docs/shots/v18-native-open-dialog.png`、`v18-native-final-import.png`、`v18-native-final-props.png`。
+
+## 验收记录（2026-11-23，第十九批）
+
+- `npx tsc --noEmit` 通过；`npm run tauri:build` 通过：139 modules，`pdf-CCjG0iuz.js` 407.16 kB、`index-CBeaEbsD.js` 458.88 kB、CSS 47.27 kB；release `Vexa.exe` 7,717,376 B。
+- 浏览器渲染页 `scripts/svg-clip-test.html`：卡片矩形+圆形并集裁切、裁切内标题/副标题、底部色带裁切、两枚星星（96 与 meet 缩放到 48）全部正确，状态 `nodes=14 roots=7 groups=2 texts=4 clips=2`；截图 `docs/shots/v19-svg-clip-render.png`。
+- 真实发布版（Tauri/WebView2）：新建干净 `900×600` 画板，从“文件 → 导入 SVG…”导入 `scripts/fixtures/import-clip-symbol.svg`；实际得到 7 个顶层对象、14 个总节点、2 个剪裁组、4 段文字，状态“已选 7 · 7 个对象”；图层根层顺序为剪裁组 2、路径 5..2、文字 3、剪裁组 1，画布与 fixture 一致。
+- 剪裁内对象可选择：直接选择工具点击裁切标题，属性坞显示“导入文字 1 / 文本 / Arial / 41.28px / 165×52 px”；普通选择仍是整组。改成“裁切标题 · 已改”后画布即时重排，宽度变 296×52，说明组内文字不是死图。
+- 修复点：拾取现在按组的 clip 范围先做排除，clip 外的整张画布矩形不再挡住上方裁切内容；中文文字包围盒改为按字符宽度估（CJK 1em），避免中文标题点到字上却选不到。
+- 已知边界：图层面板仍不展开组内子节点，也不支持双击钻组；组内对象依靠“直接选择”工具进入。`objectBoundingBox` 剪裁、even-odd 孔洞、`slice` 对齐、图案/滤镜/`mask` 仍未处理。
+- 原生对话框自动化：重复点“导入 SVG…”会留下多个 `#32770`；UIA 对文件列表项暴露 `ListItem + InvokePattern`，目录已停在 fixtures 时可直接 Invoke 文件打开，比物理点击稳。
+- 截图：`docs/shots/v19c-native-direct.png`、`v19c-text-edited.png`、`v19b-native-final.png`。
+
+## 验收记录（2026-11-23，第二十批）
+
+- `npx tsc --noEmit` 通过；`npx tauri:build` 通过：139 modules，`pdf-D7J_EnSR.js` 407.16 kB、`index-CIZP0VR_.js` 459.59 kB、`index-T9he_bYd.css` 47.62 kB；release `Vexa.exe` 7,717,888 B。
+- 图层树：顶层行保持倒序；组前新增箭头，展开后子图层缩进列出，内部剪裁路径跳过；展开状态按组 id 保存，收起再开不丢选中。
+- 真实发布版：新建 `900×600` 画板“图层终验”，导入 clip 验收文件后切到图层面板；顶层 7 行，展开“导入剪裁组 1”得到 3 个子行（导入文字 2 / 导入文字 1 / 导入路径 1），箭头方向为收起向右、展开向下。
+- 子层选择：点“导入文字 1”直接选中 165×52 px；切到属性页显示“导入文字 1 / 文本 / Arial / 41.28px / 文本 裁切标题”，不再需要先选组。
+- 交互约束：拖拽仍只允许顶层行，子行不可拖，避免结构损坏；组名单击选组、双击展开/收起。
+- 已知边界：组内子层拖动排序、把子层拖出组、批量显隐/锁定尚未做；导入组默认收起。
+- 截图：`docs/shots/v20-final-layers.png`、`v20-final-select-text.png`、`v20-final-text-props.png`。
+

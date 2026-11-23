@@ -1,0 +1,1305 @@
+{
+ "format": "vexa",
+ "version": 1,
+ "generator": "Vexa 0.1.0 · 小方工作室",
+ "savedAt": "2026-11-23T07:47:52.385Z",
+ "doc": {
+  "format": "vexa",
+  "version": 1,
+  "name": "PDF 实机验收",
+  "unit": "px",
+  "artboards": [
+   {
+    "id": "a1",
+    "name": "PDF 实机验收",
+    "x": 0,
+    "y": 0,
+    "w": 900,
+    "h": 640,
+    "bg": "#ffffff"
+   },
+   {
+    "id": "ab2",
+    "name": "第二页",
+    "x": 940,
+    "y": 0,
+    "w": 520,
+    "h": 360,
+    "bg": "#f7f8fa"
+   }
+  ],
+  "nodes": {
+   "pdf1": {
+    "kind": "path",
+    "id": "pdf1",
+    "name": "渐变矩形",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 60,
+        "y": 60,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 480,
+        "y": 60,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 480,
+        "y": 280,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 60,
+        "y": 280,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "linear",
+     "color": "#e5484d",
+     "opacity": 0.94,
+     "grad": {
+      "angle": 20,
+      "stops": [
+       {
+        "offset": 0,
+        "color": "#e5484d",
+        "alpha": 0.82
+       },
+       {
+        "offset": 0.46,
+        "color": "#00d0f8"
+       },
+       {
+        "offset": 1,
+        "color": "#0f2d5a",
+        "alpha": 0.34
+       }
+      ]
+     }
+    },
+    "stroke": {
+     "kind": "solid",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 8,
+     "dash": [
+      12,
+      7
+     ],
+     "cap": "round",
+     "join": "round",
+     "arrow": "triangle"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "pdf2": {
+    "kind": "path",
+    "id": "pdf2",
+    "name": "径向圆角",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 546,
+        "y": 60,
+        "hIn": {
+         "x": 526.1177490072,
+         "y": 60
+        },
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 804,
+        "y": 60,
+        "hIn": null,
+        "hOut": {
+         "x": 823.8822509928,
+         "y": 60
+        },
+        "smooth": false
+       },
+       {
+        "x": 840,
+        "y": 96,
+        "hIn": {
+         "x": 840,
+         "y": 76.1177490072
+        },
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 840,
+        "y": 244,
+        "hIn": null,
+        "hOut": {
+         "x": 840,
+         "y": 263.8822509928
+        },
+        "smooth": false
+       },
+       {
+        "x": 804,
+        "y": 280,
+        "hIn": {
+         "x": 823.8822509928,
+         "y": 280
+        },
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 546,
+        "y": 280,
+        "hIn": null,
+        "hOut": {
+         "x": 526.1177490072,
+         "y": 280
+        },
+        "smooth": false
+       },
+       {
+        "x": 510,
+        "y": 244,
+        "hIn": {
+         "x": 510,
+         "y": 263.8822509928
+        },
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 510,
+        "y": 96,
+        "hIn": null,
+        "hOut": {
+         "x": 510,
+         "y": 76.1177490072
+        },
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "radial",
+     "color": "#ffffff",
+     "opacity": 1,
+     "grad": {
+      "angle": 0,
+      "stops": [
+       {
+        "offset": 0,
+        "color": "#ffffff"
+       },
+       {
+        "offset": 1,
+        "color": "#0f76d6",
+        "alpha": 0.5
+       }
+      ]
+     }
+    },
+    "stroke": {
+     "kind": "solid",
+     "color": "#0f76d6",
+     "opacity": 1,
+     "width": 5,
+     "dash": [],
+     "cap": "round",
+     "join": "round",
+     "arrow": "none"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "pdf3": {
+    "kind": "text",
+    "id": "pdf3",
+    "name": "Vexa PDF 导出",
+    "x": 100,
+    "y": 410,
+    "text": "Vexa PDF 导出\n文字轮廓保持矢量",
+    "size": 44,
+    "font": "黑体",
+    "bold": true,
+    "italic": false,
+    "lineHeight": 1.4,
+    "tracking": 1.2,
+    "align": "left",
+    "hScale": 100,
+    "vScale": 100,
+    "baseline": 0,
+    "fill": {
+     "kind": "linear",
+     "color": "#6b4ef2",
+     "opacity": 1,
+     "grad": {
+      "angle": 0,
+      "stops": [
+       {
+        "offset": 0,
+        "color": "#6b4ef2"
+       },
+       {
+        "offset": 0.55,
+        "color": "#0f76d6"
+       },
+       {
+        "offset": 1,
+        "color": "#00c2a8"
+       }
+      ]
+     }
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "pdf4": {
+    "kind": "text",
+    "id": "pdf4",
+    "name": "实色文字 · 零联网 · 本地导出",
+    "x": 100,
+    "y": 548,
+    "text": "实色文字 · 零联网 · 本地导出",
+    "size": 26,
+    "font": "黑体",
+    "bold": true,
+    "italic": false,
+    "lineHeight": 1.4,
+    "tracking": 1.2,
+    "align": "left",
+    "hScale": 100,
+    "vScale": 100,
+    "baseline": 0,
+    "fill": {
+     "kind": "solid",
+     "color": "#17171c",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "pdf5": {
+    "kind": "image",
+    "id": "pdf5",
+    "name": "透明位图",
+    "src": "data:image/png;base64,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",
+    "x": 520,
+    "y": 410,
+    "w": 280,
+    "h": 170,
+    "opacity": 0.9,
+    "visible": true,
+    "locked": false
+   },
+   "pdf6": {
+    "kind": "path",
+    "id": "pdf6",
+    "name": "星形",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 1200,
+        "y": 88,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 1225.9565967412357,
+        "y": 144.27380952840232,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 1287.497199499154,
+        "y": 151.57043651750485,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 1241.998655759594,
+        "y": 193.64619047159766,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 1254.0762432109075,
+        "y": 254.42956348249515,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 1200,
+        "y": 224.16,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 1145.9237567890925,
+        "y": 254.42956348249515,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 1158.001344240406,
+        "y": 193.6461904715977,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 1112.5028005008458,
+        "y": 151.57043651750485,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 1174.0434032587643,
+        "y": 144.27380952840232,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#f2b84b",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "solid",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 5,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter",
+     "arrow": "none"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n2": {
+    "kind": "text",
+    "id": "n2",
+    "name": "导入文字 1",
+    "x": 85.29699800929001,
+    "y": 132.45494359654947,
+    "text": "SVG 文本导入",
+    "size": 73.04578633045787,
+    "font": "Arial",
+    "bold": true,
+    "italic": false,
+    "align": "left",
+    "tracking": 1,
+    "hScale": 100,
+    "vScale": 100,
+    "fill": {
+     "kind": "solid",
+     "color": "#17171c",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n3": {
+    "kind": "text",
+    "id": "n3",
+    "name": "导入文字 2",
+    "x": 85.29699800929001,
+    "y": 249.32820172528204,
+    "text": "渐变行一",
+    "size": 73.04578633045787,
+    "font": "Arial",
+    "bold": false,
+    "italic": false,
+    "align": "left",
+    "tracking": 0,
+    "hScale": 100,
+    "vScale": 100,
+    "fill": {
+     "kind": "linear",
+     "color": "#e5484d",
+     "opacity": 1,
+     "grad": {
+      "angle": 0,
+      "stops": [
+       {
+        "offset": 0,
+        "color": "#e5484d"
+       },
+       {
+        "offset": 0.5,
+        "color": "#7a5cff"
+       },
+       {
+        "offset": 1,
+        "color": "#00d0f8"
+       }
+      ]
+     }
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n4": {
+    "kind": "text",
+    "id": "n4",
+    "name": "导入文字 3",
+    "x": 85.29699800929001,
+    "y": 336.9831453218315,
+    "text": "第二行保持可编辑",
+    "size": 73.04578633045787,
+    "font": "Arial",
+    "bold": false,
+    "italic": false,
+    "align": "left",
+    "tracking": 0,
+    "hScale": 100,
+    "vScale": 100,
+    "fill": {
+     "kind": "solid",
+     "color": "#17171c",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n5": {
+    "kind": "path",
+    "id": "n5",
+    "name": "导入路径 1",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 85.29699800929001,
+        "y": 373.50603848706044,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 187.56109887193102,
+        "y": 373.50603848706044,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 187.56109887193102,
+        "y": 439.2472461844725,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 85.29699800929001,
+        "y": 439.2472461844725,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#336699",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter",
+     "arrow": "none"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n6": {
+    "kind": "path",
+    "id": "n6",
+    "name": "导入路径 2",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 202.1702561380226,
+        "y": 410.0289316522893,
+        "hIn": null,
+        "hOut": {
+         "x": 202.1702561380226,
+         "y": 389.85789473855874
+        },
+        "smooth": false
+       },
+       {
+        "x": 238.69314930325154,
+        "y": 373.50603848706044,
+        "hIn": {
+         "x": 218.52211238952094,
+         "y": 373.50603848706044
+        },
+        "hOut": {
+         "x": 258.8641862169821,
+         "y": 373.50603848706044
+        },
+        "smooth": false
+       },
+       {
+        "x": 275.21604246848045,
+        "y": 410.0289316522893,
+        "hIn": {
+         "x": 275.21604246848045,
+         "y": 389.85789473855874
+        },
+        "hOut": {
+         "x": 275.21604246848045,
+         "y": 430.19996856601995
+        },
+        "smooth": false
+       },
+       {
+        "x": 238.69314930325154,
+        "y": 446.55182481751825,
+        "hIn": {
+         "x": 258.8641862169821,
+         "y": 446.55182481751825
+        },
+        "hOut": {
+         "x": 218.52211238952094,
+         "y": 446.55182481751825
+        },
+        "smooth": false
+       },
+       {
+        "x": 202.1702561380226,
+        "y": 410.0289316522893,
+        "hIn": {
+         "x": 202.1702561380226,
+         "y": 430.19996856601995
+        },
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#00d0f8",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter",
+     "arrow": "none"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n7": {
+    "kind": "path",
+    "id": "n7",
+    "name": "导入路径 3",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 85.29699800929001,
+        "y": 519.5976111479761,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 187.56109887193102,
+        "y": 519.5976111479761,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 187.56109887193102,
+        "y": 585.3388188453882,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 85.29699800929001,
+        "y": 585.3388188453882,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#336699",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter",
+     "arrow": "none"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n8": {
+    "kind": "path",
+    "id": "n8",
+    "name": "导入路径 4",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 202.1702561380226,
+        "y": 556.1205043132051,
+        "hIn": null,
+        "hOut": {
+         "x": 202.1702561380226,
+         "y": 535.9494673994744
+        },
+        "smooth": false
+       },
+       {
+        "x": 238.69314930325154,
+        "y": 519.5976111479761,
+        "hIn": {
+         "x": 218.52211238952094,
+         "y": 519.5976111479761
+        },
+        "hOut": {
+         "x": 258.8641862169821,
+         "y": 519.5976111479761
+        },
+        "smooth": false
+       },
+       {
+        "x": 275.21604246848045,
+        "y": 556.1205043132051,
+        "hIn": {
+         "x": 275.21604246848045,
+         "y": 535.9494673994744
+        },
+        "hOut": {
+         "x": 275.21604246848045,
+         "y": 576.2915412269357
+        },
+        "smooth": false
+       },
+       {
+        "x": 238.69314930325154,
+        "y": 592.643397478434,
+        "hIn": {
+         "x": 258.8641862169821,
+         "y": 592.643397478434
+        },
+        "hOut": {
+         "x": 218.52211238952094,
+         "y": 592.643397478434
+        },
+        "smooth": false
+       },
+       {
+        "x": 202.1702561380226,
+        "y": 556.1205043132051,
+        "hIn": {
+         "x": 202.1702561380226,
+         "y": 576.2915412269357
+        },
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#00d0f8",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter",
+     "arrow": "none"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n9": {
+    "kind": "text",
+    "id": "n9",
+    "name": "导入文字 4",
+    "x": 684.2724459190446,
+    "y": 446.55182481751825,
+    "text": "缩放文字",
+    "size": 43.82747179827472,
+    "font": "Microsoft YaHei",
+    "bold": true,
+    "italic": false,
+    "align": "left",
+    "tracking": 0,
+    "hScale": 120,
+    "vScale": 100,
+    "fill": {
+     "kind": "solid",
+     "color": "#0f76d6",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n10": {
+    "kind": "text",
+    "id": "n10",
+    "name": "导入文字 5",
+    "x": 684.2724459190446,
+    "y": 592.643397478434,
+    "text": "居中文字",
+    "size": 51.13205043132051,
+    "font": "Microsoft YaHei",
+    "bold": false,
+    "italic": false,
+    "align": "center",
+    "tracking": 0,
+    "hScale": 100,
+    "vScale": 100,
+    "fill": {
+     "kind": "solid",
+     "color": "#e5484d",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n11": {
+    "kind": "text",
+    "id": "n11",
+    "name": "导入文字 1",
+    "x": 85.29699800929001,
+    "y": 132.45494359654947,
+    "text": "SVG 文本导入",
+    "size": 73.05,
+    "font": "Arial",
+    "bold": true,
+    "italic": false,
+    "align": "left",
+    "tracking": 1,
+    "hScale": 100,
+    "vScale": 100,
+    "fill": {
+     "kind": "solid",
+     "color": "#17171c",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n12": {
+    "kind": "text",
+    "id": "n12",
+    "name": "导入文字 2",
+    "x": 85.29699800929001,
+    "y": 249.32820172528204,
+    "text": "渐变行一",
+    "size": 73.05,
+    "font": "Arial",
+    "bold": false,
+    "italic": false,
+    "align": "left",
+    "tracking": 0,
+    "hScale": 100,
+    "vScale": 100,
+    "fill": {
+     "kind": "linear",
+     "color": "#e5484d",
+     "opacity": 1,
+     "grad": {
+      "angle": 0,
+      "stops": [
+       {
+        "offset": 0,
+        "color": "#e5484d"
+       },
+       {
+        "offset": 0.5,
+        "color": "#7a5cff"
+       },
+       {
+        "offset": 1,
+        "color": "#00d0f8"
+       }
+      ]
+     }
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n13": {
+    "kind": "text",
+    "id": "n13",
+    "name": "导入文字 3",
+    "x": 85.29699800929001,
+    "y": 336.9831453218315,
+    "text": "第二行保持可编辑",
+    "size": 73.05,
+    "font": "Arial",
+    "bold": false,
+    "italic": false,
+    "align": "left",
+    "tracking": 0,
+    "hScale": 100,
+    "vScale": 100,
+    "fill": {
+     "kind": "solid",
+     "color": "#17171c",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n14": {
+    "kind": "path",
+    "id": "n14",
+    "name": "导入路径 1",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 85.29699800929001,
+        "y": 373.50603848706044,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 187.56109887193102,
+        "y": 373.50603848706044,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 187.56109887193102,
+        "y": 439.2472461844725,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 85.29699800929001,
+        "y": 439.2472461844725,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#336699",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n15": {
+    "kind": "path",
+    "id": "n15",
+    "name": "导入路径 2",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 202.1702561380226,
+        "y": 410.0289316522893,
+        "hIn": null,
+        "hOut": {
+         "x": 202.1702561380226,
+         "y": 389.85789473855874
+        },
+        "smooth": false
+       },
+       {
+        "x": 238.69314930325154,
+        "y": 373.50603848706044,
+        "hIn": {
+         "x": 218.52211238952094,
+         "y": 373.50603848706044
+        },
+        "hOut": {
+         "x": 258.8641862169821,
+         "y": 373.50603848706044
+        },
+        "smooth": false
+       },
+       {
+        "x": 275.21604246848045,
+        "y": 410.0289316522893,
+        "hIn": {
+         "x": 275.21604246848045,
+         "y": 389.85789473855874
+        },
+        "hOut": {
+         "x": 275.21604246848045,
+         "y": 430.19996856601995
+        },
+        "smooth": false
+       },
+       {
+        "x": 238.69314930325154,
+        "y": 446.55182481751825,
+        "hIn": {
+         "x": 258.8641862169821,
+         "y": 446.55182481751825
+        },
+        "hOut": {
+         "x": 218.52211238952094,
+         "y": 446.55182481751825
+        },
+        "smooth": false
+       },
+       {
+        "x": 202.1702561380226,
+        "y": 410.0289316522893,
+        "hIn": {
+         "x": 202.1702561380226,
+         "y": 430.19996856601995
+        },
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#00d0f8",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n16": {
+    "kind": "path",
+    "id": "n16",
+    "name": "导入路径 3",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 85.29699800929001,
+        "y": 519.5976111479761,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 187.56109887193102,
+        "y": 519.5976111479761,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 187.56109887193102,
+        "y": 585.3388188453882,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 85.29699800929001,
+        "y": 585.3388188453882,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#336699",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n17": {
+    "kind": "path",
+    "id": "n17",
+    "name": "导入路径 4",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 202.1702561380226,
+        "y": 556.1205043132051,
+        "hIn": null,
+        "hOut": {
+         "x": 202.1702561380226,
+         "y": 535.9494673994744
+        },
+        "smooth": false
+       },
+       {
+        "x": 238.69314930325154,
+        "y": 519.5976111479761,
+        "hIn": {
+         "x": 218.52211238952094,
+         "y": 519.5976111479761
+        },
+        "hOut": {
+         "x": 258.8641862169821,
+         "y": 519.5976111479761
+        },
+        "smooth": false
+       },
+       {
+        "x": 275.21604246848045,
+        "y": 556.1205043132051,
+        "hIn": {
+         "x": 275.21604246848045,
+         "y": 535.9494673994744
+        },
+        "hOut": {
+         "x": 275.21604246848045,
+         "y": 576.2915412269357
+        },
+        "smooth": false
+       },
+       {
+        "x": 238.69314930325154,
+        "y": 592.643397478434,
+        "hIn": {
+         "x": 258.8641862169821,
+         "y": 592.643397478434
+        },
+        "hOut": {
+         "x": 218.52211238952094,
+         "y": 592.643397478434
+        },
+        "smooth": false
+       },
+       {
+        "x": 202.1702561380226,
+        "y": 556.1205043132051,
+        "hIn": {
+         "x": 202.1702561380226,
+         "y": 576.2915412269357
+        },
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#00d0f8",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n18": {
+    "kind": "text",
+    "id": "n18",
+    "name": "导入文字 4",
+    "x": 684.2724459190446,
+    "y": 446.55182481751825,
+    "text": "缩放文字",
+    "size": 43.83,
+    "font": "Microsoft YaHei",
+    "bold": true,
+    "italic": false,
+    "align": "left",
+    "tracking": 0,
+    "hScale": 120,
+    "vScale": 100,
+    "fill": {
+     "kind": "solid",
+     "color": "#0f76d6",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "n19": {
+    "kind": "text",
+    "id": "n19",
+    "name": "导入文字 5",
+    "x": 684.2724459190446,
+    "y": 592.643397478434,
+    "text": "居中文字",
+    "size": 51.13,
+    "font": "Microsoft YaHei",
+    "bold": false,
+    "italic": false,
+    "align": "center",
+    "tracking": 0,
+    "hScale": 100,
+    "vScale": 100,
+    "fill": {
+     "kind": "solid",
+     "color": "#e5484d",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   }
+  },
+  "root": [
+   "pdf1",
+   "pdf2",
+   "pdf3",
+   "pdf4",
+   "pdf5",
+   "pdf6",
+   "n2",
+   "n3",
+   "n4",
+   "n5",
+   "n6",
+   "n7",
+   "n8",
+   "n9",
+   "n10",
+   "n11",
+   "n12",
+   "n13",
+   "n14",
+   "n15",
+   "n16",
+   "n17",
+   "n18",
+   "n19"
+  ],
+  "seq": 20
+ }
+}
