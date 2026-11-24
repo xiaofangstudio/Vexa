@@ -44,6 +44,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 | `src/core/bool.ts` | 路径查找器：拍平 → polygon-clipping 布尔 → Douglas–Peucker 简化 |
 | `src/core/vectorOps.ts` | 对象级操作：排列、对齐、分布、旋转/翻转/平移、编组/取消编组 |
 | `src/core/svg.ts` | 导出 SVG；把描摹/导入 SVG 解析回可编辑节点（含线性/径向渐变、色标透明度、href 继承） |
+| `src/core/launch.ts` | 启动路径读取（`launch_intent` / `?open=`）与单实例外部打开事件订阅 |
 | `src/core/vex.ts` | `.vex` 序列化 / 解析（版本 1，向后兼容兜底） |
 | `src/engine/view.ts` | 屏幕 ↔ 文档坐标、适配画板、以光标为中心缩放 |
 | `src/engine/render.ts` | 画布渲染（点阵粘贴板、画板、路径、选择框、锚点手柄、钢笔预览、智能参考线） |
@@ -72,7 +73,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - **虚线**：`Stroke.dash` 是工程字段，画布 `setLineDash`、SVG `stroke-dasharray` 都读它；属性面板给四档预设。
 - **箭头**：`Stroke.arrow`（none/triangle/open/diamond）只对开放子路径的末端生效；画布按末段切线画，SVG 用 `<marker orient="auto">`。
 - **变换手柄**：`engine/handles.ts` 统一算 8 个缩放柄 + 旋转柄的位置与命中，渲染与 pointer 交互共用；缩放走 `scaleNodes`（可指定固定锚点），旋转走 `rotateNodesAround`，Shift 分别锁比例与 15° 吸附。
-- **图层排序**：图层面板按视觉从上到下展示，拖动落点后反转写回 `doc.root`（末尾在最上层）；一次拖动算一个撤销步。
+- **图层排序**：图层面板按视觉从上到下展示，存储是反向；`canMoveLayer` / `moveLayerNode` 支持任意层级行的 `before` / `after`、组行的 `inside`，同容器移动会按来源显示索引修正插入点；搬移只改 `doc.root` 或组 `children`，不改绝对坐标，一次操作记一步撤销。
 - **混合模式**：`node.blend` 存 CSS 合成名（16 档），画布直接赋 `globalCompositeOperation`，SVG 写 `style="mix-blend-mode:…"`；`normal` 不落字段。
 - **剪切蒙版**：`GroupNode.clip` 指向同组内的路径 id，绘制组时先 `ctx.clip()` 再画其余子节点，轮廓节点本身跳过；释放 = 删 `clip` + 拆组。SVG 导出为 `<clipPath>` + `clip-path`。
 - **多画板**：`doc.artboards[boardIndex]` 是当前板；属性坞的画板列表负责切换/增删，激活 id 传给渲染器做蓝框高亮；SVG 每板输出独立 `<g id="board-N">`，只收与板相交的顶层对象，根 viewBox 覆盖全部画板。
@@ -109,25 +110,33 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - 路径布尔是**多边形级**（曲线先拍平），曲线级保真布尔还没做；偏移/描边轮廓是折线近似（尖角斜接、平头端帽），路径效果生成的轮廓尚未支持圆头/方头端帽与曲线保真
 - 可变宽度描边已支持宽度点、单侧加宽、余弦过渡与 SVG/`.vex` 往返；均匀描边已支持平/圆/方端帽与尖角/圆角/斜角连接，但可变宽度轮廓不跟随这些设置，仍按平头外框绘制；虚线暂不随轮廓走（有宽度点时按实线轮廓输出），箭头仍按基础线宽；宽度手柄只画在第一条子路径，复合路径各子路径共用同一 `t` 轮廓
 - 渐变支持线性/径向多色标、独立透明度、插值中点与画布轴线/色标直拖；径向渐变的圆心固定在 bbox 中心、半径固定为半对角线，画布手柄只沿右侧半径显示；尚缺网格/自由渐变、渐变描边、图案填充、符号、画笔、图形样式
-- SVG 导入已覆盖基础图形、变换、线性/径向渐变、色标透明度、`href` 继承与 `fill/stroke-opacity`；尚缺 `<use>`、`<clipPath>`、图案、滤镜、`<text>` 转可编辑文字；`gradientTransform`、`spreadMethod` 与径向 `cx/cy/r` 目前按 bbox 规则近似
+- SVG 导入已覆盖基础图形、变换、线性/径向渐变、色标透明度、`href` 继承、`fill/stroke-opacity`、`<use>` / 嵌套 use、`<clipPath>` 嵌套交集裁切、symbol viewBox/width 缩放与 `<text>` / `<tspan>` 可编辑文字；尚缺图案、滤镜、`mask`、`objectBoundingBox` 剪裁、`gradientTransform` / `spreadMethod` 的完整语义，文本旋转/斜切只映射位置与缩放、不旋转字形
 - 文字已支持单点文字 + 字符面板（字重/字形/行距/字距/对齐/横纵缩放/基线），但还没有段落文字、区域文字、沿路径排版、避头尾、文字转路径
 - 旋转/翻转对文本与位图只做位置级变换（没有旋转属性，见 `docs/PARITY.md`）
 - 拖拽撤销粒度较粗（一次拖拽一步）
-- 文件关联已注册，但双击 `.vex` 启动并载入还需接 argv 处理
+- 图层树已支持组内排序、把子层拖出组、把顶层拖入组；批量显隐/锁定仍未做，折叠组内的子层需先展开才能拖动。
+- 第二十二批已消除 React 壳层的高频重渲染（live 不再递增 UI 版本、光标/视口/滑块/图层名走局部路径），但画布本身仍是全场景 `renderScene` 重绘，尚未做 dirty-rect / 分层画布；超大节点数文档若仍掉帧，下一步应做节点视口剔除或脏矩形重绘。
+- 文件关联已注册，双击 `.vex` / `.svg` 启动并载入已接：`launch_intent` 读第一个真实存在的路径参数；已开实例由 `tauri-plugin-single-instance` 把路径 emit 成 `vexa://launch-open` 并聚焦主窗口；SVG 用 `svgIntrinsicSize` 建同尺寸画板、`svgToNodes` 转可编辑节点。Vexa 只接 `.vex` / `.svg`，不导入 Groma 工程；需要把 Vexa 的图交给 Groma 时，在 Vexa 导出 SVG，再到 Groma“导入 Vexa 画的图”。PNG/JPG 不接。
 - 自动保存只在已有路径时生效；未保存过的新工程仍需手动 `Ctrl+S`
 - PDF 导出已支持多画板、原生线性/径向渐变、渐变文字、实色/虚线/端帽/连接、透明位图与文字轮廓；文字是路径、不可选中/搜索，渐变描边、图案填充、渐变网格未做，组透明度按节点复合 alpha 近似；字体只读本机文件，不打包不联网
 - SVG 导入现支持 `<text>` / `<tspan>` 可编辑文字、`<use>` / `xlink:href` 引用与嵌套 use、`<clipPath>` 组裁切（含嵌套交集）、symbol viewBox/width 缩放；`objectBoundingBox` 剪裁、图案、滤镜、`mask` 仍未处理，文本旋转/斜切只映射位置与缩放、不旋转字形
 
 ## 发布构建
 
-- 版本：`0.1.0`（第二十批：图层面板组展开）
+- 版本：`0.1.0`（第二十四批：图层树组内排序、把子层拖出组、把顶层拖入组）
 - 文件：`release\Vexa.exe`
-- 大小：`7,717,888 B`
-- SHA256：`880F8BAEA9461EE9E9928D1DD7F299D901F6CA977281E5482C272B30BF009C91`
-- 构建时间：`2026-11-23 19:34:04`
+- 大小：`7,790,080 B`
+- SHA256：`83834C3E9C0C5DAB88029AD29E073788549B0ED7A8FF386696995E7D240A02CD`
+- 构建时间：`2026-11-24 20:37:23`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,308,381 B`，SHA256 `8B617959EF85FB269BF8506A5B6DCA6737A0522FC0548574AF671D1DAD9A9650`
-- 前端产物：`dist/assets/pdf-D7J_EnSR.js` 407.16 kB / gzip 169.22；`dist/assets/index-CIZP0VR_.js` 459.59 kB / gzip 145.16；`dist/assets/index-T9he_bYd.css` 47.62 kB
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,349,102 B`，SHA256 `4F9CF6C0950FD932EAB4AC47F009783FFDE3CD9D4A236C7BCCBF739F0522EFE9`
+- 前端产物：`dist/assets/pdf-DagSJbuI.js` 407.16 kB / gzip 169.22；`dist/assets/index-Dr0xuXFD.js` 466.30 kB / gzip 147.82；`dist/assets/index-DmPGAybe.css` 48.38 kB / gzip 9.49；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 图层拖放验收（第二十四批）：`npx tsc --noEmit` 通过；`npm run build` 142 modules 通过；`npx tsx scripts/smoke.layers.mts` 24 项 PASS（含跨组 inside 到已有子层的目标组）。`npm run tauri:build` 通过，生成上方 `vexa.exe` 与 NSIS；真实 Tauri/WebView2 窗口用 `scripts/fixtures/layer-panel.vex` 完成“组内标题上移 / 操作提示放入图标组 / 再拖出到根层背景上方”，截图 `docs/shots/layers-drop-before.png`、`layers-drop-inside.png`、`layers-drag.png`、`layers-drag-window.png`。
+- 应用图标：新图标源文件 `assets/brand/vexa-icon.svg`、`assets/brand/vexa-icon.png`（1024×1024，透明外角）；`scripts/make-icons.mjs` 生成 32/128/256 PNG 与 16/32/48/64/128/256 六尺寸 `icon.ico`。从 `release\Vexa.exe` 提取 32px 资源核对，图标为蓝底倾斜奶油画布 + 黑色 V 路径 + 两个方形锚点 + 珊瑚色底锚点；NSIS 安装器/卸载器同图标。应用内 `BrandMark` 已替换 StartPage 顶部、编辑器顶栏、Splash、AboutDialog 的旧 V 标记，favicon 用 `public/vexa-icon.png`。
+- Vexa → Groma 导入验收（第二十三批）：真实 Groma release 从欢迎页“导入 Vexa 画的图”读取 Vexa 导出的 `scripts/fixtures/vexa-groma-import.svg`（1,460×640，两个画板），得到 2 个画板 / 26 个图层；路径、线性/径向渐变、虚线描边、可编辑文本、透明 PNG 均显示，内嵌图片写入工程 `assets\图片 1.png`。选中路径后检查器显示“矢量 / 填充 #E5484D 94% / 描边 #17171C 100% / 宽度 8 / 透明 100”。截图见 `docs/shots/groma-vexa-import-final.png`。
+- 第二十三批撤销项：Vexa 的 Groma `.groma` 原生导入已完整移除（`src/core/groma.ts`、`pickGromaOpen()`、`readGromaProject()`、StartPage/EditorShell 入口、启动参数与文件关联全部删除）；Vexa 端只保留 `.vex` / `.svg`，不再把 Groma 工程当文档打开。
+- 局部重渲染验收（第二十二批）：开发模式（React StrictMode 双渲染，计数折半即生产值）下，24 步拖动已有对象只触发 `shell/dock/canvas = 2/2/2`（生产 1 次，落在松手提交）；30 次画布指针移动 `0/0/0`；24 步空格平移 `2/2/2`（生产 1 次，落在平移结束）；6 次 Ctrl 滚轮缩放 `2/2/2`（生产 1 次，落在 120ms 防抖后）。`docStore.live` 不再递增 UI 版本，只通知画布；透明度滑块/图层名输入改为 live + finish，锚点拖拽也已从逐帧 `touch()` 改为 `live()`。
+- 第二十三批截图：`docs/shots/groma-vexa-import-final.png`（真实 Groma release 导入 Vexa 绘图后的画布、图层面板与路径描边检查器）；`docs/shots/vexa-app-start.png` 仍为启动页样例。
 - 真实原生验收（第二十批）：新建 `900×600` 画板“图层终验”，从“文件 → 导入 SVG…”导入 `scripts/fixtures/import-clip-symbol.svg`，切到图层面板：顶层 7 行，展开“导入剪裁组 1”后出现 3 个子行（导入文字 2 / 导入文字 1 / 导入路径 1），内部剪裁路径不显示；点子行“导入文字 1”后状态“已选 1 · 165 × 52 px”，属性坞显示 Arial / 41.28px / 文本“裁切标题”。截图 `docs/shots/v20-final-layers.png`、`v20-final-select-text.png`、`v20-final-text-props.png`。
 - 第十九批发布验收保留：导入 clip/symbol fixture 得到 7 个顶层对象、14 个节点、2 个剪裁组、4 段文字；直接选择裁切标题 165×52、Arial 41.28px，改字后 296×52。冒烟 `nodes=14 roots=7 groups=2 text=4 cardSubs=2 bigStar=76.8 smallStar=38.4 nested=5 badGroups=0`。
 - 第十八批发布验收保留：`Vexa.exe` 7,715,840 B，SHA256 `E42244D2A0A8D531369053D42A93A72D114ABE600D9F55D2FB75B2867DB1D3D6`；导入 `import-text-use.svg` 得到 9 个对象（5 段文字 + 4 个路径），属性坞 `Arial / 73.05px`。

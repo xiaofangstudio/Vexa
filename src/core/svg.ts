@@ -1078,6 +1078,37 @@ export function svgToNodes(
   return { nodes, roots, nextSeq: seq };
 }
 
+/** SVG 画板尺寸：优先 viewBox，其次 width/height；夹到 Vexa 能承受的 32–8000。 */
+export function svgIntrinsicSize(svg: string): { w: number; h: number } {
+  const fallback = { w: 1000, h: 1000 };
+  try {
+    const dom = new DOMParser().parseFromString(svg, "image/svg+xml");
+    if (dom.getElementsByTagName("parsererror").length) return fallback;
+    const root = dom.documentElement;
+    const viewBox = (root.getAttribute("viewBox") ?? "")
+      .trim()
+      .split(/[\s,]+/)
+      .map((part) => Number.parseFloat(part));
+    if (viewBox.length === 4 && Number.isFinite(viewBox[2]) && Number.isFinite(viewBox[3])) {
+      const w = Math.abs(viewBox[2]);
+      const h = Math.abs(viewBox[3]);
+      if (w >= 1 && h >= 1) return { w: clampSide(w), h: clampSide(h) };
+    }
+    const width = Number.parseFloat(root.getAttribute("width") ?? "");
+    const height = Number.parseFloat(root.getAttribute("height") ?? "");
+    if (Number.isFinite(width) && Number.isFinite(height) && width >= 1 && height >= 1) {
+      return { w: clampSide(width), h: clampSide(height) };
+    }
+  } catch {
+    /* 解析失败按默认画板，不让启动卡死 */
+  }
+  return fallback;
+}
+
+function clampSide(value: number): number {
+  return Math.max(32, Math.min(8000, Math.round(value * 100) / 100));
+}
+
 /** 兼容描摹通道：只取 SVG 中可见的路径节点。 */
 export function svgToPathNodes(svg: string, startSeq: number, namePrefix = "描摹路径"): { nodes: PathNode[]; nextSeq: number } {
   const all = svgToNodes(svg, startSeq, namePrefix);

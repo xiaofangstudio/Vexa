@@ -7,6 +7,8 @@ import SettingsDialog from "./ui/SettingsDialog";
 import { zh, useTheme } from "./i18n/zh";
 import { addNode, createDoc, newId } from "./core/docOps";
 import { parseVex } from "./core/vex";
+import { svgIntrinsicSize, svgToNodes } from "./core/svg";
+import { onExternalOpen, readLaunchIntent } from "./core/launch";
 import type { VexaDoc } from "./core/types";
 import { makeThumb, pickVexOpen, readImageDataURL, readTextFile } from "./engine/io";
 import { pushRecent } from "./stores/recent";
@@ -23,8 +25,28 @@ export default function App() {
   const [about, setAbout] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ title: string; body: string } | null>(null);
+  const [bootReady, setBootReady] = useState(false);
   const [closing, setClosing] = useState(false);
   const closeTimer = useRef<number | undefined>(undefined);
+  const settingsRef = useRef(settings);
+  const docRef = useRef<VexaDoc | null>(null);
+
+  useEffect(() => {
+    docRef.current = doc;
+  }, [doc]);
+
+  const confirmReplace = useCallback((source: string): boolean => {
+    const current = docRef.current;
+    if (!current) return true;
+    return window.confirm(
+      `当前已打开「${current.name || "未命名工程"}」。打开${source}会替换当前工程，未保存的修改会丢失。继续？`,
+    );
+  }, []);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   useEffect(() => {
     applyDensity(settings);
@@ -79,8 +101,67 @@ export default function App() {
 
   const startOpen = async () => {
     const p = await pickVexOpen();
-    if (p) await openFile(p);
+    if (p && confirmReplace("另一个 Vexa 工程")) await openFile(p);
   };
+
+  const importSvgLaunch = async (p: string) => {
+    setClosing(false);
+    window.clearTimeout(closeTimer.current);
+    const svg = await readTextFile(p);
+    const size = svgIntrinsicSize(svg);
+    const file = p.split(/[\\/]/).pop() ?? "SVG 导入";
+    const name = file.replace(/\.[^.]+$/, "") || "SVG 导入";
+    const d = createDoc(name, size.w, size.h, settingsRef.current.defaultBg);
+    const { nodes, roots, nextSeq } = svgToNodes(svg, d.seq, "导入路径");
+    if (!nodes.length) throw new Error("SVG 里没有可编辑的图形或文字");
+    d.seq = nextSeq;
+    for (const node of nodes) d.nodes[node.id] = node;
+    d.root = roots;
+    setDoc(d);
+    setPath(null);
+    setDocKey((k) => k + 1);
+    setPendingTrace(null);
+  };
+
+  const openExternal = async (p: string) => {
+    const ext = p.split(".").pop()?.toLowerCase();
+    if (ext === "vex") {
+      if (confirmReplace("另一个 Vexa 工程")) await openFile(p);
+      return;
+    }
+    if (ext === "svg") {
+      if (!confirmReplace("外部 SVG 文件")) return;
+      await importSvgLaunch(p);
+      return;
+    }
+    throw new Error("Vexa 只接 .vex 工程和 .svg 矢量文件");
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      try {
+        const intent = await readLaunchIntent();
+        if (!cancelled && intent.kind === "file") await openExternal(intent.path);
+      } catch (e) {
+        if (!cancelled) setBootError(`外部打开失败：${String((e as Error).message ?? e)}`);
+      } finally {
+        if (!cancelled) setBootReady(true);
+      }
+      if (!cancelled) {
+        unlisten = await onExternalOpen((p) => {
+          if (!cancelled) void openExternal(p);
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+    // 启动意图只在首帧读一次；后续外部打开走 single-instance 事件。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const create = (name: string, w: number, h: number) => {
     setClosing(false);
@@ -132,6 +213,7 @@ export default function App() {
   };
 
   if (splash) return <Splash onDone={() => setSplash(false)} />;
+  if (!bootReady) return <div className="app-bg" />;
 
   return (
     <>
@@ -186,6 +268,23 @@ export default function App() {
             </div>
             <div className="modal-foot">
               <button className="btn btn-primary" onClick={() => setBootError(null)}>
+                好的
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {notice && (
+        <div className="modal-mask" onClick={() => setNotice(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>{notice.title}</h3>
+            </div>
+            <div className="modal-body">
+              <p style={{ whiteSpace: "pre-line" }}>{notice.body}</p>
+            </div>
+            <div className="modal-foot">
+              <button className="btn btn-primary" onClick={() => setNotice(null)}>
                 好的
               </button>
             </div>

@@ -2,9 +2,10 @@
 //! 零联网、零遥测、零 AI；不发起任何外部请求。
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tauri::{Emitter, Manager};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct TraceOptions {
@@ -117,14 +118,78 @@ pub fn trace_svg(path: &Path, opts: &TraceOptions) -> Result<String, String> {
         .map_err(|e| format!("描摹失败：{e}"))
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LaunchIntent {
+    kind: &'static str,
+    path: Option<String>,
+    args: Vec<String>,
+}
+
+fn openable_ext(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase())
+            .as_deref(),
+        Some("svg" | "vex")
+    )
+}
+
+fn openable_path(path: &Path) -> bool {
+    path.is_file() && openable_ext(path)
+}
+
+/// 与 Strata 的启动判定同口径：跳过开关参数，取第一个真实存在的 .svg / .vex。
+fn pick_launch_path(args: &[String]) -> Option<String> {
+    for raw in args {
+        if raw.starts_with('-') {
+            continue;
+        }
+        let path = raw.trim().trim_matches('"');
+        if path.is_empty() {
+            continue;
+        }
+        let candidate = Path::new(path);
+        if openable_path(candidate) {
+            return Some(path.to_string());
+        }
+    }
+    None
+}
+
+#[tauri::command]
+fn launch_intent() -> LaunchIntent {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match pick_launch_path(&args) {
+        Some(path) => LaunchIntent {
+            kind: "file",
+            path: Some(path),
+            args,
+        },
+        None => LaunchIntent {
+            kind: "home",
+            path: None,
+            args,
+        },
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if let Some(path) = pick_launch_path(&argv) {
+                let _ = app.emit("vexa://launch-open", path);
+            }
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // 小屏 / 高缩放机器上，默认尺寸可能超出工作区：按显示器大小收一下并居中。
-            use tauri::Manager;
             if let Some(w) = app.get_webview_window("main") {
                 if let Ok(Some(mon)) = w.current_monitor() {
                     let m = mon.size();
@@ -135,7 +200,8 @@ pub fn run() {
                         let cw = cur.width as f64 / s;
                         let ch = cur.height as f64 / s;
                         if cw > max_w || ch > max_h {
-                            let _ = w.set_size(tauri::LogicalSize::new(cw.min(max_w), ch.min(max_h)));
+                            let _ =
+                                w.set_size(tauri::LogicalSize::new(cw.min(max_w), ch.min(max_h)));
                         }
                     }
                     let _ = w.center();
@@ -144,6 +210,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            launch_intent,
             read_text_file,
             write_text_file,
             read_binary_file,

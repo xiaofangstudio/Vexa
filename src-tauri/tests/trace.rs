@@ -36,7 +36,11 @@ fn traces_png_into_paths() {
     let svg = trace_svg(&png, &opts("illustration")).expect("描摹应成功");
 
     assert!(svg.contains("<svg"), "输出应是 SVG：{svg}");
-    assert!(svg.contains("<path"), "输出应含路径：{}", &svg[..svg.len().min(240)]);
+    assert!(
+        svg.contains("<path"),
+        "输出应含路径：{}",
+        &svg[..svg.len().min(240)]
+    );
     assert!(svg.len() > 100, "输出不应为空");
 }
 

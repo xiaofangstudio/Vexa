@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import bg from "../assets/splash-bg.jpg";
 import { zh } from "../i18n/zh";
+import BrandMark from "./BrandMark";
 import "./Splash.css";
 
 const STEPS = zh.splash.steps;
@@ -54,12 +55,8 @@ export default function Splash({ onDone }: { onDone: () => void }) {
       <img className="splash-bg" src={bg} alt="" draggable={false} />
       <div className="splash-scrim" />
       <div className="splash-inner">
-        <div className="splash-mark" aria-hidden>
-          <svg viewBox="0 0 48 48" width="44" height="44">
-            <rect x="4" y="4" width="40" height="40" rx="12" fill="none" stroke="currentColor" strokeWidth="1.4" opacity="0.55" />
-            <path d="M12 34 L24 13 L36 34" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinejoin="round" />
-            <path d="M17.5 27 L30.5 27" fill="none" stroke="currentColor" strokeWidth="1.6" opacity="0.8" />
-          </svg>
+        <div className="splash-mark">
+          <BrandMark size={44} />
         </div>
         <div className="splash-name">Vexa</div>
         <div className="splash-meta">{zh.splash.meta}</div>

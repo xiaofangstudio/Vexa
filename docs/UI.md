@@ -163,5 +163,18 @@
 - 子层选择：点“导入文字 1”直接选中 165×52 px；切到属性页显示“导入文字 1 / 文本 / Arial / 41.28px / 文本 裁切标题”，不再需要先选组。
 - 交互约束：拖拽仍只允许顶层行，子行不可拖，避免结构损坏；组名单击选组、双击展开/收起。
 - 已知边界：组内子层拖动排序、把子层拖出组、批量显隐/锁定尚未做；导入组默认收起。
+- 第二十四批已补齐组内排序与跨组搬移；批量显隐/锁定仍未做。组内排序与拖入/拖出记录见下方第二十四批验收。
 - 截图：`docs/shots/v20-final-layers.png`、`v20-final-select-text.png`、`v20-final-text-props.png`。
+
+## 验收记录（2026-11-24，第二十四批）
+
+- `npx tsc --noEmit` 通过；`npm run build` 通过：142 modules，`index-Dr0xuXFD.js` 466.30 kB / gzip 147.82，`index-DmPGAybe.css` 48.38 kB / gzip 9.49，`pdf-DagSJbuI.js` 407.16 kB / gzip 169.22。
+- 纯逻辑：`npx tsx scripts/smoke.layers.mts` 24 项 PASS，覆盖组内 A/B/C 排序、子层拖出到根层、顶层拖入组、根层组重排、拒绝自身 / inside 普通路径 / 把组拖进后代，以及“子层从 A 组放进已有子层的 B 组”。
+- 真实发布版窗口（Tauri/WebView2，1280×1000）：用 `scripts/fixtures/layer-panel.vex` 打开图层页，展开“卡片组”，在窗口内触发完整 `dragstart → dragover → drop` 链。组内排序把“标题”拖到“副标题”上方，得到 `标题 / 副标题 / 卡片底`；拖拽时目标行顶部出现品牌蓝落点线。
+- 拖入组：把“操作提示”拖到“图标组”行中间，目标行高亮并出现“放入组内”胶囊；松手后“操作提示”成为图标组顶行，图标组自动展开为 `操作提示 / 短条 / 圆点`。
+- 拖出组：再把“操作提示”拖到根层“背景”上方，缩进从 19px 回到 5px，根层对象数从 4 变为 5，背景仍在最底层；状态栏显示“已选 1 · 5 个对象”。
+- 落点分区：组行纵向 28% / 44% / 28% 分别为 before / inside / after；普通行按上下半区。只有合法落点才显示反馈并 `preventDefault`，拖自身、普通对象 inside、组进后代都不产生落点。
+- 自动化工具：`tools/shot.ps1` 在独立虚拟桌面启动 release，`--remote-debugging-port` 接 WebView2，`tools/cdp-layer-drag.mjs` 驱动并截取拖放前后状态；截图后虚拟桌面立即关闭。
+- 截图：`docs/shots/layers-drop-before.png`（组内排序落点）、`layers-drop-inside.png`（放入组内）、`layers-drag.png`（三次搬移后的最终树）、`layers-drag-window.png`（真实窗口截图）。
+- 已知边界：批量显隐 / 锁定仍未做；折叠组内的子层不可拖，需先展开；组内排序与跨组搬移一次操作记一步撤销。
 

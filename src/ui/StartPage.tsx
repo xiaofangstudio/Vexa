@@ -4,6 +4,7 @@ import { zh } from "../i18n/zh";
 import { formatWhen, loadRecent, removeRecent, type RecentEntry } from "../stores/recent";
 import { pickImage, pickVexOpen } from "../engine/io";
 import type { VexaSettings } from "../stores/settings";
+import BrandMark from "./BrandMark";
 import "./StartPage.css";
 
 interface Preset {
@@ -108,11 +109,8 @@ export default function StartPage(props: Props) {
     <div className="start">
       <header className="start-top">
         <div className="brand">
-          <span className="brand-mark" aria-hidden>
-            <svg viewBox="0 0 40 40" width="27" height="27">
-              <path d="M6 30 L20 8 L34 30" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" />
-              <path d="M12.5 24 L27.5 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.7" />
-            </svg>
+          <span className="brand-mark">
+            <BrandMark size={27} />
           </span>
           <span className="brand-name">Vexa</span>
           <span className="brand-tag">小方工作室</span>

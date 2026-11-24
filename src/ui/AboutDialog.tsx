@@ -1,5 +1,6 @@
 /** 关于：一句话讲清定位与红线。 */
 import { zh } from "../i18n/zh";
+import BrandMark from "./BrandMark";
 import "./AboutDialog.css";
 
 export default function AboutDialog({ onClose }: { onClose: () => void }) {
@@ -7,12 +8,8 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
     <div className="modal-mask" onClick={onClose}>
       <div className="modal about-modal" onClick={(e) => e.stopPropagation()}>
         <div className="about-head">
-          <div className="about-mark" aria-hidden>
-            <svg viewBox="0 0 48 48" width="40" height="40">
-              <rect x="4" y="4" width="40" height="40" rx="12" fill="none" stroke="currentColor" strokeWidth="1.3" opacity="0.5" />
-              <path d="M12 34 L24 13 L36 34" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinejoin="round" />
-              <path d="M17.5 27 L30.5 27" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.75" />
-            </svg>
+          <div className="about-mark">
+            <BrandMark size={40} />
           </div>
           <div>
             <h3 className="about-title">{zh.about.title}</h3>

@@ -1,0 +1,394 @@
+{
+ "format": "vexa",
+ "version": 1,
+ "generator": "Vexa 0.1.0 · 小方工作室",
+ "savedAt": "2026-11-24T12:32:15.323Z",
+ "doc": {
+  "format": "vexa",
+  "version": 1,
+  "name": "图层拖拽验收",
+  "unit": "px",
+  "artboards": [
+   {
+    "id": "a1",
+    "name": "图层拖拽验收",
+    "x": 0,
+    "y": 0,
+    "w": 900,
+    "h": 600,
+    "bg": "#ffffff"
+   }
+  ],
+  "nodes": {
+   "bg": {
+    "kind": "path",
+    "id": "bg",
+    "name": "背景",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 0,
+        "y": 0,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 900,
+        "y": 0,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 900,
+        "y": 600,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 0,
+        "y": 600,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#f4f1e8",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "card": {
+    "kind": "path",
+    "id": "card",
+    "name": "卡片底",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 120,
+        "y": 110,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 780,
+        "y": 110,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 780,
+        "y": 490,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 120,
+        "y": 490,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#fffaf0",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "solid",
+     "color": "#e7dfcc",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "title": {
+    "kind": "text",
+    "id": "title",
+    "name": "标题",
+    "x": 166,
+    "y": 200,
+    "text": "图层排序验收",
+    "size": 46,
+    "font": "Microsoft YaHei",
+    "bold": true,
+    "lineHeight": 1.25,
+    "align": "left",
+    "fill": {
+     "kind": "solid",
+     "color": "#17171c",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "subtitle": {
+    "kind": "text",
+    "id": "subtitle",
+    "name": "副标题",
+    "x": 166,
+    "y": 266,
+    "text": "组内排序 · 拖入组 · 拖出组",
+    "size": 22,
+    "font": "Microsoft YaHei",
+    "bold": false,
+    "lineHeight": 1.25,
+    "align": "left",
+    "fill": {
+     "kind": "solid",
+     "color": "#5a5540",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "hint": {
+    "kind": "text",
+    "id": "hint",
+    "name": "操作提示",
+    "x": 166,
+    "y": 320,
+    "text": "图层面板里拖动任意行",
+    "size": 18,
+    "font": "Microsoft YaHei",
+    "bold": false,
+    "lineHeight": 1.25,
+    "align": "left",
+    "fill": {
+     "kind": "solid",
+     "color": "#8a8168",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "icon-dot": {
+    "kind": "path",
+    "id": "icon-dot",
+    "name": "圆点",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 720,
+        "y": 388,
+        "hIn": {
+         "x": 696.8040405084,
+         "y": 388
+        },
+        "hOut": {
+         "x": 743.1959594916,
+         "y": 388
+        },
+        "smooth": true
+       },
+       {
+        "x": 762,
+        "y": 430,
+        "hIn": {
+         "x": 762,
+         "y": 406.8040405084
+        },
+        "hOut": {
+         "x": 762,
+         "y": 453.1959594916
+        },
+        "smooth": true
+       },
+       {
+        "x": 720,
+        "y": 472,
+        "hIn": {
+         "x": 743.1959594916,
+         "y": 472
+        },
+        "hOut": {
+         "x": 696.8040405084,
+         "y": 472
+        },
+        "smooth": true
+       },
+       {
+        "x": 678,
+        "y": 430,
+        "hIn": {
+         "x": 678,
+         "y": 453.1959594916
+        },
+        "hOut": {
+         "x": 678,
+         "y": 406.8040405084
+        },
+        "smooth": true
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#e5484d",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "icon-bar": {
+    "kind": "path",
+    "id": "icon-bar",
+    "name": "短条",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 620,
+        "y": 220,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 740,
+        "y": 220,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 740,
+        "y": 238,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 620,
+        "y": 238,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#f2b705",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "foot": {
+    "kind": "text",
+    "id": "foot",
+    "name": "页脚",
+    "x": 120,
+    "y": 550,
+    "text": "Vexa · 图层面板验收",
+    "size": 18,
+    "font": "Microsoft YaHei",
+    "bold": false,
+    "lineHeight": 1.25,
+    "align": "left",
+    "fill": {
+     "kind": "solid",
+     "color": "#8a8168",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "card-group": {
+    "kind": "group",
+    "id": "card-group",
+    "name": "卡片组",
+    "children": [
+     "card",
+     "title",
+     "subtitle",
+     "hint"
+    ],
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "icon-group": {
+    "kind": "group",
+    "id": "icon-group",
+    "name": "图标组",
+    "children": [
+     "icon-dot",
+     "icon-bar"
+    ],
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   }
+  },
+  "root": [
+   "bg",
+   "icon-group",
+   "card-group",
+   "foot"
+  ],
+  "seq": 30
+ }
+}

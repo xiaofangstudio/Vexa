@@ -19,6 +19,8 @@ export interface DocStore {
   canRedo: boolean;
   reset: (next: VexaDoc) => void;
   touch: () => void;
+  /** 画布专用订阅：live 只通知这里，不触发 React 壳层重渲染。 */
+  subscribeCanvas: (fn: () => void) => () => void;
 }
 
 const clone = (d: VexaDoc): VexaDoc => JSON.parse(JSON.stringify(d)) as VexaDoc;
@@ -29,11 +31,24 @@ export function useDocStore(initial: VexaDoc): DocStore {
   const redoRef = useRef<string[]>([]);
   const [, setVersion] = useState(0);
   const versionRef = useRef(0);
+  const canvasSubsRef = useRef(new Set<() => void>());
+
+  const notifyCanvas = useCallback(() => {
+    for (const fn of canvasSubsRef.current) fn();
+  }, []);
+
+  const subscribeCanvas = useCallback((fn: () => void) => {
+    canvasSubsRef.current.add(fn);
+    return () => {
+      canvasSubsRef.current.delete(fn);
+    };
+  }, []);
 
   const bump = useCallback(() => {
     versionRef.current += 1;
     setVersion(versionRef.current);
-  }, []);
+    notifyCanvas();
+  }, [notifyCanvas]);
 
   const snapshot = useCallback(() => JSON.stringify(docRef.current), []);
 
@@ -51,9 +66,11 @@ export function useDocStore(initial: VexaDoc): DocStore {
   const live = useCallback(
     (fn: (doc: VexaDoc) => void) => {
       fn(docRef.current);
-      bump();
+      // 关键：拖拽 / 连续输入不增加 UI 版本，只通知画布重绘，
+      // 避免 EditorShell、Dock、菜单和图层树每帧重建。
+      notifyCanvas();
     },
-    [bump],
+    [notifyCanvas],
   );
 
   const finish = useCallback(
@@ -108,6 +125,7 @@ export function useDocStore(initial: VexaDoc): DocStore {
     canRedo: redoRef.current.length > 0,
     reset,
     touch,
+    subscribeCanvas,
   };
 }
 

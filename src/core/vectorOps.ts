@@ -18,6 +18,69 @@ export function containerOf(doc: VexaDoc, id: string, list = doc.root, parent = 
   return null;
 }
 
+export type LayerDropZone = "before" | "after" | "inside";
+export type LayerMoveReason = "missing" | "self" | "cycle" | "not-group";
+export interface LayerMoveResult {
+  moved: boolean;
+  parent: string | null;
+  reason?: LayerMoveReason;
+}
+
+/** 目标容器是不是 fromId 的后代；把组拖进自己内部会形成环。 */
+function parentChainHas(doc: VexaDoc, id: string, ancestor: string): boolean {
+  let c = containerOf(doc, id);
+  while (c && c.parent) {
+    if (c.parent === ancestor) return true;
+    c = containerOf(doc, c.parent);
+  }
+  return false;
+}
+
+/**
+ * 图层面板的拖动语义：列表按视觉从上到下（存储是反向）。
+ * before/after 以同级行定位；inside 把目标组当成新容器并从组顶插入。
+ */
+export function canMoveLayer(doc: VexaDoc, fromId: string, targetId: string, zone: LayerDropZone): LayerMoveReason | null {
+  if (!doc.nodes[fromId] || !doc.nodes[targetId]) return "missing";
+  if (fromId === targetId) return "self";
+  if (zone === "inside" && doc.nodes[targetId].kind !== "group") return "not-group";
+  const targetBox = containerOf(doc, targetId);
+  if (!targetBox) return "missing";
+  const parent = zone === "inside" ? targetId : targetBox.parent;
+  if (parent && (parent === fromId || parentChainHas(doc, parent, fromId))) return "cycle";
+  return null;
+}
+
+function layerDisplayIndex(list: string[], id: string): number {
+  const stored = list.indexOf(id);
+  return stored < 0 ? -1 : list.length - 1 - stored;
+}
+
+export function moveLayerNode(doc: VexaDoc, fromId: string, targetId: string, zone: LayerDropZone): LayerMoveResult {
+  const reason = canMoveLayer(doc, fromId, targetId, zone);
+  if (reason) return { moved: false, parent: null, reason };
+
+  const source = containerOf(doc, fromId);
+  const targetRow = containerOf(doc, targetId);
+  const targetNode = doc.nodes[targetId];
+  if (!source || !targetRow || !targetNode) return { moved: false, parent: null, reason: "missing" };
+
+  const targetParent = zone === "inside" ? targetId : targetRow.parent;
+  const targetList = zone === "inside" && targetNode.kind === "group" ? targetNode.children : targetRow.list;
+  const sameList = source.list === targetList;
+  const sourceDisplay = layerDisplayIndex(source.list, fromId);
+  let insertDisplay =
+    zone === "inside" ? 0 : layerDisplayIndex(targetList, targetId) + (zone === "after" ? 1 : 0);
+  if (sameList && sourceDisplay < insertDisplay) insertDisplay -= 1;
+
+  const sourceIndex = source.list.indexOf(fromId);
+  if (sourceIndex < 0) return { moved: false, parent: null, reason: "missing" };
+  source.list.splice(sourceIndex, 1);
+  const insert = Math.max(0, Math.min(targetList.length, targetList.length - insertDisplay));
+  targetList.splice(insert, 0, fromId);
+  return { moved: true, parent: targetParent || null };
+}
+
 export function selectionBox(doc: VexaDoc, ids: string[]): Box | null {
   let box: Box | null = null;
   for (const id of ids) {

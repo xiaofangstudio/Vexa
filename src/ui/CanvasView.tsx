@@ -95,8 +95,11 @@ export default function CanvasView(props: Props) {
   const gradientHoverRef = useRef<RenderState["gradientHover"]>(null);
   const guidesRef = useRef<RenderState["snapGuides"]>([]);
   const propsRef = useRef(props);
-  const rafRef = useRef(0);
+   const rafRef = useRef(0);
+  const viewRef = useRef<View>(view);
+  const wheelCommitRef = useRef<number | undefined>(undefined);
   propsRef.current = props;
+  viewRef.current = view;
 
   const drawNow = useCallback(() => {
     const cv = canvasRef.current;
@@ -117,7 +120,7 @@ export default function CanvasView(props: Props) {
       widthHover: widthHoverRef.current,
       gradientHover: gradientHoverRef.current,
     };
-    renderScene(cv, p.doc, p.view, state, s.dpr, { w: s.w, h: s.h });
+    renderScene(cv, p.doc, viewRef.current, state, s.dpr, { w: s.w, h: s.h });
   }, []);
 
   // 指针高频移动时合并到一帧画一次，避免一移动就全场景重绘
@@ -128,8 +131,34 @@ export default function CanvasView(props: Props) {
       drawNow();
     });
   }, [drawNow]);
+
+  /** 高频平移 / 缩放：只改视口对象并重绘画布，不惊动 React 壳层。 */
+  const applyView = useCallback(
+    (next: View) => {
+      const v = viewRef.current;
+      v.zoom = next.zoom;
+      v.panX = next.panX;
+      v.panY = next.panY;
+      draw();
+    },
+    [draw],
+  );
+
+  const commitView = useCallback(() => {
+    window.clearTimeout(wheelCommitRef.current);
+    wheelCommitRef.current = window.setTimeout(() => {
+      propsRef.current.onView({ ...viewRef.current });
+    }, 120);
+  }, []);
+
+  const commitViewNow = useCallback(() => {
+    window.clearTimeout(wheelCommitRef.current);
+    propsRef.current.onView({ ...viewRef.current });
+  }, []);
+
   useEffect(() => () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    window.clearTimeout(wheelCommitRef.current);
   }, []);
 
   // 尺寸自适应
@@ -159,6 +188,9 @@ export default function CanvasView(props: Props) {
     draw();
   }, [draw, doc, version, view, selected, tool, props.grid, props.snap, props.emptyHint, props.activeBoardId]);
 
+  // 拖拽 / 连续编辑走 live：这里直接收通知重绘，不依赖父组件版本号。
+  useEffect(() => store.subscribeCanvas(draw), [store.subscribeCanvas, draw]);
+
   useEffect(() => {
     hoverRef.current = null;
     widthHoverRef.current = null;
@@ -171,21 +203,24 @@ export default function CanvasView(props: Props) {
     if (!wrap) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const p = propsRef.current;
       const r = wrap.getBoundingClientRect();
       const sx = e.clientX - r.left;
       const sy = e.clientY - r.top;
       if (e.ctrlKey || e.metaKey) {
         const factor = Math.exp(-e.deltaY * 0.0016);
-        p.onView(zoomAt(p.view, sx, sy, p.view.zoom * factor));
+        applyView(zoomAt(viewRef.current, sx, sy, viewRef.current.zoom * factor));
       } else {
-        p.onView({ ...p.view, panX: p.view.panX - e.deltaX, panY: p.view.panY - e.deltaY });
+        applyView({
+          ...viewRef.current,
+          panX: viewRef.current.panX - e.deltaX,
+          panY: viewRef.current.panY - e.deltaY,
+        });
       }
-      draw();
+      commitView();
     };
     wrap.addEventListener("wheel", onWheel, { passive: false });
     return () => wrap.removeEventListener("wheel", onWheel);
-  }, [draw]);
+  }, [applyView, commitView]);
 
   // 离开时清掉光标坐标
   useEffect(() => {
@@ -337,14 +372,15 @@ export default function CanvasView(props: Props) {
     const prev = propsRef.current;
     wrapRef.current?.setPointerCapture(e.pointerId);
     if (spaceHeld || prev.tool === "hand") {
-      dragRef.current = { kind: "pan", startScreen: local(e), startView: prev.view };
+      dragRef.current = { kind: "pan", startScreen: local(e), startView: { ...viewRef.current } };
       return;
     }
 
     if (prev.tool === "zoom") {
       const s = local(e);
       const z = e.altKey ? 1 / 1.5 : 1.5;
-      prev.onView(zoomAt(prev.view, s.x, s.y, prev.view.zoom * z));
+      applyView(zoomAt(viewRef.current, s.x, s.y, viewRef.current.zoom * z));
+      commitView();
       return;
     }
 
@@ -883,7 +919,7 @@ export default function CanvasView(props: Props) {
 
     if (drag.kind === "pan") {
       const s = local(e);
-      propsRef.current.onView({
+      applyView({
         ...drag.startView,
         panX: drag.startView.panX + (s.x - drag.startScreen.x),
         panY: drag.startView.panY + (s.y - drag.startScreen.y),
@@ -1144,12 +1180,12 @@ export default function CanvasView(props: Props) {
       const dx = p.x - drag.last.x;
       const dy = p.y - drag.last.y;
       drag.last = p;
-      const n = propsRef.current.doc.nodes[drag.nodeId];
-      if (n && n.kind === "path") {
+      store.live((d) => {
+        const n = d.nodes[drag.nodeId];
+        if (!n || n.kind !== "path") return;
         if (drag.part === "anchor") dragAnchor(n, drag.si, drag.ai, dx, dy);
         else dragHandle(n, drag.si, drag.ai, drag.part, p.x, p.y);
-      }
-      store.touch();
+      });
       draw();
       return;
     }
@@ -1216,6 +1252,12 @@ export default function CanvasView(props: Props) {
     dragRef.current = null;
     guidesRef.current = [];
     if (!drag) return;
+
+    if (drag.kind === "pan") {
+      commitViewNow();
+      draw();
+      return;
+    }
 
     if (drag.kind === "marquee") {
       const box = marqueeRef.current;

@@ -65,7 +65,7 @@
 | 旋转手柄 | 自由变换旋转 | 顶边上方圆形手柄，绕选区中心旋转，Shift 以 15° 吸附；`rotateNodesAround` 复用路径精确旋转 | 拖旋转柄 45°，包围盒中心不变（冒烟 `rotate45 center kept`） |
 | 径向渐变填充 | 径向渐变 | `Paint.kind = "radial"`，圆心为 bbox 中心、半径取半对角线；画布 `createRadialGradient` 与 SVG `<radialGradient gradientUnits="userSpaceOnUse">` 同一几何 | 面板“径向”档可调起止色；导出 SVG 含 `<radialGradient>`（冒烟 `radial=true`） |
 | 描边端点箭头 | 箭头/终点样式 | `Stroke.arrow`：无 / 实心三角 / 空心 / 菱形；画布按末段切线绘制，SVG 用 `<marker orient="auto">`，只对开放子路径生效 | 冒烟：闭合矩形不产生箭头，开放线产生 1 个 marker |
-| 图层面板拖动排序 | 图层面板 | 行可拖动，落点重排 `doc.root`（列表按视觉从上到下，写回时反转）；拖动中有半透明反馈 | 实机拖动后画布叠放顺序变化，可撤销 |
+| 图层面板拖动排序 | 图层面板 | 任意层级行可拖动；根层与组内 before/after 排序，组行中间 inside 放入组内；落点重排容器 list，显示顺序与存储反向互换；组内排序与跨组搬移见第二十四批 | 实机拖动后画布叠放顺序变化，可撤销；三次搬移截图 `docs/shots/layers-drag.png` |
 | SVG 导入（基础图形） | `svg` 导入 | 文件 → 导入 SVG…：支持 `path` / `rect` / `circle` / `ellipse` / `polygon` / `polyline` / `line`，解析 `transform`（translate/scale/rotate/matrix）与分组继承的 fill/stroke/opacity，导入后等比放进画板；第十六批起同时导入线性/径向渐变与 `fill-opacity` / `stroke-opacity` | 结构化 SVG 导入后成为可编辑路径节点；渐变矩形/圆形导入后填充类型、色标与透明度保留 |
 | MCP 同步扩展 | — | `vexa-mcp` 的 `fill.kind=radial`、`stroke.arrow` 与 `set_paint` 描述、SVG 导出同步 | `--selftest` 仍 11/11；`smoke.mjs` 端到端通过 |
 
@@ -282,6 +282,21 @@
 
 发布验收：`release\Vexa.exe` 已用第二十批源码重新构建（7,717,888 B，SHA256 `880F8BAEA9461EE9E9928D1DD7F299D901F6CA977281E5482C272B30BF009C91`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,308,381 B（SHA256 `8B617959EF85FB269BF8506A5B6DCA6737A0522FC0548574AF671D1DAD9A9650`）。
 
+## 1.21 第二十四批已对齐（图层组内排序与跨组搬移）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 组内子层拖动排序 | Layer reorder inside groups | 图层树所有层级都可拖动；`before` / `after` 以同级行定位，同一容器移动时按来源显示索引修正插入点；只改 `doc.root` 或组 `children`，不改绝对坐标 | 真实发布版窗口：展开“卡片组”，把“标题”拖到“副标题”上方，显示顺序变为 `标题 / 副标题 / 卡片底`；截图 `docs/shots/layers-drop-before.png` |
+| 子层拖出组 | Move child to root | 拖到根层行的上/下半区即离开原组，插入根层对应位置；组内剩余顺序与撤销历史保持 | 真实发布版窗口：把“操作提示”从卡片组拖到根层“背景”上方，根层对象 4 → 5，行缩进从 19px 回到 5px；截图 `docs/shots/layers-drag.png` |
+| 顶层拖入组 | Move into group | 组行按纵向 `<28%` / `28..72%` / `>72%` 分 before / inside / after；`inside` 把目标组当新容器，从组顶插入并自动展开目标组 | 真实发布版窗口：把“操作提示”拖到“图标组”中间，出现“放入组内”胶囊；松手后成为图标组顶行，图标组自动展开，见 `docs/shots/layers-drop-inside.png` |
+| 落点反馈与非法拦截 | Drop affordances | 行内画顶部/底部品牌色落点线；组内落点显示胶囊；`canMoveLayer` 拒绝拖自身、把普通对象拖成组内、把组拖进自己的后代；成功后选中来源节点 | 冒烟拒绝 self / not-group / cycle；真实窗口三向搬移后状态栏“未保存”，对象数与缩进同步 |
+
+验收记录：`npx tsc --noEmit`、`npm run build` 通过（142 modules；`index-Dr0xuXFD.js` 466.30 kB、`index-DmPGAybe.css` 48.38 kB、`pdf-DagSJbuI.js` 407.16 kB）；`npx tsx scripts/smoke.layers.mts` **24 项 PASS**，新增“把一个组里的子层放进另一个已有子层的组”回归（目标组显示 `P / R / Q`，来源组清空）。真实 Tauri/WebView2 窗口用 `scripts/fixtures/layer-panel.vex`（4 个根对象、2 个组）完成组内排序、拖入组、拖出组三次操作；截图 `docs/shots/layers-drag.png`、`layers-drop-before.png`、`layers-drop-inside.png`、`layers-drag-window.png`。
+
+已知边界：批量显隐 / 锁定仍未做；把子层拖入非组行会按同级 before/after 处理，不会报错；组折叠时子层不可见，需先展开才能拖动子层。
+
+发布验收：`release\Vexa.exe` 已用第二十四批源码重新构建（7,790,080 B，SHA256 `83834C3E9C0C5DAB88029AD29E073788549B0ED7A8FF386696995E7D240A02CD`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,349,102 B（SHA256 `4F9CF6C0950FD932EAB4AC47F009783FFDE3CD9D4A236C7BCCBF739F0522EFE9`）。真实 Tauri/WebView2 窗口在 `scripts/fixtures/layer-panel.vex` 上完成组内排序、拖入组、拖出组三向操作；截图 `docs/shots/layers-drop-before.png`、`layers-drop-inside.png`、`layers-drag.png`。
+
 ## 2. 部分对齐
 
 | 能力 | 现状 | 差什么 |
@@ -295,7 +310,7 @@
 | PDF 导出 | 多画板分页、原生线性/径向渐变、渐变文字、实色/虚线/端帽/连接、透明位图、文字轮廓 | 文字不可选中/搜索；渐变描边、图案填充、渐变网格未做；组透明度按节点复合 alpha 近似；字体只读本机文件 |
 | .vex 文档 | 保存/读取、撤销栈 200 步、多画板、混合模式、剪切蒙版往返 | 画板级导出（单板 PNG）与文档设置面板尚未全流程实测 |
 | 描摹 | Rust VTracer：预设/颜色数/细节/平滑/杂色，单测 3 项通过 | 分层输出、调色板编辑、实时预览、批量 |
-| 面板 | 属性面板（位置/尺寸/填充/描边/不透明度/混合模式/画板）+ 可展开组图层树 | 批量显隐/锁定、组内拖动排序、色板、样式、符号、变换面板仍缺 |
+| 面板 | 属性面板（位置/尺寸/填充/描边/不透明度/混合模式/画板）+ 可展开组图层树、组内排序与跨组搬移 | 批量显隐/锁定、色板、样式、符号、变换面板仍缺 |
 
 ## 3. 未实现（按批次规划）
 
@@ -308,7 +323,7 @@
 
 **P3 · 文档与绘制**
 - 画板预设导入、单画板 PNG 导出
-- 图层作为真实对象：组嵌套显示已做，还缺组内拖动排序、把子层拖出组、批量显隐/锁定
+- 图层作为真实对象：组嵌套显示、组内拖动排序、把子层拖入/拖出组已做，还缺批量显隐/锁定
 - 色板、全局色、专色、CMYK（参考 `doc/cmyk.rs`）
 - 图案填充、渐变网格/自由渐变、渐变描边
 - 符号、样式、画笔（参考 `brush` crate）

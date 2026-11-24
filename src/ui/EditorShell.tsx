@@ -1,5 +1,5 @@
 /** 主编辑壳：顶栏 + 文档标签 + 三栏（工具轨 / 选项栏+画布 / 面板坞）+ 状态栏。 */
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { zh } from "../i18n/zh";
 import { addNode, newId, removeNode } from "../core/docOps";
 import { booleanSubpaths, type BoolOp } from "../core/bool";
@@ -7,15 +7,18 @@ import {
   alignNodes,
   arrangeNodes,
   canGroup,
+  canMoveLayer,
   containerOf,
   distributeNodes,
   flipNodes,
   groupNodes,
+  moveLayerNode,
   rotateNodes,
   translateNode,
   ungroupNodes,
   type AlignMode,
   type ArrangeMode,
+  type LayerDropZone,
 } from "../core/vectorOps";
 import { docToSVG, svgToNodes, svgToPathNodes } from "../core/svg";
 import { loadSystemFont } from "../engine/fonts";
@@ -31,6 +34,7 @@ import type { VexaSettings } from "../stores/settings";
 import { exportPNG, fileNameOf, pickExport, pickImage, pickSVGOpen, pickVexSave, readImageDataURL, readTextFile, traceImage, writeBinaryBytes, writeTextFile, type TraceOptions } from "../engine/io";
 import { serializeVex } from "../core/vex";
 import CanvasView from "./CanvasView";
+import BrandMark from "./BrandMark";
 import Icon, { type IconName } from "./Icon";
 import MenuBar, { type MenuGroup } from "./MenuBar";
 import AboutDialog from "./AboutDialog";
@@ -245,7 +249,6 @@ export default function EditorShell(props: Props) {
   const [selected, setSelected] = useState<string[]>([]);
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View | null>(null);
-  const [cursor, setCursor] = useState<Pt | null>(null);
   const [space, setSpace] = useState(false);
   const [tab, setTab] = useState<"props" | "layers">("props");
   const [dockOpen, setDockOpen] = useState(true);
@@ -264,6 +267,35 @@ export default function EditorShell(props: Props) {
   const [eraserDia, setEraserDia] = useState(24);
 
   const toastTimer = useRef<number | undefined>(undefined);
+  const cursorTextRef = useRef<HTMLSpanElement | null>(null);
+  const cursorValueRef = useRef<Pt | null>(null);
+  const cursorRafRef = useRef(0);
+
+  /** 选择集只在真正变化时更新；重复点选同一对象不再触发整壳重渲染。 */
+  const selectIds = useCallback((ids: string[]) => {
+    setSelected((prev) =>
+      prev.length === ids.length && prev.every((id, i) => id === ids[i]) ? prev : ids,
+    );
+  }, []);
+
+  /** 鼠标坐标只改状态栏那一小段文本，不触发 EditorShell 重渲染。 */
+  const updateCursor = useCallback((p: Pt | null) => {
+    cursorValueRef.current = p;
+    if (cursorRafRef.current) return;
+    cursorRafRef.current = requestAnimationFrame(() => {
+      cursorRafRef.current = 0;
+      const el = cursorTextRef.current;
+      if (!el) return;
+      const q = cursorValueRef.current;
+      el.textContent = q ? `X ${Math.round(q.x)}　Y ${Math.round(q.y)}` : "";
+      el.style.visibility = q ? "visible" : "hidden";
+    });
+  }, []);
+
+  useEffect(() => () => {
+    if (cursorRafRef.current) cancelAnimationFrame(cursorRafRef.current);
+  }, []);
+
   const say = useCallback((msg: string) => {
     setToast(msg);
     window.clearTimeout(toastTimer.current);
@@ -1161,11 +1193,8 @@ export default function EditorShell(props: Props) {
       {/* 顶栏 */}
       <div className="ed-top">
         <div className="ed-brand">
-          <span className="ed-brand-mark" aria-hidden>
-            <svg viewBox="0 0 40 40" width="22" height="22">
-              <path d="M6 30 L20 8 L34 30" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinejoin="round" />
-              <path d="M12.5 24 L27.5 24" fill="none" stroke="currentColor" strokeWidth="1.6" opacity="0.7" />
-            </svg>
+          <span className="ed-brand-mark">
+            <BrandMark size={22} />
           </span>
           <span className="ed-brand-name">Vexa</span>
         </div>
@@ -1454,13 +1483,13 @@ export default function EditorShell(props: Props) {
             snap={props.settings.snap}
             emptyHint={props.settings.welcomeHints ? "拖出形状开始；按 P 钢笔，R 矩形，输入文字按 T" : null}
             activeBoardId={board.id}
-            onSelect={setSelected}
+            onSelect={selectIds}
             onSamplePaint={(f, s) => {
               if (f) setNewFill(f);
               if (s) setNewStroke(s);
             }}
             onView={setView}
-            onCursor={setCursor}
+            onCursor={updateCursor}
             onSize={(w, h) => setVp({ w, h })}
             onBoardIndex={setBoardFromCanvas}
             onContext={(x, y) => setCtxMenu({ x, y })}
@@ -1473,7 +1502,7 @@ export default function EditorShell(props: Props) {
           tab={tab}
           onTab={setTab}
           store={store}
-          onSelect={setSelected}
+          onSelect={selectIds}
           onToast={say}
           boardIndex={boardIndex}
           onBoardIndex={setBoardIndex}
@@ -1499,7 +1528,7 @@ export default function EditorShell(props: Props) {
           <span className={"status-save" + (!fileName || dirty ? " is-dirty" : "")}>{!fileName || dirty ? " · 未保存" : " · 已保存"}</span>
         </span>
         <div className="spacer" />
-        {cursor && <span className="status-coord num">X {Math.round(cursor.x)}　Y {Math.round(cursor.y)}</span>}
+        <span ref={cursorTextRef} className="status-coord num" style={{ visibility: "hidden" }} aria-hidden />
         <span className="status-count num">{safeSelected.length ? `已选 ${safeSelected.length} · ` : ""}{zh.status.objects.replace("{n}", String(doc.root.length))}</span>
         <span className="status-sep" />
         <button className="icon-btn status-zoom" title="缩小" onClick={() => zoomBy(1 / 1.2)}>
@@ -1624,25 +1653,63 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
   const pathCount = ids.filter((id) => doc.nodes[id]?.kind === "path").length;
   const hasSel = ids.length > 0;
   const [dragLayer, setDragLayer] = useState<string | null>(null);
+  const [dropHint, setDropHint] = useState<{ id: string; zone: LayerDropZone } | null>(null);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
   const textBeforeRef = useRef<string | null>(null);
+  const liveBeforeRef = useRef<string | null>(null);
 
-  const reorderLayer = (fromId: string, toId: string) => {
-    if (fromId === toId) return;
-    store.commit((d) => {
-      const display = [...d.root].reverse();
-      const from = display.indexOf(fromId);
-      const to = display.indexOf(toId);
-      if (from < 0 || to < 0) return;
-      const [item] = display.splice(from, 1);
-      display.splice(to, 0, item);
-      d.root = display.reverse();
-    });
+  const layerDropZone = (e: DragEvent<HTMLElement>, node: Node): LayerDropZone => {
+    const row = e.currentTarget.getBoundingClientRect();
+    const y = (e.clientY - row.top) / Math.max(1, row.height);
+    if (node.kind === "group") return y < 0.28 ? "before" : y > 0.72 ? "after" : "inside";
+    return y < 0.5 ? "before" : "after";
+  };
+
+  const layerMoveError = (reason: ReturnType<typeof canMoveLayer>) => {
+    if (reason === "cycle") return "不能把组拖进它自己的内部";
+    if (reason === "not-group") return "只有组行中间能放入子层";
+    if (reason === "self") return "不能拖到自身";
+    return "图层不存在";
+  };
+
+  const moveLayer = (fromId: string, toId: string, zone: LayerDropZone) => {
+    const reason = canMoveLayer(doc, fromId, toId, zone);
+    if (reason) {
+      onToast(layerMoveError(reason));
+      return false;
+    }
+    let moved = false;
+    store.commit((d) => { moved = moveLayerNode(d, fromId, toId, zone).moved; });
+    if (!moved) {
+      onToast(layerMoveError("missing"));
+      return false;
+    }
+    if (zone === "inside") setOpenGroups((prev) => new Set(prev).add(toId));
+    onSelect([fromId]);
+    return true;
   };
 
   const setNode = (fn: (n: Node) => void) => {
     if (!single) return;
     store.commit((d) => {
+      const n = d.nodes[single.id];
+      if (n) fn(n);
+    });
+  };
+
+  const beginLive = () => {
+    if (!liveBeforeRef.current) liveBeforeRef.current = store.snapshot();
+  };
+
+  const endLive = () => {
+    if (!liveBeforeRef.current) return;
+    store.finish(liveBeforeRef.current);
+    liveBeforeRef.current = null;
+  };
+
+  const setNodeLive = (fn: (n: Node) => void) => {
+    if (!single) return;
+    store.live((d) => {
       const n = d.nodes[single.id];
       if (n) fn(n);
     });
@@ -1701,24 +1768,43 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
     return (
       <Fragment key={id}>
         <li
-          className={"layer-row" + (ids.includes(id) ? " is-on" : "") + (dragLayer === id ? " is-dragging" : "")}
+          className={
+            "layer-row"
+            + (ids.includes(id) ? " is-on" : "")
+            + (dragLayer === id ? " is-dragging" : "")
+            + (dropHint?.id === id ? ` is-drop-${dropHint.zone}` : "")
+          }
           style={{ paddingLeft: 5 + depth * 14 }}
-          draggable={depth === 0}
+          draggable
           onDragStart={(e) => {
-            if (depth !== 0) return;
             setDragLayer(id);
+            setDropHint(null);
             e.dataTransfer.effectAllowed = "move";
             e.dataTransfer.setData("text/plain", id);
           }}
-          onDragOver={(e) => { if (depth === 0) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }}
-          onDrop={(e) => {
-            if (depth !== 0) return;
+          onDragOver={(e) => {
+            if (!dragLayer || dragLayer === id) return;
+            const zone = layerDropZone(e, n);
+            if (canMoveLayer(doc, dragLayer, id, zone)) return;
             e.preventDefault();
-            const from = e.dataTransfer.getData("text/plain") || dragLayer;
-            if (from) reorderLayer(from, id);
-            setDragLayer(null);
+            e.dataTransfer.dropEffect = "move";
+            setDropHint((prev) => (prev?.id === id && prev.zone === zone ? prev : { id, zone }));
           }}
-          onDragEnd={() => setDragLayer(null)}
+          onDragLeave={(e) => {
+            const next = e.relatedTarget as globalThis.Node | null;
+            if (next && e.currentTarget.contains(next)) return;
+            setDropHint((prev) => (prev?.id === id ? null : prev));
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const from = e.dataTransfer.getData("text/plain") || dragLayer;
+            const zone = dropHint?.id === id ? dropHint.zone : layerDropZone(e, n);
+            if (from) moveLayer(from, id, zone);
+            setDragLayer(null);
+            setDropHint(null);
+          }}
+          onDragEnd={() => { setDragLayer(null); setDropHint(null); }}
         >
           {n.kind === "group" ? (
             <button
@@ -1806,7 +1892,9 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                   <input
                     className="field-input"
                     value={single.name}
-                    onChange={(e) => setNode((n) => { n.name = e.target.value; })}
+                    onFocus={beginLive}
+                    onChange={(e) => setNodeLive((n) => { n.name = e.target.value; })}
+                    onBlur={endLive}
                   />
                 </div>
               </section>
@@ -2283,7 +2371,13 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                   min={0}
                   max={100}
                   value={Math.round(single.opacity * 100)}
-                  onChange={(e) => setNode((n) => { n.opacity = Number(e.target.value) / 100; })}
+                  onFocus={beginLive}
+                  onBlur={endLive}
+                  onPointerDown={beginLive}
+                  onPointerUp={endLive}
+                  onKeyDown={beginLive}
+                  onKeyUp={endLive}
+                  onChange={(e) => setNodeLive((n) => { n.opacity = Number(e.target.value) / 100; })}
                 />
                 <div className="field">
                   <label className="field-label">混合模式</label>
@@ -2387,8 +2481,8 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
             <button className="btn btn-ghost btn-mini" onClick={() => { if (ids.length) { store.commit((d) => { for (const id of ids) removeNode(d, id); }); onSelect([]); } }} disabled={!ids.length}>
               <Icon name="trash" size={14} /> {zh.dock.delete}
             </button>
-            <span className="faint layer-tip">组可展开；拖动顶层行调整层级</span>
-            <button className="btn btn-ghost btn-mini" onClick={() => onToast("组前的箭头可展开子图层；双击组名也能收起/展开，拖动顶层行调整叠放顺序")}>
+            <span className="faint layer-tip">任意行可拖动；组行中间可放入子层</span>
+            <button className="btn btn-ghost btn-mini" onClick={() => onToast("拖动任意图层行可排序；组行上/下缘是同级插入，拖到组行中间会放进组内，拖到根层行可把子层移出组")}>
               提示
             </button>
           </div>
