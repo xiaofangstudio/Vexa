@@ -1,0 +1,304 @@
+{
+ "format": "vexa",
+ "version": 1,
+ "generator": "Vexa 0.1.0 · 小方工作室",
+ "savedAt": "2026-11-25T12:05:23.955Z",
+ "doc": {
+  "format": "vexa",
+  "version": 1,
+  "name": "路径查找器验收",
+  "unit": "px",
+  "artboards": [
+   {
+    "id": "a1",
+    "name": "路径查找器验收",
+    "x": 0,
+    "y": 0,
+    "w": 900,
+    "h": 600,
+    "bg": "#f7f3e9"
+   }
+  ],
+  "nodes": {
+   "bg": {
+    "kind": "path",
+    "id": "bg",
+    "name": "背景",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 0,
+        "y": 0,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 900,
+        "y": 0,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 900,
+        "y": 600,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 0,
+        "y": 600,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#f7f3e9",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "red": {
+    "kind": "path",
+    "id": "red",
+    "name": "红块",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 140,
+        "y": 160,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 400,
+        "y": 160,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 400,
+        "y": 380,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 140,
+        "y": 380,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#e5484d",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "blue": {
+    "kind": "path",
+    "id": "blue",
+    "name": "蓝块",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 300,
+        "y": 240,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 560,
+        "y": 240,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 560,
+        "y": 460,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 300,
+        "y": 460,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#0f76d6",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "red2": {
+    "kind": "path",
+    "id": "red2",
+    "name": "红块 2",
+    "subpaths": [
+     {
+      "anchors": [
+       {
+        "x": 430,
+        "y": 160,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 610,
+        "y": 160,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 610,
+        "y": 300,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       },
+       {
+        "x": 430,
+        "y": 300,
+        "hIn": null,
+        "hOut": null,
+        "smooth": false
+       }
+      ],
+      "closed": true
+     }
+    ],
+    "fill": {
+     "kind": "solid",
+     "color": "#e5484d",
+     "opacity": 1
+    },
+    "stroke": {
+     "kind": "none",
+     "color": "#17171c",
+     "opacity": 1,
+     "width": 1,
+     "dash": [],
+     "cap": "butt",
+     "join": "miter"
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "title": {
+    "kind": "text",
+    "id": "title",
+    "name": "标题",
+    "x": 90,
+    "y": 70,
+    "text": "路径查找器验收",
+    "size": 34,
+    "font": "Microsoft YaHei",
+    "bold": true,
+    "lineHeight": 1.25,
+    "align": "left",
+    "fill": {
+     "kind": "solid",
+     "color": "#17171c",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   },
+   "hint": {
+    "kind": "text",
+    "id": "hint",
+    "name": "说明",
+    "x": 90,
+    "y": 112,
+    "text": "选中红块与蓝块，再点分割 / 修边 / 裁剪；红块与红块 2 可试合并。",
+    "size": 16,
+    "font": "Microsoft YaHei",
+    "bold": false,
+    "lineHeight": 1.25,
+    "align": "left",
+    "fill": {
+     "kind": "solid",
+     "color": "#6b6452",
+     "opacity": 1
+    },
+    "opacity": 1,
+    "visible": true,
+    "locked": false
+   }
+  },
+  "root": [
+   "bg",
+   "red",
+   "blue",
+   "red2",
+   "title",
+   "hint"
+  ],
+  "seq": 20
+ }
+}

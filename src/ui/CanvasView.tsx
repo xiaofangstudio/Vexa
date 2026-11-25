@@ -1,7 +1,7 @@
 /** 画布：指针交互 + 直接重绘。视口状态由外层持有，这里只算坐标与手势。 */
 import { useCallback, useEffect, useRef, type MouseEvent, type PointerEvent as RPointerEvent } from "react";
-import { anchorAt, type Artboard, type Paint, type PathNode, type Pt, type Stroke, type VexaDoc } from "../core/types";
-import { addNode, dragAnchor, dragHandle, ellipsePath, findAnchor, findSegment, insertAnchorOnSegment, newId, rectPath, removeNode } from "../core/docOps";
+import { anchorAt, type AnchorRef, type Artboard, type Paint, type PathNode, type Pt, type Stroke, type VexaDoc } from "../core/types";
+import { addNode, dragHandle, ellipsePath, findAnchor, findSegment, insertAnchorOnSegment, newId, nudgeAnchors, rectPath, removeNode } from "../core/docOps";
 import { shapeFromDrag } from "../core/shapes";
 import { translateNode, scaleNodes, rotateNodesAround, splitPathAtPoint, segmentPoint, smoothPathNear, makeSmoothLimits, freehandAnchors, type SmoothLimit } from "../core/vectorOps";
 import { boxOfPoints, nodeBox, unionBox, type Box } from "../core/geom";
@@ -45,12 +45,16 @@ interface Props {
   onBoardIndex: (i: number) => void;
   /** 右键：在屏幕坐标处打开对象菜单 */
   onContext?: (x: number, y: number) => void;
+  /** 直接选择当前选中的锚点 */
+  onAnchorSelection?: (refs: AnchorRef[]) => void;
+  /** 外部动作（连接锚点）后清空锚点选择 */
+  anchorReset?: number;
 }
 
 type Drag =
   | { kind: "move"; before: string; last: Pt; ids: string[] }  | { kind: "marquee"; start: Pt }
   | { kind: "pan"; startScreen: Pt; startView: View }
-  | { kind: "anchor"; nodeId: string; si: number; ai: number; part: "anchor" | "hIn" | "hOut"; before: string; last: Pt }
+  | { kind: "anchor"; before: string; last: Pt; refs: AnchorRef[]; part: "anchor" | "hIn" | "hOut" }
   | { kind: "create"; shape: "rect" | "ellipse" | "roundrect" | "polygon" | "star"; start: Pt; id: string; before: string }
   | { kind: "resize"; before: string; ids: string[]; startBox: Box; anchor: Pt; handle: HandleId }
   | { kind: "rotate"; before: string; ids: string[]; center: Pt; startAngle: number; applied: number }
@@ -93,6 +97,7 @@ export default function CanvasView(props: Props) {
   const eraserRef = useRef<RenderState["eraser"]>(null);
   const widthHoverRef = useRef<RenderState["widthHover"]>(null);
   const gradientHoverRef = useRef<RenderState["gradientHover"]>(null);
+  const anchorSelRef = useRef<AnchorRef[]>([]);
   const guidesRef = useRef<RenderState["snapGuides"]>([]);
   const propsRef = useRef(props);
    const rafRef = useRef(0);
@@ -119,6 +124,7 @@ export default function CanvasView(props: Props) {
       eraser: eraserRef.current,
       widthHover: widthHoverRef.current,
       gradientHover: gradientHoverRef.current,
+      anchorSel: anchorSelRef.current,
     };
     renderScene(cv, p.doc, viewRef.current, state, s.dpr, { w: s.w, h: s.h });
   }, []);
@@ -131,6 +137,66 @@ export default function CanvasView(props: Props) {
       drawNow();
     });
   }, [drawNow]);
+
+  const applyAnchorSel = useCallback(
+    (list: AnchorRef[]) => {
+      anchorSelRef.current = list;
+      propsRef.current.onAnchorSelection?.(list);
+      draw();
+    },
+    [draw],
+  );
+
+  // 工具切换或重新挂载时同步锚点选择
+  useEffect(() => {
+    propsRef.current.onAnchorSelection?.(anchorSelRef.current);
+  }, [props.tool]);
+
+  // 连接锚点后由外层发起清空
+  useEffect(() => {
+    if (anchorSelRef.current.length) applyAnchorSel([]);
+  }, [applyAnchorSel, props.anchorReset]);
+
+  // 切换对象或文档变化后，丢掉已经失效的锚点引用
+  useEffect(() => {
+    if (props.tool !== "direct") {
+      if (anchorSelRef.current.length) applyAnchorSel([]);
+      return;
+    }
+    const current = anchorSelRef.current;
+    if (!current.length) return;
+    const valid = current.filter((r) => {
+      if (!props.selected.includes(r.nodeId)) return false;
+      const node = props.doc.nodes[r.nodeId];
+      return !!node && node.kind === "path" && !!node.subpaths[r.si]?.anchors[r.ai];
+    });
+    if (valid.length !== current.length) applyAnchorSel(valid);
+  }, [applyAnchorSel, props.doc, props.selected, props.tool, props.version]);
+
+  // 锚点被选中时，方向键只推锚点，不再推整个对象
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (propsRef.current.tool !== "direct" || !anchorSelRef.current.length) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      const step = e.shiftKey ? 10 : 1;
+      let dx = 0;
+      let dy = 0;
+      if (e.key === "ArrowLeft") dx = -step;
+      else if (e.key === "ArrowRight") dx = step;
+      else if (e.key === "ArrowUp") dy = -step;
+      else if (e.key === "ArrowDown") dy = step;
+      else return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      store.commit((d) => {
+        nudgeAnchors(d, anchorSelRef.current, dx, dy);
+      });
+      draw();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [draw, store]);
 
   /** 高频平移 / 缩放：只改视口对象并重绘画布，不惊动 React 壳层。 */
   const applyView = useCallback(
@@ -734,18 +800,36 @@ export default function CanvasView(props: Props) {
     if (prev.tool === "direct") {
       const hit = hitAnchor(prev.selected, p);
       if (hit) {
-        const before = store.snapshot();
+        const ref = { nodeId: hit.node.id, si: hit.si, ai: hit.ai };
+        if (hit.part !== "anchor") {
+          applyAnchorSel([ref]);
+          dragRef.current = {
+            kind: "anchor",
+            refs: [ref],
+            part: hit.part,
+            before: store.snapshot(),
+            last: p,
+          };
+          return;
+        }
+        if (e.shiftKey) {
+          const has = anchorSelRef.current.some((r) => r.nodeId === ref.nodeId && r.si === ref.si && r.ai === ref.ai);
+          applyAnchorSel(has ? anchorSelRef.current.filter((r) => !(r.nodeId === ref.nodeId && r.si === ref.si && r.ai === ref.ai)) : [...anchorSelRef.current, ref]);
+          return;
+        }
+        const has = anchorSelRef.current.some((r) => r.nodeId === ref.nodeId && r.si === ref.si && r.ai === ref.ai);
+        const refs = has ? anchorSelRef.current : [ref];
+        if (!has) applyAnchorSel(refs);
         dragRef.current = {
           kind: "anchor",
-          nodeId: hit.node.id,
-          si: hit.si,
-          ai: hit.ai,
-          part: hit.part,
-          before,
+          refs,
+          part: "anchor",
+          before: store.snapshot(),
           last: p,
         };
         return;
       }
+      if (anchorSelRef.current.length) applyAnchorSel([]);
     }
 
     // 选择工具：先命中变换手柄（旋转柄 / 八个缩放柄），再命中对象
@@ -1181,10 +1265,15 @@ export default function CanvasView(props: Props) {
       const dy = p.y - drag.last.y;
       drag.last = p;
       store.live((d) => {
-        const n = d.nodes[drag.nodeId];
+        if (drag.part === "anchor") {
+          nudgeAnchors(d, drag.refs, dx, dy);
+          return;
+        }
+        const ref = drag.refs[0];
+        if (!ref) return;
+        const n = d.nodes[ref.nodeId];
         if (!n || n.kind !== "path") return;
-        if (drag.part === "anchor") dragAnchor(n, drag.si, drag.ai, dx, dy);
-        else dragHandle(n, drag.si, drag.ai, drag.part, p.x, p.y);
+        dragHandle(n, ref.si, ref.ai, drag.part, p.x, p.y);
       });
       draw();
       return;

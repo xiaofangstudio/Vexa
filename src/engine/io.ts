@@ -48,6 +48,26 @@ export async function pickImage(): Promise<string | null> {
   return typeof r === "string" ? r : null;
 }
 
+export async function pickPresetOpen(): Promise<string | null> {
+  if (!isTauri()) return null;
+  const r = await openDialog({
+    title: "导入画板预设",
+    multiple: false,
+    filters: [{ name: "Vexa 画板预设", extensions: ["json"] }],
+  });
+  return typeof r === "string" ? r : null;
+}
+
+export async function pickPresetSave(defaultName: string): Promise<string | null> {
+  if (!isTauri()) return null;
+  const r = await saveDialog({
+    title: "导出画板预设",
+    defaultPath: `${defaultName || "Vexa-画板预设"}.json`,
+    filters: [{ name: "Vexa 画板预设", extensions: ["json"] }],
+  });
+  return typeof r === "string" ? r : null;
+}
+
 export async function pickExport(defaultName: string, ext: "svg" | "png" | "pdf"): Promise<string | null> {
   if (!isTauri()) return null;
   const r = await saveDialog({

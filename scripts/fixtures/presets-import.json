@@ -1,0 +1,8 @@
+{
+  "format": "vexa-board-presets",
+  "version": 1,
+  "presets": [
+    { "label": "名片", "w": 90, "h": 54 },
+    { "label": "海报", "w": 400, "h": 300 }
+  ]
+}

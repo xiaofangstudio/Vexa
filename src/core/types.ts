@@ -61,6 +61,13 @@ export interface Anchor {
   smooth: boolean;
 }
 
+/** 直接选择里被选中的锚点：节点 + 子路径 + 锚点序号。 */
+export interface AnchorRef {
+  nodeId: string;
+  si: number;
+  ai: number;
+}
+
 export interface SubPath {
   anchors: Anchor[];
   closed: boolean;

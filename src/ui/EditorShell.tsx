@@ -2,9 +2,11 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from "react";
 import { zh } from "../i18n/zh";
 import { addNode, newId, removeNode } from "../core/docOps";
+import { alignAnchors, anchorsNeedAlign, canJoinAnchors, joinAnchors, type AnchorAlignMode } from "../core/anchorOps";
+import { BOARD_PRESETS, applyBoardPreset, duplicateArtboard, fitBoardToContent, moveArtboard, type DuplicateBoardResult } from "../core/artboards";
 import { allLayerFlag, layerDisplayOrder, nextLayerFlagValue, selectLayerIds } from "../core/layerSelection";
 import { EMPTY_LAYER_FILTER, filterLayerTree, isLayerFilterActive, type LayerFilter } from "../core/layerFilter";
-import { booleanSubpaths, type BoolOp } from "../core/bool";
+import { booleanSubpaths, pathfinderPieces, sortPathNodesByZ, type BoolOp, type PathfinderOp } from "../core/bool";
 import {
   alignNodes,
   arrangeNodes,
@@ -28,7 +30,7 @@ import { loadSystemFont } from "../engine/fonts";
 import { offsetPathNode, outlineStrokeNode, smoothPathNode } from "../core/pathfx";
 import { nodeBox, unionBox } from "../core/geom";
 import { groupBox } from "../engine/pick";
-import { noPaint, noStroke, solid, BLEND_MODES, LAYER_TAGS, type Artboard, type BlendMode, type GradStop, type GroupNode, type LayerTag, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc } from "../core/types";
+import { noPaint, noStroke, solid, BLEND_MODES, LAYER_TAGS, type AnchorRef, type Artboard, type BlendMode, type GradStop, type GroupNode, type LayerTag, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc } from "../core/types";
 import { insertGradStop, paintPreview, paintStops, stopAlpha, stopCssColor } from "../core/paint";
 import { fitBoard, zoomAt, type View } from "../engine/view";
 import type { ToolId } from "../engine/render";
@@ -36,11 +38,15 @@ import { useDocStore } from "../stores/docStore";
 import type { VexaSettings } from "../stores/settings";
 import { exportPNG, fileNameOf, pickExport, pickImage, pickSVGOpen, pickVexSave, readImageDataURL, readTextFile, traceImage, writeBinaryBytes, writeTextFile, type TraceOptions } from "../engine/io";
 import { serializeVex } from "../core/vex";
+import { applyDocSettings, validateDocSettings, type DocSettings } from "../core/documentSettings";
+import { addPreset, useCustomPresets } from "../stores/boardPresets";
 import CanvasView from "./CanvasView";
 import BrandMark from "./BrandMark";
 import Icon, { type IconName } from "./Icon";
 import MenuBar, { type MenuGroup } from "./MenuBar";
 import AboutDialog from "./AboutDialog";
+import BoardPresetDialog from "./BoardPresetDialog";
+import DocumentDialog from "./DocumentDialog";
 import "./EditorShell.css";
 
 const BLEND_LABELS: Record<BlendMode, string> = {
@@ -291,6 +297,9 @@ export default function EditorShell(props: Props) {
 
   const [tool, setTool] = useState<ToolId>("select");
   const [selected, setSelected] = useState<string[]>([]);
+  const [anchorSel, setAnchorSel] = useState<AnchorRef[]>([]);
+  const [anchorReset, setAnchorReset] = useState(0);
+  const anchorCount = anchorSel.length;
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View | null>(null);
   const [space, setSpace] = useState(false);
@@ -302,6 +311,7 @@ export default function EditorShell(props: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [about, setAbout] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [docSettingsOpen, setDocSettingsOpen] = useState(false);
   const [tracePath, setTracePath] = useState<string | null>(props.pendingTrace);
   const [fileName, setFileName] = useState<string | null>(props.initialPath);
   const [savedVersion, setSavedVersion] = useState(0);
@@ -459,7 +469,8 @@ export default function EditorShell(props: Props) {
     return () => window.clearInterval(timer);
   }, [props.settings.autoSave, fileName, savedVersion, store.version, doSave]);
 
-  const doExport = useCallback(    async (fmt: "svg" | "png" | "pdf", scale: number, pdfAll: boolean) => {
+  const doExport = useCallback(
+    async (fmt: "svg" | "png" | "pdf", scale: number, pdfAll: boolean) => {
       try {
         const name = fileName ? fileNameOf(fileName) : doc.name;
         const path = await pickExport(name, fmt);
@@ -485,6 +496,22 @@ export default function EditorShell(props: Props) {
       }
     },
     [board, doc, fileName, say],
+  );
+
+  const applyDocumentSettings = useCallback(
+    (patch: DocSettings) => {
+      const issue = validateDocSettings(patch);
+      if (issue) {
+        say(issue);
+        return;
+      }
+      store.commit((d) => {
+        applyDocSettings(d, boardIndex, patch);
+      });
+      setDocSettingsOpen(false);
+      say("文档设置已应用");
+    },
+    [boardIndex, say, store],
   );
 
   const doPlaceImage = useCallback(
@@ -698,6 +725,40 @@ export default function EditorShell(props: Props) {
     [safeSelected, store],
   );
 
+  const alignAnchorSel = useCallback(
+    (mode: AnchorAlignMode) => {
+      if (anchorSel.length < 2) return;
+      if (!anchorsNeedAlign(doc, anchorSel, mode)) {
+        say("选中的锚点已经对齐");
+        return;
+      }
+      let moved = 0;
+      store.commit((d) => {
+        moved = alignAnchors(d, anchorSel, mode);
+      });
+      say(moved ? `已对齐 ${moved} 个锚点` : "选中的锚点已经对齐");
+    },
+    [anchorSel, doc, say, store],
+  );
+
+  const joinAnchorSel = useCallback(() => {
+    if (!canJoinAnchors(doc, anchorSel)) {
+      say("请选中同一路径的两个开放端点");
+      return;
+    }
+    let result: { ok: boolean; error?: string } = { ok: false, error: "没有可连接的锚点" };
+    store.commit((d) => {
+      result = joinAnchors(d, anchorSel);
+    });
+    if (!result.ok) {
+      say(result.error ?? "连接失败");
+      return;
+    }
+    setAnchorSel([]);
+    setAnchorReset((v) => v + 1);
+    say("已连接 2 个锚点");
+  }, [anchorSel, doc, say, store]);
+
   const distributeSel = useCallback(
     (axis: "h" | "v") => {
       if (safeSelected.length < 3) {
@@ -825,9 +886,10 @@ export default function EditorShell(props: Props) {
 
   const boolSel = useCallback(
     (op: BoolOp) => {
-      const paths = safeSelected
-        .map((id) => doc.nodes[id])
-        .filter((n): n is PathNode => !!n && n.kind === "path");
+      const paths = sortPathNodesByZ(
+        doc,
+        safeSelected.map((id) => doc.nodes[id]).filter((n): n is PathNode => !!n && n.kind === "path"),
+      );
       if (paths.length < 2) {
         say("路径查找器需要两个以上路径");
         return;
@@ -860,6 +922,54 @@ export default function EditorShell(props: Props) {
         list.splice(at < 0 ? list.length : Math.min(at, list.length), 0, nid);
       });
       setSelected([nid]);
+    },
+    [doc, safeSelected, store, say],
+  );
+
+  const pathfinderSel = useCallback(
+    (op: PathfinderOp) => {
+      const names: Record<PathfinderOp, string> = { divide: "分割", trim: "修边", merge: "合并", crop: "裁剪", outline: "轮廓" };
+      const paths = sortPathNodesByZ(
+        doc,
+        safeSelected.map((id) => doc.nodes[id]).filter((n): n is PathNode => !!n && n.kind === "path"),
+      );
+      if (paths.length < (op === "outline" ? 1 : 2)) {
+        say(op === "outline" ? "轮廓需要一个以上路径" : "路径查找器需要两个以上路径");
+        return;
+      }
+      const pieces = pathfinderPieces(paths, op);
+      if (!pieces.length) {
+        say(op === "trim" ? "没有可修边的重叠区域" : op === "crop" ? "顶层路径没有裁到下层内容" : "结果为空");
+        return;
+      }
+      const base = paths[0];
+      const ids: string[] = [];
+      store.commit((d) => {
+        const host = containerOf(d, base.id);
+        const parentId = host?.parent ?? "";
+        const at = host ? host.list.indexOf(base.id) : -1;
+        for (const p of paths) removeNode(d, p.id);
+        const list = parentId ? ((d.nodes[parentId] as GroupNode | undefined)?.children ?? d.root) : d.root;
+        const insertAt = at < 0 ? list.length : Math.min(at, list.length);
+        pieces.forEach((piece, i) => {
+          const nid = newId(d, "n");
+          d.nodes[nid] = {
+            kind: "path",
+            id: nid,
+            name: `${piece.name} · ${names[op]}${pieces.length > 1 ? ` ${i + 1}` : ""}`,
+            subpaths: piece.subpaths,
+            fill: piece.fill,
+            stroke: piece.stroke,
+            opacity: piece.opacity,
+            visible: true,
+            locked: false,
+          };
+          list.splice(insertAt + i, 0, nid);
+          ids.push(nid);
+        });
+      });
+      setSelected(ids);
+      say(`已生成 ${ids.length} 个路径（${names[op]}）`);
     },
     [doc, safeSelected, store, say],
   );
@@ -942,6 +1052,7 @@ export default function EditorShell(props: Props) {
     save: () => void doSave(false),
     saveAs: () => void doSave(true),
     export: () => setExportOpen(true),
+    joinAnchors: joinAnchorSel,
     undo: store.undo,
     redo: store.redo,
     del: deleteSelected,
@@ -993,7 +1104,12 @@ export default function EditorShell(props: Props) {
         if (k === "z") { e.preventDefault(); if (e.shiftKey) a.redo(); else a.undo(); return; }
         if (k === "y") { e.preventDefault(); a.redo(); return; }
         if (k === "s") { e.preventDefault(); if (e.shiftKey) a.saveAs(); else a.save(); return; }
-        if (k === ",") { e.preventDefault(); a.settings(); return; }
+        if (k === ",") {
+          e.preventDefault();
+          if (e.altKey) setDocSettingsOpen(true);
+          else a.settings();
+          return;
+        }
         if (k === "e") { e.preventDefault(); a.export(); return; }
         if (k === "a") { e.preventDefault(); a.selectAll(); return; }
         if (k === "d") { e.preventDefault(); a.dup(); return; }
@@ -1003,6 +1119,7 @@ export default function EditorShell(props: Props) {
         if (k === "x") { e.preventDefault(); a.cut(); return; }
         if (k === "v") { e.preventDefault(); a.paste(); return; }
         if (k === "g") { e.preventDefault(); if (e.shiftKey) a.ungroup(); else a.group(); return; }
+        if (k === "j") { e.preventDefault(); a.joinAnchors(); return; }
         if (k === "7" || e.code === "Digit7") { e.preventDefault(); if (e.altKey) a.releaseMask(); else a.mask(); return; }
         if (e.key === "]" || e.key === "}") { e.preventDefault(); a.arrange(e.shiftKey ? "front" : "forward"); return; }
         if (e.key === "[" || e.key === "{") { e.preventDefault(); a.arrange(e.shiftKey ? "back" : "backward"); return; }
@@ -1077,6 +1194,7 @@ export default function EditorShell(props: Props) {
         { label: "打开工程", key: "Ctrl+O", run: props.onOpenRequest },
         { label: "保存", key: "Ctrl+S", run: () => void doSave(false) },
         { label: "另存为", key: "Ctrl+Shift+S", run: () => void doSave(true) },
+        { label: "文档设置…", key: "Ctrl+Alt+,", run: () => setDocSettingsOpen(true) },
         { label: "", sep: true },
         { label: "置入图片…", run: () => void doPlaceImage() },
         { label: "导入 SVG…", run: () => void doImportSVG() },
@@ -1123,6 +1241,14 @@ export default function EditorShell(props: Props) {
         { label: "水平分布", run: () => distributeSel("h"), disabled: safeSelected.length < 3 },
         { label: "垂直分布", run: () => distributeSel("v"), disabled: safeSelected.length < 3 },
         { label: "", sep: true },
+        { label: "连接锚点", key: "Ctrl+J", run: joinAnchorSel, disabled: !canJoinAnchors(doc, anchorSel) },
+        { label: "锚点左对齐", run: () => alignAnchorSel("left"), disabled: anchorCount < 2 },
+        { label: "锚点水平居中", run: () => alignAnchorSel("hcenter"), disabled: anchorCount < 2 },
+        { label: "锚点右对齐", run: () => alignAnchorSel("right"), disabled: anchorCount < 2 },
+        { label: "锚点顶对齐", run: () => alignAnchorSel("top"), disabled: anchorCount < 2 },
+        { label: "锚点垂直居中", run: () => alignAnchorSel("vcenter"), disabled: anchorCount < 2 },
+        { label: "锚点底对齐", run: () => alignAnchorSel("bottom"), disabled: anchorCount < 2 },
+        { label: "", sep: true },
         { label: "顺时针旋转 90°", run: () => rotateSel(90), disabled: selNone },
         { label: "逆时针旋转 90°", run: () => rotateSel(-90), disabled: selNone },
         { label: "水平翻转", run: () => flipSel("h"), disabled: selNone },
@@ -1132,6 +1258,11 @@ export default function EditorShell(props: Props) {
         { label: "路径查找器 · 交集", run: () => boolSel("intersect"), disabled: !hasPaths },
         { label: "路径查找器 · 减去顶层", run: () => boolSel("subtract"), disabled: !hasPaths },
         { label: "路径查找器 · 排除重叠", run: () => boolSel("exclude"), disabled: !hasPaths },
+        { label: "路径查找器 · 分割", run: () => pathfinderSel("divide"), disabled: !hasPaths },
+        { label: "路径查找器 · 修边", run: () => pathfinderSel("trim"), disabled: !hasPaths },
+        { label: "路径查找器 · 合并", run: () => pathfinderSel("merge"), disabled: !hasAnyPath },
+        { label: "路径查找器 · 裁剪", run: () => pathfinderSel("crop"), disabled: !hasPaths },
+        { label: "路径查找器 · 轮廓", run: () => pathfinderSel("outline"), disabled: !hasAnyPath },
         { label: "", sep: true },
         { label: "偏移路径（6px）", run: () => pathFxSel("offset"), disabled: !hasAnyPath },
         { label: "描边转轮廓", run: () => pathFxSel("outline"), disabled: !hasAnyPath },
@@ -1508,7 +1639,7 @@ export default function EditorShell(props: Props) {
                 )}
               </div>
             )}
-            <span className="opt-hint">{zh.hint[tool]}</span>
+            <span className="opt-hint">{tool === "direct" && anchorCount > 0 ? `锚点 ${anchorCount} · Shift 多选 · 方向键微移` : zh.hint[tool]}</span>
           </div>
 
           <CanvasView
@@ -1537,6 +1668,8 @@ export default function EditorShell(props: Props) {
             onSize={(w, h) => setVp({ w, h })}
             onBoardIndex={setBoardFromCanvas}
             onContext={(x, y) => setCtxMenu({ x, y })}
+            onAnchorSelection={setAnchorSel}
+            anchorReset={anchorReset}
           />
         </div>
 
@@ -1553,6 +1686,7 @@ export default function EditorShell(props: Props) {
           onAlign={alignSel}
           onDistribute={distributeSel}
           onBool={boolSel}
+          onPathfinder={pathfinderSel}
           onArrange={arrange}
           collapsed={!dockOpen}
           onCollapse={() => setDockOpen(false)}
@@ -1647,6 +1781,14 @@ export default function EditorShell(props: Props) {
       )}
       {toast && <div className="toast">{toast}</div>}
       {about && <AboutDialog onClose={() => setAbout(false)} />}
+      {docSettingsOpen && (
+        <DocumentDialog
+          doc={store.doc}
+          boardIndex={boardIndex}
+          onApply={applyDocumentSettings}
+          onClose={() => setDocSettingsOpen(false)}
+        />
+      )}
       {exportOpen && (
         <ExportModal
           board={board}
@@ -1683,12 +1825,13 @@ interface DockProps {
   onAlign: (mode: AlignMode) => void;
   onDistribute: (axis: "h" | "v") => void;
   onBool: (op: BoolOp) => void;
+  onPathfinder: (op: PathfinderOp) => void;
   onArrange: (mode: ArrangeMode) => void;
   collapsed: boolean;
   onCollapse: () => void;
 }
 
-function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBoardIndex, onAlign, onDistribute, onBool, onArrange, collapsed, onCollapse }: DockProps) {
+function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBoardIndex, onAlign, onDistribute, onBool, onPathfinder, onArrange, collapsed, onCollapse }: DockProps) {
   const single = ids.length === 1 ? doc.nodes[ids[0]] : undefined;
   const fillStops = single && (single.kind === "path" || single.kind === "text") && (single.fill.kind === "linear" || single.fill.kind === "radial")
     ? paintStops(single.fill)
@@ -2073,7 +2216,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
       {tab === "props" ? (
         <div className="dock-body" key="props">
           {ids.length === 0 && (
-            <BoardProps doc={doc} store={store} index={boardIndex} setIndex={onBoardIndex} />
+            <BoardProps doc={doc} store={store} index={boardIndex} setIndex={onBoardIndex} onToast={onToast} onSelect={onSelect} />
           )}
 
           {ids.length > 0 && !single && (
@@ -2620,12 +2763,19 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
           </section>
 
           <section className="dock-sec">
-            <div className="dock-sec-head"><span>路径查找器</span><span className="faint">布尔</span></div>
+            <div className="dock-sec-head"><span>路径查找器</span><span className="faint">布尔 · 9 种</span></div>
             <div className="panel-grid cols-2">
               <button className="panel-btn" disabled={pathCount < 2} onClick={() => onBool("union")}>联集</button>
               <button className="panel-btn" disabled={pathCount < 2} onClick={() => onBool("intersect")}>交集</button>
               <button className="panel-btn" disabled={pathCount < 2} onClick={() => onBool("subtract")}>减去顶层</button>
               <button className="panel-btn" disabled={pathCount < 2} onClick={() => onBool("exclude")}>排除重叠</button>
+            </div>
+            <div className="panel-grid cols-3 pathfinder-extra">
+              <button className="panel-btn" title="把叠加区域拆成互不重叠的面" disabled={pathCount < 2} onClick={() => onPathfinder("divide")}>分割</button>
+              <button className="panel-btn" title="去掉重叠，只留下各自露出的部分" disabled={pathCount < 2} onClick={() => onPathfinder("trim")}>修边</button>
+              <button className="panel-btn" title="相同填充的路径合并为一个" disabled={pathCount < 1} onClick={() => onPathfinder("merge")}>合并</button>
+              <button className="panel-btn" title="用最上层路径裁剪下层内容" disabled={pathCount < 2} onClick={() => onPathfinder("crop")}>裁剪</button>
+              <button className="panel-btn" title="去填充，只留 1px 边界线" disabled={pathCount < 1} onClick={() => onPathfinder("outline")}>轮廓</button>
             </div>
           </section>
 
@@ -2801,8 +2951,10 @@ function kindGlyph(n: Node): string {
   return "G";
 }
 
-function BoardProps({ doc, store, index, setIndex }: { doc: VexaDoc; store: ReturnType<typeof useDocStore>; index: number; setIndex: (i: number) => void }) {
+function BoardProps({ doc, store, index, setIndex, onToast, onSelect }: { doc: VexaDoc; store: ReturnType<typeof useDocStore>; index: number; setIndex: (i: number) => void; onToast: (msg: string) => void; onSelect: (ids: string[]) => void }) {
   const board = doc.artboards[index] ?? doc.artboards[0];
+  const customPresets = useCustomPresets();
+  const [presetOpen, setPresetOpen] = useState(false);
   const setBoard = (fn: (b: Artboard) => void) => {
     store.commit((d) => {
       if (d.artboards[index]) fn(d.artboards[index]);
@@ -2832,6 +2984,32 @@ function BoardProps({ doc, store, index, setIndex }: { doc: VexaDoc; store: Retu
     });
     setIndex(Math.max(0, Math.min(index, doc.artboards.length - 2)));
   };
+  const moveBoard = (delta: number) => {
+    let moved = false;
+    store.commit((d) => { moved = moveArtboard(d, index, delta); });
+    if (!moved) return;
+    setIndex(index + delta);
+    onToast(delta < 0 ? "画板已上移" : "画板已下移");
+  };
+  const fitBoard = () => {
+    let fitted = false;
+    store.commit((d) => { fitted = fitBoardToContent(d, index); });
+    onToast(fitted ? "画板已适配内容" : "当前画板没有可适配的内容");
+  };
+  const copyBoard = () => {
+    let result: DuplicateBoardResult | null = null;
+    store.commit((d) => { result = duplicateArtboard(d, index, true); });
+    const created = result as DuplicateBoardResult | null;
+    if (!created) return;
+    setIndex(created.index);
+    onSelect([]);
+    onToast(created.roots.length ? `已复制画板，含 ${created.roots.length} 个顶层对象` : "已复制空画板");
+  };
+  const savePreset = () => {
+    const result = addPreset({ label: board.name, width: Math.round(board.w), height: Math.round(board.h) });
+    if (result.error) onToast(result.error);
+    else onToast(`已保存预设「${result.preset?.label}」`);
+  };
   return (
     <>
       <section className="dock-sec">
@@ -2839,6 +3017,8 @@ function BoardProps({ doc, store, index, setIndex }: { doc: VexaDoc; store: Retu
           <span>画板</span>
           <span className="board-actions">
             <button className="mini-btn" onClick={addBoard} title="新建画板">＋</button>
+            <button className="mini-btn" onClick={() => moveBoard(-1)} title="上移画板" disabled={index <= 0}>↑</button>
+            <button className="mini-btn" onClick={() => moveBoard(1)} title="下移画板" disabled={index >= doc.artboards.length - 1}>↓</button>
             <button className="mini-btn" onClick={delBoard} title="删除当前画板" disabled={doc.artboards.length <= 1}>－</button>
           </span>
         </div>
@@ -2852,12 +3032,59 @@ function BoardProps({ doc, store, index, setIndex }: { doc: VexaDoc; store: Retu
           ))}
         </div>
         <div className="field">
+          <label className="field-label">尺寸预设</label>
+          <div className="board-presets">
+            {BOARD_PRESETS.map((p) => {
+              const on = board.w === p.w && board.h === p.h;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={"board-preset" + (on ? " is-on" : "")}
+                  title={`${p.label} · ${p.note}`}
+                  aria-pressed={on}
+                  onClick={() => setBoard((b) => applyBoardPreset(b, p))}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+          {customPresets.length > 0 && (
+            <div className="board-presets custom-board-presets">
+              {customPresets.map((p) => {
+                const on = board.w === p.w && board.h === p.h;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={"board-preset" + (on ? " is-on" : "")}
+                    title={`${p.label} · ${p.note}`}
+                    aria-pressed={on}
+                    onClick={() => setBoard((b) => applyBoardPreset(b, p))}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="board-preset-actions">
+            <button type="button" className="btn-link board-preset-open" onClick={() => setPresetOpen(true)}>预设库…</button>
+            <button type="button" className="btn-link" onClick={savePreset}>存当前尺寸</button>
+          </div>
+        </div>
+        <div className="field">
           <label className="field-label">名称</label>
           <input className="field-input" value={board.name} onChange={(e) => setBoard((b) => { b.name = e.target.value; })} />
         </div>
         <div className="dock-grid">
           <NumField label="W" value={Math.round(board.w)} min={1} onCommit={(v) => setBoard((b) => { b.w = v; })} />
           <NumField label="H" value={Math.round(board.h)} min={1} onCommit={(v) => setBoard((b) => { b.h = v; })} />
+        </div>
+        <div className="panel-grid cols-2 board-tools">
+          <button className="panel-btn" onClick={fitBoard} title="把画板贴到当前内容的包围盒">适配内容</button>
+          <button className="panel-btn" onClick={copyBoard} title="复制当前画板，连内容一起平移">复制画板</button>
         </div>
       </section>
       <section className="dock-sec">
@@ -2871,6 +3098,18 @@ function BoardProps({ doc, store, index, setIndex }: { doc: VexaDoc; store: Retu
         <ColorSwatches value={board.bg} onPick={(color) => setBoard((b) => { b.bg = color; })} />
       </section>
       <div className="dock-note">{zh.dock.emptyHint}<br />{zh.dock.emptyHint2}</div>
+      {presetOpen && (
+        <BoardPresetDialog
+          defaultW={Math.round(board.w)}
+          defaultH={Math.round(board.h)}
+          returnFocusSelector=".board-preset-open"
+          onApply={(p) => {
+            setBoard((b) => applyBoardPreset(b, p));
+            onToast(`已应用预设「${p.label}」`);
+          }}
+          onClose={() => setPresetOpen(false)}
+        />
+      )}
     </>
   );
 }

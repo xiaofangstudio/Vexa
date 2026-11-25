@@ -328,18 +328,117 @@
 
 发布验收：`release\Vexa.exe` 已用第二十八批源码重新构建（7,793,152 B，SHA256 `48DFD55B7D10D1762B038C93CD2C1793A32B2DAC379E98C22FE538B4B587B82F`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,352,669 B（SHA256 `84D7AF7B7C1C761B09DE5A82E50FFAC56CE72D8982FFEAA9AB0AD8E35975B403`）。
 
+## 1.24 第二十九批已对齐（画板预设 / 适配内容 / 复制与换序）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 画板尺寸预设 | Artboard presets | `src/core/artboards.ts` 的 `BOARD_PRESETS` 六档：方图 1080、横屏 1920×1080、竖屏 1080×1920、A4 竖 794×1123、A4 横 1123×794、图标 1024；启动页与编辑器属性坞共用同一份常量，属性坞显示 6 个 chip，命中当前 W/H 时高亮 | 真实窗口点“A4 竖版”，画板行与 W/H 同步为 `794×1123`，chip 变为选中；截图 `boards-preset-a4.png` |
+| 适配内容 | Fit artboard to artwork | `nodeBounds` 递归组并跳过剪裁轮廓，只取与当前画板相交的根层对象求并集；`fitBoardToContent` 把画板 x/y/w/h 贴到该包围盒（最小 1px）；无内容时返回 false 并 toast | 真实窗口点“适配内容”，画板从 `794×1123` 回到内容包围盒 `900×600`，toast“画板已适配内容” |
+| 复制画板 | Duplicate artboard | `duplicateArtboard` 把新板插到当前板之后、右侧 48px；默认连内容：只克隆与源板相交的根层，子树 id 重新分配，组 `children` 与 `clip` 引用同步重映射，整体按新板偏移平移；空白板也可复制 | 真实窗口点“复制画板”，画板数 1→2，当前板变为“图层拖拽验收 副本”，toast“已复制画板，含 4 个顶层对象”；截图 `boards-copy.png` |
+| 画板换序 | Reorder artboards | `moveArtboard` 互换 `doc.artboards` 相邻项，越界/自身返回 false；属性坞标题栏提供 ↑/↓，换序后当前板跟随、边界按钮禁用态更新 | 真实窗口上移后副本到第一位，下移恢复原顺序；toast“画板已上移 / 下移” |
+| 布局与回归 | Panel layout / regression | 预设 chips 两行、`适配内容 / 复制画板` 两个按钮、5 个标题栏小按钮都在 303px 面板内；名称/W/H/底色与原有画板工具未改 | `.ed-dock / .dock-body / .board-list / .board-presets / .board-tools` 的 `scrollWidth == clientWidth`；截图 `boards-presets.png`、`boards-window.png` |
+
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（145 modules；`index-NKdXWcrY.js` 479.32 kB / gzip 152.21，`index-DjYS-YFN.css` 53.10 kB / gzip 10.13，`pdf-Dtxo_CmN.js` 407.16 kB / gzip 169.22）；`npx tsx scripts/smoke.artboards.mts` **19 项 PASS**（预设尺寸、组包围盒与剪裁排除、适配、连内容复制、组/剪裁 id 重映射、原文坐标不变、换序、空板复制），`scripts/smoke.selection.mts` 16 项、`scripts/smoke.layers.mts` 24 项、`scripts/smoke.layerfilter.mts` 27 项复跑无回归。真实 Tauri/WebView2 窗口（1280×1000 逻辑，DPR 1.5）完成预设、适配、复制与上下移；截图 `docs/shots/boards-presets.png`、`boards-preset-a4.png`、`boards-copy.png`、`boards-final.png`、`boards-window.png`。
+
+已知边界：画板预设是内置六档，不支持自定义预设保存/导入；适配内容包含隐藏图层，也不把描边宽度计入包围盒；复制画板只克隆与源板相交的根层，跨板对象只保留在源板；换序只改画板列表与导出顺序，不改画板在画布上的坐标。
+
+发布验收：`release\Vexa.exe` 已用第二十九批源码重新构建（7,794,176 B，SHA256 `30100533102295D2432D1001B41FE74B09FD220BA3A86CEF73FC9527798040DC`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,353,312 B（SHA256 `2D47242510B5E94EE8322C2A32BF2B00EF44CA73EE3573CBDC0AC9B3BA044EB5`）。
+
+## 1.25 第三十批已对齐（路径查找器 9 种）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 分割 | Divide | `bool.ts` 的 `pathfinderPieces`：最多 8 个形状时枚举所有成员组合，算出互不重叠的面（A 单独 / B 单独 / A∩B），每面保留覆盖它的最上层填充与透明度；超过 8 个形状退化为自顶向下逐层切面；结果清空描边避免内部接缝 | 真实窗口选红块 + 蓝块点“分割”，2 个对象变 3 个面，对象数 6→7，toast“已生成 3 个路径（分割）”；截图 `pathfinder-divide.png` |
+| 修边 | Trim | 从下往上逐层减去上方所有路径：最上层保持完整，下层只留露出部分，重叠区归最上层；保留各自填充，清空描边，视觉与原来一致 | 红块 + 蓝块修边后红块变 L 形、蓝块完整，对象数保持 6，toast“已生成 2 个路径（修边）”；截图 `pathfinder-trim.png` |
+| 合并 | Merge | 按 `opacity + fill + stroke` 分组，同组路径做联合，输出一个路径；不同外观各自保留；描边随组保留 | 红块 + 红块 2 合并为 1 个路径，对象数 6→5，toast“已生成 1 个路径（合并）”；截图 `pathfinder-merge.png` |
+| 裁剪 | Crop | 按文档叠放顺序取最上层路径作裁剪框，下层每个形状与它求交，输出各自填充的片段；裁剪框自身删除；结果清空描边 | 红块 + 蓝块裁剪后只剩红块在蓝块范围内的 `100×140` 片段，对象数 6→5，toast“已生成 1 个路径（裁剪）”；截图 `pathfinder-crop.png` |
+| 轮廓 | Outline | 保留原几何，去掉填充，统一 1px `#17171c` 实线描边；只做边界线，不把描边宽度转成外扩轮廓 | 单选红块点“轮廓”，红块变 1px 边界线，对象数保持 6，toast“已生成 1 个路径（轮廓）”；截图 `pathfinder-outline.png` |
+| 叠放顺序 | Stacking order | 新增 `sortPathNodesByZ`，按 `doc.root` 与组内 children 的深度优先顺序排序；路径查找器与“减去顶层/裁剪”不再依赖点击顺序 | 冒烟 `sortPathNodesByZ(doc,[b,a])` 返回 `["a","b"]`；减去顶层与裁剪都以真实的蓝块在上 |
+| 入口与布局 | Pathfinder panel | 属性坞路径查找器从 4 个扩到 9 个：前 4 个 2 列、后 5 个 3 列；对象菜单同步新增分割/修边/合并/裁剪/轮廓；合并与轮廓只需 1 个路径，其余至少 2 个 | 真实窗口 257px 面板内 9 个按钮无横向溢出；截图 `pathfinder-panel.png`、`pathfinder-window.png` |
+
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（145 modules；`index-BeGzVO9t.js` 484.02 kB / gzip 153.73，`index-BMY57vWz.css` 53.14 kB / gzip 10.14，`pdf-BC40eu39.js` 407.16 kB / gzip 169.22）；`npx tsx scripts/smoke.pathfinder.mts` **22 项 PASS**（叠放顺序、分割 3 面与总面积、修边 2 面、同/异填充合并、裁剪面积与下层填充、轮廓无填充、1px 描边、无重叠裁剪为空），`scripts/smoke.vector.mts`、`scripts/smoke.artboards.mts` 19 项、`scripts/smoke.selection.mts` 16 项、`scripts/smoke.layers.mts` 24 项、`scripts/smoke.layerfilter.mts` 27 项复跑通过。真实 Tauri/WebView2 窗口用 `scripts/fixtures/pathfinder.vex` 完成 5 个新操作，每次撤销后对象数回到 6；截图 `docs/shots/pathfinder-panel.png`、`pathfinder-divide.png`、`pathfinder-trim.png`、`pathfinder-merge.png`、`pathfinder-crop.png`、`pathfinder-outline.png`、`pathfinder-final.png`、`pathfinder-window.png`。
+
+已知边界：分割最多枚举 8 个形状的全部组合，超过 8 个改为逐层切面，可能不会再单独拆出“只有某两层重叠”的面；分割、修边、裁剪会清空结果描边，只保留填充与透明度；合并按外观分组，不处理不同填充之间的遮挡顺序；轮廓只留 1px 边界线，不会把原描边宽度外扩成轮廓；布尔与路径查找器仍是拍平折线级，不是曲线保真。
+
+发布验收：`release\Vexa.exe` 已用第三十批源码重新构建（7,795,712 B，SHA256 `94135DA721BCC7D2A36072B871F59978E49DCA849F54B975B20CEE021D7C25FA`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,354,744 B（SHA256 `48EF2CE55C65451DA56CA17094FD590833F2AB8124F3BF3AB54DF8A86E70B7A1`）。
+
+## 1.26 第三十一批已对齐（文档设置）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 文档名称 | Document title | `src/core/documentSettings.ts` 的 `readDocSettings` / `applyDocSettings`；空名称回退“未命名”，应用后写入 `doc.name`，同时进入撤销栈 | 真实窗口把名称改为“文档设置验收”，关闭再打开仍保留；撤销后回到“路径查找器验收” |
+| 当前画板名称 | Artboard name | 弹窗只编辑当前画板；空名称回退“画板 N”；写入 `board.name`，与属性坞名称字段同源 | 当前画板名改为“主画板”，右侧画板行、W/H 面板与文档设置再次打开均同步显示“主画板” |
+| 画板尺寸 | Artboard size | 宽/高整数输入，限制 1–20000 px；显示当前画板序号与全文档对象/根层统计；只改边界，不移动现有对象 | 从 `900×600` 改为 `1000×700`，对象数保持 6；右侧画板行同步 `1000×700`；撤销恢复 `900×600` |
+| 画板背景 | Artboard background | 原生取色器 + 6 位十六进制输入；非法色回退 `#ffffff`；写入 `board.bg`，画布与属性坞色块即时更新 | `#f7f3e9` 改为 `#eef4ff`；属性坞色块与画板露出区域变浅蓝，撤销恢复原色 |
+| 校验与恢复 | Validation | 使用 `noValidate` 接管原生校验；尺寸为空/非数字/小于 1/超过 20000、背景非 6 位十六进制时在弹窗内显示错误，弹窗不关闭、不写入文档 | 宽输入 `0` 点“应用更改”，错误“画板尺寸不能小于 1 px”，弹窗保持打开；改回 `1000` 后可正常应用 |
+| 入口与键盘 | Document setup | 文件菜单新增“文档设置…”，快捷键 `Ctrl+Alt+,`；弹窗打开聚焦文档名称，`Esc` 与遮罩点击关闭；关闭后焦点回到“文件”菜单按钮 | 真实窗口从“文件 → 文档设置…”进入；`Esc` 关闭后 `activeElement` 为 `.menubtn`；再次用 `Ctrl+Alt+,` 打开成功 |
+| 只读信息 | Document info | 显示单位 `px`、颜色模式 `RGB / 8 位`、画板序号、对象数/根层数；单位与颜色模式明确只读，不伪造 CMYK/DPI | 初始显示 `单位 px`、`RGB / 8 位`、`画板 1 / 1`、`对象 6 / 6 根层` |
+
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（148 modules；`index-Bo5YbkGz.js` 490.05 kB / gzip 155.45，`index-DmuFagZe.css` 54.90 kB / gzip 10.41，`pdf-9ZZxLwVd.js` 407.16 kB / gzip 169.22）；`npx tsx scripts/smoke.document.mts` **25 项 PASS**（读取、统计、空名称回退、尺寸取整/上下限、非法背景回退、校验错误、应用后不改节点/根层、非法输入不写入、缺画板报错），`scripts/smoke.artboards.mts` 19 项复跑通过。真实 Tauri/WebView2 窗口用 `scripts/fixtures/pathfinder.vex` 完成打开、非法输入、应用、再次打开与撤销；弹窗宽 559 px，正文与全部输入 `scrollWidth == clientWidth`，无横向溢出；关闭后焦点回到菜单按钮。截图 `docs/shots/doc-settings-panel.png`、`doc-settings-error.png`、`doc-settings-applied.png`、`doc-settings-undo.png`、`doc-settings-window.png`。
+
+已知边界：文档设置只编辑当前画板，不批量改所有画板；单位固定 px、颜色模式固定 RGB，不提供 CMYK/DPI；改画板尺寸不移动、不缩放内容，超出部分仍留在画布；文档名称与已保存文件名分离，标签仍显示文件名。
+
+发布验收：`release\Vexa.exe` 已用第三十一批源码重新构建（7,797,248 B，SHA256 `89031DCCA409116E2816EABE8ABDD9A51F9FCD8BFAD4EE33AA9D474ACCBAEC09`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,356,079 B（SHA256 `DDA9BE03C619D010B1C7D3E973A835B35DF8F00E96E221406BE2E127F2713D86`）。
+
+## 1.27 第三十二批已对齐（自定义画板预设 / 适配描边）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 自定义预设 | Custom artboard presets | `src/core/boardPresets.ts` 负责清洗、1–20000 整数尺寸、按尺寸去重、最多 20 个、空名称回退；`src/stores/boardPresets.ts` 写 `vexa.board-presets.v1`，跨启动保留 | 保存“名片”`90×54`，重启后启动页与编辑器都显示；重复尺寸提示“该尺寸已在预设中” |
+| 预设库入口 | Preset library | 启动页“新建”卡片右上“预设库…”；编辑器画板段新增自定义 chip、“预设库…”与“存当前尺寸”；当前 W/H 命中时 chip 高亮 | 启动页从 `.preset-open` 打开；编辑器从 `.board-preset-open` 打开；保存当前画板 `900×600` 后出现第三个 chip，toast“已保存预设「路径查找器验收」” |
+| 保存 / 应用 / 删除 | Manage presets | 弹窗可填名称、宽、高保存；每行“应用 / 删除”；应用后启动页直接填入 W/H，编辑器一次 `commit` 改当前画板并 toast | 应用“海报”后启动页 `400×300` 且 chip 选中；编辑器画板从 `900×600` 变 `400×300`；删除“名片”行数 3→2，提示“已删除「名片」” |
+| 导入 / 导出 | Import / export JSON | 导入走隐藏 `<input type=file>` 读本地 JSON，`parsePresetsJSON` 支持 Vexa 格式或数组，只补新尺寸并受 20 个上限；导出 `{format:"vexa-board-presets",version:1,presets:[...]}`，走原生保存对话框 | 导入 `scripts/fixtures/presets-import.json`，已有“名片”去重后提示“已导入 1 个预设”，列表 1→2；“海报”行显示 `400 × 300 px`；删除后再次导入补回“名片” |
+| 适配内容 | Fit artwork | `nodeBounds` 对路径按描边宽度外扩，非均匀宽度取最大 `left/right` 倍率；`boardContentBounds(..., false)` 跳过隐藏根层与隐藏组内子层；`fitBoardToContent` 用该包围盒写画板边界 | 真实窗口应用“海报”后点“适配内容”，画板回到内容包围盒 `900×600`，toast“画板已适配内容”；核心用 20px 描边矩形验证 `90,90,220,120`，隐藏外框不参与 |
+| 布局与焦点 | Dialog / panel | 弹窗宽 659 px，正文与表单同宽；行 `613 px`、名称输入 `323 px`、宽高输入 `65 px` 均无横向溢出；打开后聚焦名称，`Esc` 与关闭按钮关闭，焦点回到触发链接 | 真实窗口 `scrollWidth == clientWidth`；应用后焦点 `btn-link preset-open`；`Esc` 关闭后焦点 `btn-link preset-open`，删除/导入后仍可继续操作 |
+
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（152 modules；`index-CIlZfatX.js` 500.91 kB / gzip 158.73，`index-C_9PXXkx.css` 58.79 kB / gzip 11.03，`pdf-BVRaIfH3.js` 407.16 kB / gzip 169.22）；`npx tsx scripts/smoke.boardpresets.mts` **25 项 PASS**（清洗、尺寸取整/上下限、去重、上限、增删、合并、导出 schema、解析错误、数组导入、roundtrip）；`scripts/smoke.artboards.mts` 25 项 PASS（新增描边外扩、非均匀宽度、隐藏根层/组内隐藏），`scripts/smoke.document.mts` 25 项复跑通过。真实 Tauri/WebView2 窗口分别验收启动页与编辑器：启动页 `1920×1500` 下弹窗 659 px、表单 615 px；编辑器 3 行预设、应用、存当前、适配全部通过；启动页另验删除、Esc 焦点恢复与再次导入。截图 `docs/shots/presets-start-error.png`、`presets-start-dialog.png`、`presets-start-applied.png`、`presets-editor-dialog.png`、`presets-editor-panel.png`、`presets-start-window.png`、`presets-editor-window.png`。
+
+已知边界：自定义预设只存尺寸与名称，不存画板底色/坐标/内容；同尺寸不能重复保存，但仍允许与内置六档同尺寸；导入只补充，不覆盖或删除现有预设；导出 JSON 已接原生保存对话框，核心 schema/roundtrip 已验证，本批未自动点选原生保存框；适配内容对尖角斜接只按半宽外扩，不计算极尖角的理论外伸。
+
+发布验收：`release\Vexa.exe` 已用第三十二批源码重新构建（7,800,832 B，SHA256 `D504595C6C2B801DE90B507CC1E6A73A0292762909007992A1A09EEFBB513E68`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,360,263 B（SHA256 `415176DFBBF6B0E9DDCDC607E9E87574B2DDF803EA60B5EF631846723CABF52D`）。
+
+## 1.28 第三十三批已对齐（直接选择多锚点 / 方向键微移）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 多锚点选择 | Direct selection multi-anchor | `AnchorRef {nodeId,si,ai}` 记录在 `CanvasView`；`hitAnchor` 命中锚点后普通点击只选当前锚点，`Shift` 点击切换加入/移除；切换到选择工具、对象选择变化或节点失效时自动清理引用 | 直接选择下先点右端锚点得“锚点 1”，`Shift` 点底端得“锚点 2”；再 `Shift` 点已选锚点回到 1，再点回来恢复 2 |
+| 多锚点拖动 | Drag selected anchors | `Drag.anchor` 改为 `refs: AnchorRef[]`；拖动任一已选锚点时 `nudgeAnchors(doc, refs, dx, dy)` 同步平移所有选中锚点及其入/出手柄；拖单手柄仍只走 `dragHandle` | 选中右端与底端锚点后从右端拖 40 屏幕 px，W `655→720`，X 保持 `189`，两个锚点一起移动 |
+| 方向键微移 | Arrow-key nudge | 锚点选中时在 `window` 捕获阶段拦截方向键并 `stopImmediatePropagation`，只推锚点，不再触发对象级 `nudge`；`Shift` 步长 10 px，普通 1 px，每次按键记一步撤销 | 两次 `→` 后 W `655→657`、X/Y/H `189/368/409` 全不变；两次 `Ctrl+Z` 逐步回到 `655` |
+| 选中态与提示 | Anchor highlight | 选中锚点画成 9 px 白底 + 2 px accent 边框，未选保持 6 px 黑边；选项栏提示在选中时变为“锚点 N · Shift 多选 · 方向键微移” | 真实窗口“锚点 2”清晰可读；1920 与 1200 宽下 `.ed-optbar`、`.opt-selection` 均 `scrollWidth == clientWidth` |
+
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（152 modules；`index-x6ScLkuV.js` 503.12 kB / gzip 159.40，`index-C_9PXXkx.css` 58.79 kB / gzip 11.03，`pdf-BWXqOk0E.js` 407.16 kB / gzip 169.22）；`scripts/smoke.anchors.mts` **20 项 PASS**（手柄同步、重复引用去重、无效引用、跨节点、直线锚点、非路径跳过、零位移）；`smoke.artboards` 25 项、`smoke.document` 25 项、`smoke.vector`、`smoke.selection` 16 项、`smoke.pathfinder` 22 项复跑通过。真实 Tauri/WebView2 窗口用钢笔现场画三角形，选中路径后点右端/底端锚点，完成多选、方向键微移、两次撤销、40 px 多锚点拖动、拖动撤销、`Shift` 取消/恢复、切工具清空与切回重选；1200×900 视口无横向溢出。截图 `docs/shots/anchors-multi.png`、`anchors-nudged.png`、`anchors-drag.png`、`anchors-narrow.png`、`anchors-window.png`。
+
+已知边界：锚点多选只覆盖同一路径或跨路径的已选对象，尚未做框选锚点；删除键仍删整个选中对象，未做删锚点；方向键按次数分步入撤销栈，长按会形成多步撤销；仍未做开放子路径连接与锚点水平/垂直/分布对齐。
+
+发布验收：`release\Vexa.exe` 已用第三十三批源码重新构建（7,799,808 B，SHA256 `AAE7FBDAAE6DC9C128659DCA5BC794DD1967C94649B2349B6ADDB1561394DB96`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,358,465 B（SHA256 `26A41DD7768D3CDDB0353F16EA7415A38895FC025B80050BDD9753907991541D`）。
+
+## 1.29 第三十四批已对齐（锚点连接 / 六向对齐）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 锚点对齐 | Align selected anchors | `core/anchorOps.ts`：按选中锚点包围盒做左 / 水平居中 / 右 / 顶 / 垂直居中 / 底六向对齐；锚点移动时入/出手柄一起平移；`anchorsNeedAlign` 预检，全部已对齐时只提示、不写空撤销 | 真实窗口选中首尾锚点后菜单“锚点左对齐”，尾锚点 X `368.6→188.6`、中点锚点与 Y 不动，toast“已对齐 1 个锚点”；再点一次只提示“已经对齐”，撤销栈长度保持 2 |
+| 同路径端点连接 | Join open subpaths | 同一开放子路径的首尾端点直接闭合；不同子路径按选中端点方向反转后拼接，接缝两侧多余手柄清空；两端点距离 <0.001 时合并为一个锚点并保留外侧手柄；跨路径节点明确拒绝 | 三角开放路径选中首尾后菜单“连接锚点”，子路径 `closed=false→true`、锚点数仍 3、锚点选择清空，toast“已连接 2 个锚点”；撤销恢复开放，`Ctrl+J` 可再连 |
+| 菜单与键盘 | Object menu / shortcut | 对象菜单新增“连接锚点”`Ctrl+J` 与 6 个“锚点*对齐”；连接只在恰好两个同路径开放端点时启用，对齐在锚点 ≥2 时启用；菜单浮层 `max-height: calc(100vh - 56px)` 可滚动 | 1 个锚点时连接与 6 项对齐均禁用；中点+端点两个锚点时对齐启用、连接仍禁用；首尾端点时连接启用；1200×900 下菜单 217/217、top 41 / bottom 885，不越视口 |
+| 选择清理 | Clear after join | `CanvasView` 的 `onAnchorSelection` 改为回传完整 `AnchorRef[]`，新增 `anchorReset`；连接成功后外层清空锚点选择并触发画布重置 | 菜单连接与 `Ctrl+J` 连接后提示均回到“拖动锚点 · Shift 多选 · 方向键微移”，不再显示“锚点 N” |
+
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（153 modules；`index-N3WvSOuM.js` 506.73 kB / gzip 160.62，`index-B25ahhqp.css` 58.86 kB / gzip 11.05，`pdf-C-f7b5j_.js` 407.16 kB / gzip 169.22）；`scripts/smoke.anchorops.mts` **50 项 PASS**（六向对齐、手柄同步、重复/无效引用、已对齐不写历史、同子路径闭合、双子路径顺序/反向/重合端点、闭合/跨节点/非端点拒绝），`smoke.anchors` 21 项及其余 14 个冒烟脚本全复跑通过。真实 Tauri/WebView2 1920×1500 窗口用钢笔现场画 3 锚点开放路径：锚点坐标初始 `[188.6,302.2] [875.9,514.9] [368.6,825.9]`；菜单禁用/启用、左对齐、重复对齐、工具栏撤销、菜单连接、撤销连接、`Ctrl+J` 连接全部通过；`.ed-optbar` 874/874、`.opt-selection` 297/297；1200×900 下 874/874 与 297/297。截图 `docs/shots/anchorjoin-menu-disabled.png`、`anchorjoin-menu-enabled.png`、`anchorjoin-align.png`、`anchorjoin-joined.png`、`anchorjoin-narrow.png`、`anchorjoin-window.png`。
+
+已知边界：连接只支持同一路径节点内的开放子路径；跨路径节点连接、锚点等距分布、框选锚点仍未做；连接后不自动选中合并出的新端点；闭合路径不能再“连接”。
+
+发布验收：`release\Vexa.exe` 已用第三十四批源码重新构建（7,800,320 B，SHA256 `10EF286D9FB0AEB0ADC783ED4B2CE2DFB5BEFF9F7DE61D689B8BC9576F392F2A`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,359,840 B（SHA256 `5CA7DADD20DC847F95ED56B88475D3EE62EB2A27BF20A2C70520B16DD85A6BE7`）。
+
 ## 2. 部分对齐
 
 | 能力 | 现状 | 差什么 |
 |---|---|---|
 | 路径布尔 | 多边形级（拍平后运算） | 曲线保真布尔（参考 `pathops/boolean.rs` 80 KB 思路）；形状边界会退化为折线，锚点数偏多 |
-| 钢笔 / 直接选择 | 加锚点、拖手柄、双击插入锚点 | 连接、锚点对齐、方向键推锚点、多选锚点 |
+| 钢笔 / 直接选择 | 加锚点、拖手柄、双击插入、Shift 多选锚点、多锚点拖动、方向键微移、同路径开放端点连接、六向锚点对齐 | 锚点等距分布；跨路径节点连接 |
 | 文字 | 单点文字 + 字符面板（字体/字号/行距/字距/粗斜体/三档对齐/横纵缩放） | 段落/区域/路径文字、段落面板（避头尾、首行缩进、段间距）、文字转路径 |
 | 可变宽度描边 | 画布与 SVG 轮廓填充、宽度点编辑、余弦过渡 | 虚线不随宽度轮廓走（有宽度点时按实线轮廓输出）；箭头仍按基础线宽绘制；端帽 / 连接类型目前只作用于普通均匀描边，宽度轮廓仍是平头外框；宽度点手柄只画在第一条子路径，复合路径各子路径共用同一 `t` 轮廓 |
 | 渐变 | 线性/径向均支持多色标、透明度、中点、画布轴线与色标直拖、`.vex` 往返、MCP `fill.stops` | 网格渐变、自由渐变、渐变描边尚未做；径向渐变的画布手柄只沿一条半径显示，不能改圆心位置/半径 |
 | SVG | 导出（组、线性/径向渐变、虚线、箭头、混合模式、剪切蒙版）；导入基础图形、变换、线性/径向渐变、色标透明度、`href` 继承、`fill/stroke-opacity`、`<text>` 可编辑文字、`<use>` 引用、`<clipPath>` 组裁切与 symbol viewBox 缩放 | 导入仍不含 `objectBoundingBox` 剪裁、图案、滤镜、`mask`；clipPath 的 even-odd 孔洞与 `slice` 对齐未细分；文本旋转/斜切只映射位置与缩放、不旋转字形；`gradientTransform`、`spreadMethod` 径向的 `cx/cy/r` 暂按 Vexa 的 bbox 规则近似 |
 | PDF 导出 | 多画板分页、原生线性/径向渐变、渐变文字、实色/虚线/端帽/连接、透明位图、文字轮廓 | 文字不可选中/搜索；渐变描边、图案填充、渐变网格未做；组透明度按节点复合 alpha 近似；字体只读本机文件 |
-| .vex 文档 | 保存/读取、撤销栈 200 步、多画板、混合模式、剪切蒙版往返 | 画板级导出（单板 PNG）与文档设置面板尚未全流程实测 |
+| .vex 文档 | 保存/读取、撤销栈 200 步、多画板、混合模式、剪切蒙版往返 | 单板 PNG 导出代码路径已接当前板，但原生保存全流程尚未实测；文档设置面板已在 1.26 完成 |
 | 描摹 | Rust VTracer：预设/颜色数/细节/平滑/杂色，单测 3 项通过 | 分层输出、调色板编辑、实时预览、批量 |
 | 面板 | 属性面板（位置/尺寸支持单选与多选、组与文字精确缩放、旋转/翻转；填充/描边/画板底色带 12 色板与最近 10 色）+ 可展开组图层树、组内排序与跨组搬移、Ctrl/Shift 多选与批量显隐/锁定 | 样式面板、符号、全局色、专色、CMYK 仍缺；渐变每个色标仍用原生取色器 |
 
@@ -347,13 +446,15 @@
 
 **P2 · 路径与几何**
 - 曲线保真的偏移与描边轮廓（当前为拍平折线，尖角按斜接近似，端帽只做平头）
-- 路径查找器的细分：分割、修边、合并、裁剪、轮廓
+- 路径查找器的分割、修边、合并、裁剪、轮廓已在第三十批完成；还缺曲线级保真的分割/布尔与超过 8 个形状的完整组合拆分
 - 曲线级布尔（替换 polygon-clipping 的退化问题）
 - 自由变换框已支持缩放与旋转，数值面板已补 X/Y/W/H 与多选精确缩放，还缺倾斜/斜切
+- 直接选择多锚点、跨节点同步拖动、方向键微移已在第三十三批完成；同路径开放端点连接、六向锚点对齐已在第三十四批完成；还缺锚点等距分布与跨路径节点连接
 - 网格与参考线对象化
 
 **P3 · 文档与绘制**
-- 画板预设导入、单画板 PNG 导出
+- 画板预设/适配内容/复制画板/上下换序已在第二十九批完成（编辑器复用启动页六档预设）；自定义预设保存/导入/删除、适配计入描边宽度并排除隐藏层已在第三十二批完成；单画板 PNG 导出路径已存在（`exportPNG` + `doExport` 传当前板），原生保存全流程尚未实测
+- 文档设置面板已在第三十一批完成（文档名、当前画板名/尺寸/背景、只读单位与颜色模式、撤销与键盘恢复）；仍缺 CMYK/DPI 与批量改全部画板
 - 图层作为真实对象：组嵌套显示、组内拖动排序、把子层拖入/拖出组、多选与批量显隐/锁定已完成；图层搜索/过滤与 6 色标记已在第二十八批完成；还缺图层搜索的历史记录、标记命名与全局色
 - 色板与最近颜色已做（固定 12 色、最近 10 色、持久化）；还缺全局色、专色、CMYK（参考 `doc/cmyk.rs`）、色板增删与导入导出
 - 图案填充、渐变网格/自由渐变、渐变描边

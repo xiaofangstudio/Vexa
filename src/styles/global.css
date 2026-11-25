@@ -359,6 +359,9 @@ a {
   position: fixed;
   z-index: 300;
   min-width: 228px;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--sp-1);
   background: var(--surface);
   border: 1px solid var(--border);

@@ -203,4 +203,84 @@
 - 已知边界：标记不参与导出，不改变画布；搜索不搜节点内文字；过滤时命中子层的组临时强制展开；标记还没有命名、全局色或导入导出。
 - 截图：`layerfilter-tags.png`、`layerfilter-search.png`、`layerfilter-red.png`、`layerfilter-empty.png`、`layerfilter-props.png`、`layerfilter-final.png`、`layerfilter-window.png`。
 
+## 验收记录（2026-11-25，第二十九批：画板预设 / 适配内容 / 复制与换序）
 
+- `npx tsc --noEmit` 通过；`npm run build` 通过：145 modules，`index-NKdXWcrY.js` 479.32 kB / gzip 152.21，`index-DjYS-YFN.css` 53.10 kB / gzip 10.13，`pdf-Dtxo_CmN.js` 407.16 kB / gzip 169.22。
+- 预设：属性坞“画板”段新增“尺寸预设”六 chip（方图 / 横屏 / 竖屏 / A4 竖版 / A4 横版 / 图标），与启动页共用 `BOARD_PRESETS`；当前 W/H 命中某一档时 chip 高亮。真实窗口点“A4 竖版”后画板行与 W/H 从 `900×600` 变 `794×1123`，chip 选中；截图 `docs/shots/boards-preset-a4.png`。
+- 适配内容：`nodeBounds` 递归组、跳过剪裁轮廓，只合并与当前板相交的根层包围盒；点“适配内容”后画板从 `794×1123` 回到内容 `900×600`，toast“画板已适配内容”；空板时按钮保留但提示“当前画板没有可适配的内容”。
+- 复制画板：点“复制画板”在当前板后插入“图层拖拽验收 副本”，x 为最右板右侧 48px，内容整体平移；组内子路径与 `clip` 引用重新分配 id。真实窗口画板数 1→2，新板自动成为当前板，toast“已复制画板，含 4 个顶层对象”；截图 `docs/shots/boards-copy.png`。
+- 换序：标题栏 ↑/↓ 互换画板数组顺序，首/尾按钮相应禁用；上移后副本到第一位、下移恢复，toast“画板已上移 / 下移”。
+- 布局自检：真实窗口 1280×1000 逻辑（DPR 1.5）下，`.ed-dock / .dock-body / .board-list / .board-presets / .board-tools` 的 `scrollWidth == clientWidth`，预设 chip 两行、两个工具按钮与 5 个标题栏小按钮均不横向溢出；`dock-body` 仍纵向滚动。截图 `docs/shots/boards-presets.png`、`boards-window.png`。
+- 回归：`scripts/smoke.artboards.mts` 19 项覆盖预设尺寸、组包围盒与剪裁排除、适配、连内容复制、组/剪裁 id 重映射、原文坐标不变、换序与空板复制；`scripts/smoke.selection.mts` 16 项、`scripts/smoke.layers.mts` 24 项、`scripts/smoke.layerfilter.mts` 27 项复跑通过。
+- 已知边界：内置六档预设不可自定义保存/导入；适配内容不排除隐藏层，也不计描边宽度；复制只克隆与源板相交的根层；换序只改列表与导出顺序，不改画布坐标。
+- 截图：`boards-presets.png`、`boards-preset-a4.png`、`boards-copy.png`、`boards-final.png`、`boards-window.png`。
+
+## 验收记录（2026-11-25，第三十批：路径查找器 9 种）
+
+- `npx tsc --noEmit` 通过；`npm run build` 通过：145 modules，`index-CPnLofxJ.js` 484.02 kB / gzip 153.73，`index-BMY57vWz.css` 53.14 kB / gzip 10.14，`pdf-Bk1CImTc.js` 407.16 kB / gzip 169.22。
+- 面板：属性坞路径查找器从 4 个按钮扩到 9 个，前 4 个 2 列，新增“分割 / 修边 / 合并 / 裁剪 / 轮廓”用 3 列排两行；合并、轮廓只需 1 个路径，其余至少 2 个；对象菜单同步 5 个入口。257px 面板内无横向溢出；截图 `docs/shots/pathfinder-panel.png`。
+- 分割：按布尔组合枚举互不重叠的面，每个面保留最上层填充。真实窗口选“红块 + 蓝块”点分割，2 个对象变 3 个面，对象数 6→7，toast“已生成 3 个路径（分割）”；三个面拼合后外观与原来一致。截图 `pathfinder-divide.png`。
+- 修边：从下往上逐层减去上方路径，最上层保持完整，下层只留露出部分，重叠区归最上层。红块 + 蓝块修边后红块变 L 形、蓝块完整，对象数保持 6，视觉与原来一致；截图 `pathfinder-trim.png`。
+- 合并：相同 `opacity + fill + stroke` 的路径联合为一个。红块 + 红块 2 合并为 1 个路径，对象数 6→5；截图 `pathfinder-merge.png`。
+- 裁剪：叠放最上层路径当裁剪框，下层各形状与它求交后保留各自填充，裁剪框删除。红块 + 蓝块裁剪得到红块 `100×140` 的片段，对象数 6→5；截图 `pathfinder-crop.png`。
+- 轮廓：保留几何、去掉填充、统一 1px 深色边界线。单选红块点轮廓后变成细线框，对象数保持 6；截图 `pathfinder-outline.png`。
+- 叠放顺序：新增 `sortPathNodesByZ`，路径查找器按文档根层/组内顺序取上下层，不再依赖点击顺序；减去顶层与裁剪都以蓝块在上为准。
+- 回归：`scripts/smoke.pathfinder.mts` 22 项覆盖叠放顺序、分割 3 面与总面积、修边 2 面、同/异填充合并、裁剪面积与下层填充、轮廓、无重叠裁剪；`smoke.vector`、`smoke.artboards` 19 项、`smoke.selection` 16 项、`smoke.layers` 24 项、`smoke.layerfilter` 27 项复跑通过。每次真实操作后点撤销，对象数均回到 6。
+- 布局自检：`.ed-dock / .dock-body / .dock-sec / .pathfinder-extra` 的 `scrollWidth == clientWidth`，按钮两行排布完整；截图 `pathfinder-final.png`、`pathfinder-window.png`。
+- 已知边界：分割最多完整枚举 8 个形状，超过后按层切面；分割/修边/裁剪清空结果描边；合并不消除不同填充间的遮挡；轮廓不做描边宽度外扩；布尔仍是折线级。
+- 截图：`pathfinder-panel.png`、`pathfinder-divide.png`、`pathfinder-trim.png`、`pathfinder-merge.png`、`pathfinder-crop.png`、`pathfinder-outline.png`、`pathfinder-final.png`、`pathfinder-window.png`。
+
+## 验收记录（2026-11-25，第三十一批：文档设置）
+
+- `npx tsc --noEmit` 通过；`npm run build` 通过：148 modules，`index-Bo5YbkGz.js` 490.05 kB / gzip 155.45，`index-DmuFagZe.css` 54.90 kB / gzip 10.41，`pdf-9ZZxLwVd.js` 407.16 kB / gzip 169.22。
+- 入口：文件菜单新增“文档设置…”（`Ctrl+Alt+,`）；弹窗打开后文档名称输入框自动聚焦并全选，`Esc`、取消、遮罩点击均可关闭；关闭后焦点回到“文件”菜单按钮，避免浮层卸载后焦点落到 `body`。
+- 字段：文档名称、当前画板名称、宽/高（1–20000 px）、画板背景（取色器 + 十六进制）；只读信息栏显示 `px`、`RGB / 8 位`、画板序号与对象/根层统计。
+- 非法输入：宽为 `0` 点“应用更改”，弹窗内显示“画板尺寸不能小于 1 px”，弹窗保持打开、文档不变；表单使用 `noValidate`，不会被浏览器原生校验气泡截断。
+- 应用：文档名 `文档设置验收`、画板名 `主画板`、尺寸 `1000×700`、背景 `#eef4ff`；一次 `store.commit` 全部写入，对象数保持 6；画板背景在画板露出区域变浅蓝，属性坞色块同步。
+- 撤销：`Ctrl+Z` 后文档名、画板名、`900×600` 与 `#f7f3e9` 全部还原；再次打开弹窗读到原值。
+- 布局：弹窗宽 559 px，`.modal-body` 与全部输入 `scrollWidth == clientWidth`；`doc-meta` 四列不溢出；真实窗口 1920×1500、DPR 1.5 下完整可见。
+- 测试：`scripts/smoke.document.mts` 25 项 PASS（读取/统计、空名称回退、尺寸取整与 1–20000 限制、非法背景回退、校验、应用、节点/根层不变、非法输入不写入、缺画板报错）；`smoke.artboards` 19 项复跑通过。
+- 截图：`docs/shots/doc-settings-panel.png`、`doc-settings-error.png`、`doc-settings-applied.png`、`doc-settings-undo.png`、`doc-settings-window.png`。
+
+## 验收记录（2026-11-25，第三十二批：自定义画板预设 / 适配描边）
+
+- `npx tsc --noEmit` 通过；`npm run build` 通过：152 modules，`index-CIlZfatX.js` 500.91 kB / gzip 158.73，`index-C_9PXXkx.css` 58.79 kB / gzip 11.03，`pdf-BVRaIfH3.js` 407.16 kB / gzip 169.22，`splash-bg-DgncLeTt.jpg` 86.90 kB。
+- 预设持久化：`src/core/boardPresets.ts` 负责 1–20000 整数校验、尺寸去重、最多 20 个、空名称回退与 JSON schema；`src/stores/boardPresets.ts` 写 `vexa.board-presets.v1`，启动页与编辑器共用同一列表；重启后仍显示。
+- 启动页：点“新建”卡片右上“预设库…”打开弹窗，保存“名片”`90×54` 后列表出现该行与“已保存「名片」”；再存同尺寸提示“该尺寸已在预设中”且弹窗不关；通过隐藏文件框导入 `presets-import.json`，已有“名片”去重、只新增“海报”，提示“已导入 1 个预设”，列表 1→2。
+- 应用与 chip：点“海报”行“应用”，启动页宽高变 `400×300`、预览 `400 × 300 px`、自定义 chip“海报”高亮；关闭后焦点回到“预设库…”链接。
+- 编辑器：画板段新增自定义 chip 与“预设库… / 存当前尺寸”；保存当前 `900×600` 画板后出现“路径查找器验收”chip，toast“已保存预设「路径查找器验收」”；应用“海报”后画板 W/H 变 `400×300`，toast“已应用预设「海报」”。
+- 适配内容：点“适配内容”后画板回到内容包围盒 `900×600`、chip 回到内置高亮，toast“画板已适配内容”；核心测试证明路径描边外扩与隐藏层排除都生效。
+- 删除 / Esc：删除“名片”后列表 3→2，提示“已删除「名片」”；`Esc` 用真实键盘事件关闭弹窗，焦点回到 `btn-link preset-open`；随后再次导入 fixture 补回“名片”，列表恢复 3。
+- 布局：真实 Tauri/WebView2 `1920×1500` 窗口下，弹窗宽 659 px，正文 659 px、表单 615 px，预设行 613 px，名称输入 323 px、宽高输入 65 px；所有 `scrollWidth == clientWidth`，无横向溢出；启动页与编辑器两种宿主位置都完整可见。
+- 测试：`scripts/smoke.boardpresets.mts` 25 项 PASS；`scripts/smoke.artboards.mts` 25 项 PASS（新增 20px 描边外扩、非均匀宽度、隐藏根层与组内隐藏）；`scripts/smoke.document.mts` 25 项复跑通过。
+- 已知边界：预设只存名称与尺寸，不存底色/坐标/内容；导入只补充新尺寸，不覆盖或删除已有项；导出 JSON 已接原生保存对话框，schema 与 roundtrip 已验证，本批未自动点选原生保存框；尖角斜接只按半宽外扩。
+- 截图：`docs/shots/presets-start-error.png`、`presets-start-dialog.png`、`presets-start-applied.png`、`presets-editor-dialog.png`、`presets-editor-panel.png`、`presets-start-window.png`、`presets-editor-window.png`。
+
+
+
+
+## 验收记录（2026-11-25，第三十三批：直接选择多锚点 / 方向键微移）
+
+- `npx tsc --noEmit` 通过；`npm run build` 通过：152 modules，`index-x6ScLkuV.js` 503.12 kB / gzip 159.40，`index-C_9PXXkx.css` 58.79 kB / gzip 11.03，`pdf-BWXqOk0E.js` 407.16 kB / gzip 169.22。
+- 锚点状态：`AnchorRef {nodeId,si,ai}` 只在直接选择工具内有效；普通点锚点选 1 个，`Shift` 点第二个变“锚点 2”；切到选择工具、对象选择变化或节点下标失效时自动清空/过滤。
+- 多锚点拖动：拖动任一已选锚点会同步平移所有选中锚点及其入/出手柄；真实窗口从右端锚点拖 40 屏幕 px，W `655→720`、X 保持 `189`，底端锚点同时移动。
+- 方向键：选中锚点后方向键在窗口捕获阶段被拦截，只推锚点；两次 `→` 后 W `655→657`，X/Y/H 不变；`Shift` 步长 10 px；每次按键独立入撤销栈，两次 `Ctrl+Z` 逐级还原。
+- 视觉：选中锚点为 9 px 白底 + 2 px accent 边框，未选 6 px 黑边；选项栏文案在选中时变为“锚点 N · Shift 多选 · 方向键微移”，与“已选 / W×H / 全选 / 取消选择 / 编组”同排显示。
+- 切换与恢复：`Shift` 再点已选锚点可取消（2→1）并再点回来（1→2）；按 `V` 切选择工具后对象仍在选、锚点计数清空；按 `A` 切回后重新点选两个锚点成功。
+- 布局：真实 Tauri/WebView2 1920×1500、DPR 1.5 下 `.ed-optbar` 874/874、`.opt-selection` 297/297；1200×900 视口下 808/808 与 297/297，均无横向溢出。
+- 测试：`scripts/smoke.anchors.mts` 20 项 PASS（手柄同步、重复引用去重、无效引用、跨节点、直线锚点、非路径跳过、零位移/负向大位移）；`smoke.artboards` 25 项、`smoke.document` 25 项、`smoke.vector`、`smoke.selection` 16 项、`smoke.pathfinder` 22 项复跑通过。
+- 已知边界：未做锚点框选；`Delete` 仍删整个对象而非锚点；长按方向键会产生多步撤销；开放子路径连接与锚点水平/垂直/分布对齐仍未做。
+- 截图：`docs/shots/anchors-multi.png`、`anchors-nudged.png`、`anchors-drag.png`、`anchors-narrow.png`、`anchors-window.png`。
+
+## 验收记录（2026-11-25，第三十四批：锚点连接 / 六向对齐）
+
+- `npx tsc --noEmit` 通过；`npm run build` 通过：153 modules，`index-N3WvSOuM.js` 506.73 kB / gzip 160.62，`index-B25ahhqp.css` 58.86 kB / gzip 11.05，`pdf-C-f7b5j_.js` 407.16 kB / gzip 169.22，`splash-bg-DgncLeTt.jpg` 86.90 kB。
+- 菜单：对象菜单在“水平/垂直分布”后新增“连接锚点”`Ctrl+J` 与 6 个“锚点左/水平居中/右/顶/垂直居中/底对齐”；1 个锚点时全部禁用，2 个非端点锚点时只启用对齐，首尾开放端点时连接才启用。
+- 对齐：选中三角路径的首尾锚点后执行“锚点左对齐”，尾锚点 X `368.6→188.6`，首锚点、未选中点与 Y 不变；手柄随锚点平移；toast“已对齐 1 个锚点”，选择仍为“锚点 2”。
+- 重复对齐：再点一次“锚点左对齐”只提示“选中的锚点已经对齐”；撤销栈长度保持 2，不多写空历史；工具栏撤销一步把尾锚点 X 还原为 `368.6`。
+- 连接：首尾端点执行“连接锚点”后子路径由开放变闭合、锚点数仍 3、选择框不变，锚点选择清空；撤销恢复开放；重新选首尾后 `Ctrl+J` 同样闭合。
+- 浮层高度：对象菜单新增 7 项后加 `max-height: calc(100vh - 56px)` 与纵向滚动；1200×900 下菜单 `217/217`、top 41 / bottom 885，不越出视口，也无横向滚动。
+- 布局：真实 Tauri/WebView2 1920×1500、DPR 1.5 下 `.ed-optbar` 874/874、`.opt-selection` 297/297；1200×900 下 874/874 与 297/297，均无横向溢出。
+- 测试：`scripts/smoke.anchorops.mts` 50 项 PASS（六向对齐、手柄同步、重复/无效引用、已对齐不写历史、同子路径闭合、双子路径顺序/反向/重合端点、闭合/跨节点/非端点拒绝）；`smoke.anchors` 21 项及其余冒烟脚本全复跑通过。
+- 已知边界：只连接同一路径节点内的开放子路径；跨路径节点、锚点等距分布与框选锚点未做；连接后不自动选中新端点；闭合路径不能继续连接。
+- 截图：`docs/shots/anchorjoin-menu-disabled.png`、`anchorjoin-menu-enabled.png`、`anchorjoin-align.png`、`anchorjoin-joined.png`、`anchorjoin-narrow.png`、`anchorjoin-window.png`。

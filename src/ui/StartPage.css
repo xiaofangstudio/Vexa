@@ -151,11 +151,20 @@
   line-height: 1.5;
 }
 
+.preset-open {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 /* ---------- 预设 ---------- */
 .presets {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.custom-presets {
+  margin-top: 8px;
 }
 
 .chip {

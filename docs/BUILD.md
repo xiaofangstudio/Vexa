@@ -63,6 +63,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 - **坐标**：文档单位就是像素，画板从 `(0,0)` 开始；视口用 `zoom + pan`，`pan` 是文档原点在屏幕上的位置。
 - **锚点手柄**存绝对坐标，`smooth` 决定拖一侧是否镜像另一侧；没有手柄的段就是直线。
+- **直接选择多锚点**：`AnchorRef {nodeId,si,ai}` 由 `CanvasView` 持有；`Shift` 点击切换锚点，拖动任一已选锚点时 `docOps.nudgeAnchors` 同步平移所有选中锚点与手柄；方向键在 `window` 捕获阶段拦截并只推锚点，避免同时触发对象级 `nudge`（`scripts/smoke.anchors.mts`）。
 - **撤销**：每次提交前把整篇文档 JSON 压栈（上限 200）。拖拽过程走 `live()` 不进栈，抬指后再 `finish()` 补一次。
 - **渲染**：Canvas 2D 自绘，DOM 只做面板；任何改文档的动作都会 bump 版本号触发重绘。
 - **描摹**：Rust 用 `image` 解码 → `vtracer` 输出 SVG 字符串 → 前端 `parseD` 成 Vexa 路径 → 等比放进画板中央。
@@ -109,6 +110,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 ## 已知边界（下一步）
 
 - 路径布尔是**多边形级**（曲线先拍平），曲线级保真布尔还没做；偏移/描边轮廓是折线近似（尖角斜接、平头端帽），路径效果生成的轮廓尚未支持圆头/方头端帽与曲线保真
+- 直接选择已支持 `Shift` 多锚点、跨节点同步拖动、方向键微移、同路径开放子路径连接与六向锚点对齐；还没做锚点框选、锚点等距分布、跨路径节点连接；`Delete` 仍删整个选中对象，不删单个锚点；长按方向键会产生多步撤销
 - 可变宽度描边已支持宽度点、单侧加宽、余弦过渡与 SVG/`.vex` 往返；均匀描边已支持平/圆/方端帽与尖角/圆角/斜角连接，但可变宽度轮廓不跟随这些设置，仍按平头外框绘制；虚线暂不随轮廓走（有宽度点时按实线轮廓输出），箭头仍按基础线宽；宽度手柄只画在第一条子路径，复合路径各子路径共用同一 `t` 轮廓
 - 渐变支持线性/径向多色标、独立透明度、插值中点与画布轴线/色标直拖；径向渐变的圆心固定在 bbox 中心、半径固定为半对角线，画布手柄只沿右侧半径显示；尚缺网格/自由渐变、渐变描边、图案填充、符号、画笔、图形样式
 - SVG 导入已覆盖基础图形、变换、线性/径向渐变、色标透明度、`href` 继承、`fill/stroke-opacity`、`<use>` / 嵌套 use、`<clipPath>` 嵌套交集裁切、symbol viewBox/width 缩放与 `<text>` / `<tspan>` 可编辑文字；尚缺图案、滤镜、`mask`、`objectBoundingBox` 剪裁、`gradientTransform` / `spreadMethod` 的完整语义，文本旋转/斜切只映射位置与缩放、不旋转字形
@@ -116,6 +118,9 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - 旋转/翻转对文本与位图只做位置级变换（没有旋转属性，见 `docs/PARITY.md`）
 - 拖拽撤销粒度较粗（一次拖拽一步）
 - 图层树已支持组内排序、把子层拖出组、把顶层拖入组、Ctrl/Shift 多选与批量显隐/锁定，第二十八批补了名称/类型搜索、6 色标记和按标记筛选；折叠组内的子层需先展开才能拖动。颜色标记不参与导出，搜索不搜节点内文字。
+- 画板面板已在第二十九批补六个尺寸预设、适配内容、复制画板（连内容）与上下换序；第三十二批补了自定义预设保存/导入/删除（本地 `vexa.board-presets.v1`，最多 20 个，导入只补新尺寸），适配内容改为一并计入路径描边半宽、忽略隐藏根层与组内隐藏子层；复制仍只克隆与源板相交的根层，换序只改列表与导出顺序。
+- 文档设置已在第三十一批补文档名、当前画板名/尺寸/背景、只读单位与颜色模式和单次撤销；只编辑当前画板，不改全部板；单位固定 px、颜色模式固定 RGB，不提供 CMYK/DPI；改尺寸不移动/缩放内容；文档名与已保存文件名分离。
+- 路径查找器已在第三十批补分割、修边、合并、裁剪、轮廓；分割超过 8 个形状改为逐层切面，分割/修边/裁剪清空描边，轮廓只留 1px 边界线，布尔仍是折线级。
 - 第二十二批已消除 React 壳层的高频重渲染（live 不再递增 UI 版本、光标/视口/滑块/图层名走局部路径），但画布本身仍是全场景 `renderScene` 重绘，尚未做 dirty-rect / 分层画布；超大节点数文档若仍掉帧，下一步应做节点视口剔除或脏矩形重绘。
 - 文件关联已注册，双击 `.vex` / `.svg` 启动并载入已接：`launch_intent` 读第一个真实存在的路径参数；已开实例由 `tauri-plugin-single-instance` 把路径 emit 成 `vexa://launch-open` 并聚焦主窗口；SVG 用 `svgIntrinsicSize` 建同尺寸画板、`svgToNodes` 转可编辑节点。Vexa 只接 `.vex` / `.svg`，不导入 Groma 工程；需要把 Vexa 的图交给 Groma 时，在 Vexa 导出 SVG，再到 Groma“导入 Vexa 画的图”。PNG/JPG 不接。
 - 自动保存只在已有路径时生效；未保存过的新工程仍需手动 `Ctrl+S`
@@ -124,14 +129,18 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 ## 发布构建
 
-- 版本：`0.1.0`（第二十八批：图层搜索、6 色标记与标记筛选）
+- 版本：`0.1.0`（第三十四批：锚点连接 / 六向对齐）
 - 文件：`release\Vexa.exe`
-- 大小：`7,793,152 B`
-- SHA256：`48DFD55B7D10D1762B038C93CD2C1793A32B2DAC379E98C22FE538B4B587B82F`
-- 构建时间：`2026-11-25 13:10:11`
+- 大小：`7,800,320 B`
+- SHA256：`10EF286D9FB0AEB0ADC783ED4B2CE2DFB5BEFF9F7DE61D689B8BC9576F392F2A`
+- 构建时间：`2026-11-25 23:09:15`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,352,669 B`，SHA256 `84D7AF7B7C1C761B09DE5A82E50FFAC56CE72D8982FFEAA9AB0AD8E35975B403`
-- 前端产物：`dist/assets/pdf-DscykRww.js` 407.16 kB / gzip 169.22；`dist/assets/index-eWrnshGC.js` 476.25 kB / gzip 150.85；`dist/assets/index-C-PqTAB4.css` 52.66 kB / gzip 10.10；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,359,840 B`，SHA256 `5CA7DADD20DC847F95ED56B88475D3EE62EB2A27BF20A2C70520B16DD85A6BE7`
+- 前端产物：`dist/assets/pdf-C-f7b5j_.js` 407.16 kB / gzip 169.22；`dist/assets/index-N3WvSOuM.js` 506.73 kB / gzip 160.62；`dist/assets/index-B25ahhqp.css` 58.86 kB / gzip 11.05；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 锚点连接 / 对齐验收（第三十四批）：`npx tsc --noEmit` 通过；`npm run build` 153 modules 通过；`npx tsx scripts/smoke.anchorops.mts` 50 项 PASS，`smoke.anchors` 21 项及其余 14 个冒烟脚本全复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1920×1500 窗口用钢笔现场画 3 锚点开放路径（`[188.6,302.2] [875.9,514.9] [368.6,825.9]`）：1 个锚点时连接与 6 项对齐禁用，首尾端点时连接启用；菜单“锚点左对齐”把尾锚点 X 从 `368.6` 移到 `188.6`，中点与 Y 不变；重复对齐只提示“已经对齐”，撤销栈长度仍为 2；工具栏撤销恢复尾锚点；菜单连接后 `closed=true`，撤销恢复开放，`Ctrl+J` 可再连；连接/撤销后锚点选择均清空。1200×900 菜单 217/217、top 41 / bottom 885，选项栏与选择区无横向溢出。截图 `docs/shots/anchorjoin-menu-disabled.png`、`anchorjoin-menu-enabled.png`、`anchorjoin-align.png`、`anchorjoin-joined.png`、`anchorjoin-narrow.png`、`anchorjoin-window.png`。
+- 自定义预设验收（第三十二批）：`npx tsc --noEmit` 通过；`npm run build` 152 modules 通过；`npx tsx scripts/smoke.boardpresets.mts` 25 项 PASS，`smoke.artboards` 25 项、`smoke.document` 25 项复跑通过。`npm run tauri:build` 通过，生成上方 `vexa.exe` 与 NSIS；真实 Tauri/WebView2 窗口在启动页保存“名片”`90×54`、重复尺寸报错、导入 `scripts/fixtures/presets-import.json` 后只新增“海报”`400×300`，应用后启动页变 `400×300` 且 chip 高亮；编辑器保存当前 `900×600` 后得到第三个 chip，应用“海报”后画板变 `400×300`，点“适配内容”回到内容包围盒 `900×600`；删除“名片”3→2、`Esc` 后焦点回 `btn-link preset-open`，再次导入补回。弹窗 659 px、行 613 px、名称输入 323 px、宽高输入 65 px，全部 `scrollWidth == clientWidth`。截图 `docs/shots/presets-start-error.png`、`presets-start-dialog.png`、`presets-start-applied.png`、`presets-editor-dialog.png`、`presets-editor-panel.png`、`presets-start-window.png`、`presets-editor-window.png`。
+- 文档设置验收（第三十一批）：`npx tsc --noEmit` 通过；`npm run build` 148 modules 通过；`npx tsx scripts/smoke.document.mts` 25 项 PASS，`smoke.artboards` 19 项复跑通过。`npm run tauri:build` 通过，生成上方 `vexa.exe` 与 NSIS；真实 Tauri/WebView2 窗口用 `scripts/fixtures/pathfinder.vex` 从“文件 → 文档设置…”打开，初始 `900×600 / #f7f3e9`，宽输入 `0` 显示“画板尺寸不能小于 1 px”且弹窗不关，改为文档名 `文档设置验收`、画板名 `主画板`、`1000×700`、`#eef4ff` 后一次应用，对象数保持 6，再次打开读回新值，撤销全部还原；`Esc` 关闭后焦点回到 `.menubtn`；弹窗 559 px 无横向溢出。截图 `docs/shots/doc-settings-panel.png`、`doc-settings-error.png`、`doc-settings-applied.png`、`doc-settings-undo.png`、`doc-settings-window.png`。
+- 路径查找器验收（第三十批）：`npx tsc --noEmit` 通过；`npm run build` 145 modules 通过；`npx tsx scripts/smoke.pathfinder.mts` 22 项 PASS，`smoke.vector`、`smoke.artboards` 19 项、`smoke.selection` 16 项、`smoke.layers` 24 项、`smoke.layerfilter` 27 项复跑通过。`npm run tauri:build` 通过，生成上方 `vexa.exe` 与 NSIS；真实 Tauri/WebView2 窗口用 `scripts/fixtures/pathfinder.vex` 跑通分割（3 个面）、修边（2 个面）、合并（1 个路径）、裁剪（100×140 片段）、轮廓（1px 边界），每次撤销后对象数回到 6；面板 9 按钮无横向溢出。截图 `docs/shots/pathfinder-panel.png`、`pathfinder-divide.png`、`pathfinder-trim.png`、`pathfinder-merge.png`、`pathfinder-crop.png`、`pathfinder-outline.png`、`pathfinder-final.png`、`pathfinder-window.png`。
 - 图层搜索 / 标记 / 筛选验收（第二十八批）：`npx tsc --noEmit` 通过；`npm run build` 144 modules 通过；`npx tsx scripts/smoke.layerfilter.mts` 27 项 PASS、`scripts/smoke.selection.mts` 16 项 PASS、`scripts/smoke.layers.mts` 24 项 PASS。`npm run tauri:build` 通过，生成上方 `vexa.exe` 与 NSIS；真实 Tauri/WebView2 窗口用 `scripts/fixtures/layer-panel.vex` 给标题/副标题/卡片组标红/蓝/绿，搜索“操作提示”只留组与子行，红色筛选只留组与标题，搜索叠加颜色得到空状态，清除恢复 8 行；多选两段文字一次标紫，toast“已标记 2 个图层”。截图 `docs/shots/layerfilter-tags.png`、`layerfilter-search.png`、`layerfilter-red.png`、`layerfilter-empty.png`、`layerfilter-props.png`、`layerfilter-final.png`、`layerfilter-window.png`。
 - 应用图标：新图标源文件 `assets/brand/vexa-icon.svg`、`assets/brand/vexa-icon.png`（1024×1024，透明外角）；`scripts/make-icons.mjs` 生成 32/128/256 PNG 与 16/32/48/64/128/256 六尺寸 `icon.ico`。从 `release\Vexa.exe` 提取 32px 资源核对，图标为蓝底倾斜奶油画布 + 黑色 V 路径 + 两个方形锚点 + 珊瑚色底锚点；NSIS 安装器/卸载器同图标。应用内 `BrandMark` 已替换 StartPage 顶部、编辑器顶栏、Splash、AboutDialog 的旧 V 标记，favicon 用 `public/vexa-icon.png`。
 - Vexa → Groma 导入验收（第二十三批）：真实 Groma release 从欢迎页“导入 Vexa 画的图”读取 Vexa 导出的 `scripts/fixtures/vexa-groma-import.svg`（1,460×640，两个画板），得到 2 个画板 / 26 个图层；路径、线性/径向渐变、虚线描边、可编辑文本、透明 PNG 均显示，内嵌图片写入工程 `assets\图片 1.png`。选中路径后检查器显示“矢量 / 填充 #E5484D 94% / 描边 #17171C 100% / 宽度 8 / 透明 100”。截图见 `docs/shots/groma-vexa-import-final.png`。

@@ -3,26 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import { zh } from "../i18n/zh";
 import { formatWhen, loadRecent, removeRecent, type RecentEntry } from "../stores/recent";
 import { pickImage, pickVexOpen } from "../engine/io";
+import { BOARD_PRESETS, type BoardPreset } from "../core/artboards";
+import { useCustomPresets } from "../stores/boardPresets";
 import type { VexaSettings } from "../stores/settings";
 import BrandMark from "./BrandMark";
+import BoardPresetDialog from "./BoardPresetDialog";
 import "./StartPage.css";
-
-interface Preset {
-  id: string;
-  label: string;
-  note: string;
-  w: number;
-  h: number;
-}
-
-const PRESETS: Preset[] = [
-  { id: "square", label: "方图", note: "1080 × 1080", w: 1080, h: 1080 },
-  { id: "hd", label: "横屏", note: "1920 × 1080", w: 1920, h: 1080 },
-  { id: "story", label: "竖屏", note: "1080 × 1920", w: 1080, h: 1920 },
-  { id: "a4", label: "A4 竖版", note: "794 × 1123", w: 794, h: 1123 },
-  { id: "a4l", label: "A4 横版", note: "1123 × 794", w: 1123, h: 794 },
-  { id: "icon", label: "图标", note: "1024 × 1024", w: 1024, h: 1024 },
-];
 
 const FEATURES = ["钢笔与贝塞尔", "布尔运算", "位图描摹", "SVG · PNG · PDF", "全本地 · 零联网"];
 
@@ -50,6 +36,8 @@ export default function StartPage(props: Props) {
   const [recent, setRecent] = useState<RecentEntry[]>([]);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [presetOpen, setPresetOpen] = useState(false);
+  const customPresets = useCustomPresets();
 
   useEffect(() => {
     setRecent(loadRecent());
@@ -65,7 +53,7 @@ export default function StartPage(props: Props) {
     return { w: Math.round(cw * s), h: Math.round(ch * s) };
   }, [cw, ch]);
 
-  const applyPreset = (p: Preset) => {
+  const applyPreset = (p: BoardPreset) => {
     setPresetId(p.id);
     setW(String(p.w));
     setH(String(p.h));
@@ -158,10 +146,11 @@ export default function StartPage(props: Props) {
             <div className="card-head">
               <h2 className="card-title">{zh.start.title}</h2>
               <span className="card-note">{zh.start.note}</span>
+              <button className="btn-link preset-open" onClick={() => setPresetOpen(true)}>预设库…</button>
             </div>
 
             <div className="presets">
-              {PRESETS.map((p) => (
+              {BOARD_PRESETS.map((p) => (
                 <button key={p.id} className={"chip" + (presetId === p.id ? " is-on" : "")} onClick={() => applyPreset(p)}>
                   <span className="chip-glyph" style={{ aspectRatio: `${p.w} / ${p.h}` }} />
                   <span className="chip-label">{p.label}</span>
@@ -169,6 +158,18 @@ export default function StartPage(props: Props) {
                 </button>
               ))}
             </div>
+
+            {customPresets.length > 0 && (
+              <div className="presets custom-presets">
+                {customPresets.map((p) => (
+                  <button key={p.id} className={"chip" + (presetId === p.id ? " is-on" : "")} onClick={() => applyPreset(p)} title={`自定义 · ${p.note}`}>
+                    <span className="chip-glyph" style={{ aspectRatio: `${p.w} / ${p.h}` }} />
+                    <span className="chip-label">{p.label}</span>
+                    <span className="chip-note num">{p.note}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="field-row create-fields">
               <div className="field">
@@ -332,6 +333,16 @@ export default function StartPage(props: Props) {
         <div className="spacer" />
         <span className="foot-note">{zh.start.foot}</span>
       </footer>
+
+      {presetOpen && (
+        <BoardPresetDialog
+          defaultW={cw}
+          defaultH={ch}
+          returnFocusSelector=".preset-open"
+          onApply={(p) => applyPreset(p)}
+          onClose={() => setPresetOpen(false)}
+        />
+      )}
 
       {pendingImage && (
         <div className="modal-mask" onClick={() => setPendingImage(null)}>

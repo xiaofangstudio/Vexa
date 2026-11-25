@@ -4,7 +4,7 @@ import { canvasPaint, gradAxis, gradHandlePoints, paintStops, stopAlpha, stopCss
 import { widthHandles, widthOutline, widthPreview } from "../core/width";
 import { groupBox } from "./pick";
 import { handleLayout } from "./handles";
-import type { Anchor, Node, PathNode, Pt, VexaDoc } from "../core/types";
+import type { Anchor, AnchorRef, Node, PathNode, Pt, VexaDoc } from "../core/types";
 import { docToScreen, type View } from "./view";
 
 export type ToolId =
@@ -55,6 +55,8 @@ export interface RenderState {
   widthHover?: { nodeId: string; t: number } | null;
   /** 渐变工具悬停的色标 */
   gradientHover?: { nodeId: string; index: number } | null;
+  /** 直接选择里高亮的锚点 */
+  anchorSel?: AnchorRef[];
 }
 
 const imageCache = new Map<string, HTMLImageElement>();
@@ -474,8 +476,10 @@ function drawOverlay(
   if (state.tool === "direct") {
     for (const n of selected) {
       if (n.kind !== "path") continue;
-      for (const sub of n.subpaths) {
-        for (const a of sub.anchors) {
+      for (let si = 0; si < n.subpaths.length; si++) {
+        const sub = n.subpaths[si];
+        for (let ai = 0; ai < sub.anchors.length; ai++) {
+          const a = sub.anchors[ai];
           if (a.hIn || a.hOut) {
             ctx.strokeStyle = css("--handle", "#0f76d6");
             ctx.lineWidth = 1 / view.zoom;
@@ -491,11 +495,12 @@ function drawOverlay(
               ctx.fill();
             }
           }
-          const s = 6 / view.zoom;
-          ctx.fillStyle = a.smooth ? css("--anchor", "#fff") : css("--anchor", "#fff");
+          const picked = state.anchorSel?.some((r) => r.nodeId === n.id && r.si === si && r.ai === ai) ?? false;
+          const s = (picked ? 9 : 6) / view.zoom;
+          ctx.fillStyle = css("--anchor", "#fff");
           ctx.fillRect(a.x - s / 2, a.y - s / 2, s, s);
-          ctx.strokeStyle = css("--anchor-ink", "#1c1c22");
-          ctx.lineWidth = 1 / view.zoom;
+          ctx.strokeStyle = picked ? accent : css("--anchor-ink", "#1c1c22");
+          ctx.lineWidth = (picked ? 2 : 1) / view.zoom;
           ctx.strokeRect(a.x - s / 2, a.y - s / 2, s, s);
         }
       }

@@ -1,5 +1,5 @@
 /** 文档操作：新建、节点构造、增删、顺序。所有函数都作用在传入的文档上（调用方负责克隆）。 */
-import { anchorAt, noStroke, solid, type Node as DocNode, type PathNode, type VexaDoc } from "./types";
+import { anchorAt, noStroke, solid, type AnchorRef, type Node as DocNode, type PathNode, type VexaDoc } from "./types";
 
 export const KAPPA = 0.5522847498;
 
@@ -149,6 +149,24 @@ export function dragAnchor(node: PathNode, si: number, ai: number, dx: number, d
   a.y += dy;
   if (a.hIn) { a.hIn.x += dx; a.hIn.y += dy; }
   if (a.hOut) { a.hOut.x += dx; a.hOut.y += dy; }
+}
+
+/** 平移一组已选锚点；无效引用跳过，返回实际移动数量。 */
+export function nudgeAnchors(doc: VexaDoc, refs: AnchorRef[], dx: number, dy: number): number {
+  let moved = 0;
+  const seen = new Set<string>();
+  for (const ref of refs) {
+    const key = `${ref.nodeId}:${ref.si}:${ref.ai}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const node = doc.nodes[ref.nodeId];
+    if (!node || node.kind !== "path") continue;
+    const anchor = node.subpaths[ref.si]?.anchors[ref.ai];
+    if (!anchor) continue;
+    dragAnchor(node, ref.si, ref.ai, dx, dy);
+    moved++;
+  }
+  return moved;
 }
 
 /** 拖手柄：平滑锚点镜像另一侧。 */
