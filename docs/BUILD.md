@@ -72,8 +72,9 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - **渐变**：`Paint.kind` 支持 `linear` / `radial`；线性用「过包围盒中心、按角度投影裁半」算端点，径向以中心 + 半对角线为半径；画布与 SVG 共用同一几何。
 - **虚线**：`Stroke.dash` 是工程字段，画布 `setLineDash`、SVG `stroke-dasharray` 都读它；属性面板给四档预设。
 - **箭头**：`Stroke.arrow`（none/triangle/open/diamond）只对开放子路径的末端生效；画布按末段切线画，SVG 用 `<marker orient="auto">`。
-- **变换手柄**：`engine/handles.ts` 统一算 8 个缩放柄 + 旋转柄的位置与命中，渲染与 pointer 交互共用；缩放走 `scaleNodes`（可指定固定锚点），旋转走 `rotateNodesAround`，Shift 分别锁比例与 15° 吸附。
-- **图层排序**：图层面板按视觉从上到下展示，存储是反向；`canMoveLayer` / `moveLayerNode` 支持任意层级行的 `before` / `after`、组行的 `inside`，同容器移动会按来源显示索引修正插入点；搬移只改 `doc.root` 或组 `children`，不改绝对坐标，一次操作记一步撤销。
+- **变换手柄**：`engine/handles.ts` 统一算 8 个缩放柄 + 旋转柄的位置与命中，渲染与 pointer 交互共用；缩放走 `scaleNodes`（可指定固定锚点），旋转走 `rotateNodesAround`，Shift 分别锁比例与 15° 吸附。文字缩放用 `size * |sy|` 与 `hScale * |sx|/|sy|` 精确落到目标 W/H（`scripts/smoke.transform.mts`）。
+- **图层排序**：图层面板按视觉从上到下展示，存储是反向；`canMoveLayer` / `moveLayerNode` 支持任意层级行的 `before` / `after`、组行的 `inside`，同容器移动会按来源显示索引修正插入点；搬移只改 `doc.root` 或组 `children`，不改绝对坐标，一次操作记一步撤销。多选与批量显隐/锁定走 `core/layerSelection.ts` 的纯函数；行内眼睛/锁在多选时作用于整组，未选行只作用于当前行。
+- **色板**：属性坞的实色填充、描边、画板底色共用 `ColorSwatches`；固定 12 色 + `localStorage` 最近 10 色，所有原生取色器与色板点击都会 `rememberColor`；渐变每个色标仍用原生取色器。
 - **混合模式**：`node.blend` 存 CSS 合成名（16 档），画布直接赋 `globalCompositeOperation`，SVG 写 `style="mix-blend-mode:…"`；`normal` 不落字段。
 - **剪切蒙版**：`GroupNode.clip` 指向同组内的路径 id，绘制组时先 `ctx.clip()` 再画其余子节点，轮廓节点本身跳过；释放 = 删 `clip` + 拆组。SVG 导出为 `<clipPath>` + `clip-path`。
 - **多画板**：`doc.artboards[boardIndex]` 是当前板；属性坞的画板列表负责切换/增删，激活 id 传给渲染器做蓝框高亮；SVG 每板输出独立 `<g id="board-N">`，只收与板相交的顶层对象，根 viewBox 覆盖全部画板。
@@ -114,7 +115,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - 文字已支持单点文字 + 字符面板（字重/字形/行距/字距/对齐/横纵缩放/基线），但还没有段落文字、区域文字、沿路径排版、避头尾、文字转路径
 - 旋转/翻转对文本与位图只做位置级变换（没有旋转属性，见 `docs/PARITY.md`）
 - 拖拽撤销粒度较粗（一次拖拽一步）
-- 图层树已支持组内排序、把子层拖出组、把顶层拖入组；批量显隐/锁定仍未做，折叠组内的子层需先展开才能拖动。
+- 图层树已支持组内排序、把子层拖出组、把顶层拖入组、Ctrl/Shift 多选与批量显隐/锁定，第二十八批补了名称/类型搜索、6 色标记和按标记筛选；折叠组内的子层需先展开才能拖动。颜色标记不参与导出，搜索不搜节点内文字。
 - 第二十二批已消除 React 壳层的高频重渲染（live 不再递增 UI 版本、光标/视口/滑块/图层名走局部路径），但画布本身仍是全场景 `renderScene` 重绘，尚未做 dirty-rect / 分层画布；超大节点数文档若仍掉帧，下一步应做节点视口剔除或脏矩形重绘。
 - 文件关联已注册，双击 `.vex` / `.svg` 启动并载入已接：`launch_intent` 读第一个真实存在的路径参数；已开实例由 `tauri-plugin-single-instance` 把路径 emit 成 `vexa://launch-open` 并聚焦主窗口；SVG 用 `svgIntrinsicSize` 建同尺寸画板、`svgToNodes` 转可编辑节点。Vexa 只接 `.vex` / `.svg`，不导入 Groma 工程；需要把 Vexa 的图交给 Groma 时，在 Vexa 导出 SVG，再到 Groma“导入 Vexa 画的图”。PNG/JPG 不接。
 - 自动保存只在已有路径时生效；未保存过的新工程仍需手动 `Ctrl+S`
@@ -123,15 +124,15 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 ## 发布构建
 
-- 版本：`0.1.0`（第二十四批：图层树组内排序、把子层拖出组、把顶层拖入组）
+- 版本：`0.1.0`（第二十八批：图层搜索、6 色标记与标记筛选）
 - 文件：`release\Vexa.exe`
-- 大小：`7,790,080 B`
-- SHA256：`83834C3E9C0C5DAB88029AD29E073788549B0ED7A8FF386696995E7D240A02CD`
-- 构建时间：`2026-11-24 20:37:23`
+- 大小：`7,793,152 B`
+- SHA256：`48DFD55B7D10D1762B038C93CD2C1793A32B2DAC379E98C22FE538B4B587B82F`
+- 构建时间：`2026-11-25 13:10:11`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,349,102 B`，SHA256 `4F9CF6C0950FD932EAB4AC47F009783FFDE3CD9D4A236C7BCCBF739F0522EFE9`
-- 前端产物：`dist/assets/pdf-DagSJbuI.js` 407.16 kB / gzip 169.22；`dist/assets/index-Dr0xuXFD.js` 466.30 kB / gzip 147.82；`dist/assets/index-DmPGAybe.css` 48.38 kB / gzip 9.49；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
-- 图层拖放验收（第二十四批）：`npx tsc --noEmit` 通过；`npm run build` 142 modules 通过；`npx tsx scripts/smoke.layers.mts` 24 项 PASS（含跨组 inside 到已有子层的目标组）。`npm run tauri:build` 通过，生成上方 `vexa.exe` 与 NSIS；真实 Tauri/WebView2 窗口用 `scripts/fixtures/layer-panel.vex` 完成“组内标题上移 / 操作提示放入图标组 / 再拖出到根层背景上方”，截图 `docs/shots/layers-drop-before.png`、`layers-drop-inside.png`、`layers-drag.png`、`layers-drag-window.png`。
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,352,669 B`，SHA256 `84D7AF7B7C1C761B09DE5A82E50FFAC56CE72D8982FFEAA9AB0AD8E35975B403`
+- 前端产物：`dist/assets/pdf-DscykRww.js` 407.16 kB / gzip 169.22；`dist/assets/index-eWrnshGC.js` 476.25 kB / gzip 150.85；`dist/assets/index-C-PqTAB4.css` 52.66 kB / gzip 10.10；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 图层搜索 / 标记 / 筛选验收（第二十八批）：`npx tsc --noEmit` 通过；`npm run build` 144 modules 通过；`npx tsx scripts/smoke.layerfilter.mts` 27 项 PASS、`scripts/smoke.selection.mts` 16 项 PASS、`scripts/smoke.layers.mts` 24 项 PASS。`npm run tauri:build` 通过，生成上方 `vexa.exe` 与 NSIS；真实 Tauri/WebView2 窗口用 `scripts/fixtures/layer-panel.vex` 给标题/副标题/卡片组标红/蓝/绿，搜索“操作提示”只留组与子行，红色筛选只留组与标题，搜索叠加颜色得到空状态，清除恢复 8 行；多选两段文字一次标紫，toast“已标记 2 个图层”。截图 `docs/shots/layerfilter-tags.png`、`layerfilter-search.png`、`layerfilter-red.png`、`layerfilter-empty.png`、`layerfilter-props.png`、`layerfilter-final.png`、`layerfilter-window.png`。
 - 应用图标：新图标源文件 `assets/brand/vexa-icon.svg`、`assets/brand/vexa-icon.png`（1024×1024，透明外角）；`scripts/make-icons.mjs` 生成 32/128/256 PNG 与 16/32/48/64/128/256 六尺寸 `icon.ico`。从 `release\Vexa.exe` 提取 32px 资源核对，图标为蓝底倾斜奶油画布 + 黑色 V 路径 + 两个方形锚点 + 珊瑚色底锚点；NSIS 安装器/卸载器同图标。应用内 `BrandMark` 已替换 StartPage 顶部、编辑器顶栏、Splash、AboutDialog 的旧 V 标记，favicon 用 `public/vexa-icon.png`。
 - Vexa → Groma 导入验收（第二十三批）：真实 Groma release 从欢迎页“导入 Vexa 画的图”读取 Vexa 导出的 `scripts/fixtures/vexa-groma-import.svg`（1,460×640，两个画板），得到 2 个画板 / 26 个图层；路径、线性/径向渐变、虚线描边、可编辑文本、透明 PNG 均显示，内嵌图片写入工程 `assets\图片 1.png`。选中路径后检查器显示“矢量 / 填充 #E5484D 94% / 描边 #17171C 100% / 宽度 8 / 透明 100”。截图见 `docs/shots/groma-vexa-import-final.png`。
 - 第二十三批撤销项：Vexa 的 Groma `.groma` 原生导入已完整移除（`src/core/groma.ts`、`pickGromaOpen()`、`readGromaProject()`、StartPage/EditorShell 入口、启动参数与文件关联全部删除）；Vexa 端只保留 `.vex` / `.svg`，不再把 Groma 工程当文档打开。

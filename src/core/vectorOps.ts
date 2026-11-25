@@ -305,7 +305,10 @@ export function scaleNodes(doc: VexaDoc, ids: string[], box: Box, sx: number, sy
     } else if (n.kind === "text") {
       n.x = ox + (n.x - ox) * sx;
       n.y = oy + (n.y - oy) * sy;
-      n.size *= Math.max(0.01, (Math.abs(sx) + Math.abs(sy)) / 2);
+      const syAbs = Math.abs(sy) || 0.001;
+      const sxAbs = Math.abs(sx) || 0.001;
+      n.size *= syAbs;
+      n.hScale = (n.hScale ?? 100) * (sxAbs / syAbs);
     } else {
       for (const cid of n.children) {
         const c = doc.nodes[cid];

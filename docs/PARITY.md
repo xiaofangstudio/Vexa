@@ -293,9 +293,40 @@
 
 验收记录：`npx tsc --noEmit`、`npm run build` 通过（142 modules；`index-Dr0xuXFD.js` 466.30 kB、`index-DmPGAybe.css` 48.38 kB、`pdf-DagSJbuI.js` 407.16 kB）；`npx tsx scripts/smoke.layers.mts` **24 项 PASS**，新增“把一个组里的子层放进另一个已有子层的组”回归（目标组显示 `P / R / Q`，来源组清空）。真实 Tauri/WebView2 窗口用 `scripts/fixtures/layer-panel.vex`（4 个根对象、2 个组）完成组内排序、拖入组、拖出组三次操作；截图 `docs/shots/layers-drag.png`、`layers-drop-before.png`、`layers-drop-inside.png`、`layers-drag-window.png`。
 
-已知边界：批量显隐 / 锁定仍未做；把子层拖入非组行会按同级 before/after 处理，不会报错；组折叠时子层不可见，需先展开才能拖动子层。
+已知边界：第二十五批已补齐批量显隐 / 锁定；把子层拖入非组行会按同级 before/after 处理，不会报错；组折叠时子层不可见，需先展开才能拖动子层。
 
 发布验收：`release\Vexa.exe` 已用第二十四批源码重新构建（7,790,080 B，SHA256 `83834C3E9C0C5DAB88029AD29E073788549B0ED7A8FF386696995E7D240A02CD`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,349,102 B（SHA256 `4F9CF6C0950FD932EAB4AC47F009783FFDE3CD9D4A236C7BCCBF739F0522EFE9`）。真实 Tauri/WebView2 窗口在 `scripts/fixtures/layer-panel.vex` 上完成组内排序、拖入组、拖出组三向操作；截图 `docs/shots/layers-drop-before.png`、`layers-drop-inside.png`、`layers-drag.png`。
+
+## 1.22 第二十五至二十七批已对齐（图层多选 / 变换数值 / 色板与最近颜色）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 图层多选 | Layer multi-select | 普通点选单选；Ctrl/Cmd 点逐层切换；Shift 从锚点按当前展开树的可见顺序连选，折叠组不把隐藏子层算进去；选中行统一高亮 | 真实发布版窗口：依次点“标题”、Ctrl 点“副标题”、Shift 点“卡片底”，得到 3 行选中，状态栏“已选 3 · 4 个对象” |
+| 批量显隐 / 锁定 | Batch show/hide and lock | 选中多行时，行内眼睛/锁和面板顶部“显隐 / 锁定”作用于整组选中层；未参与多选的行只作用于当前行；语义为“任一层可见→全部隐藏，全部隐藏→全部显示；任一层解锁→全部锁定，全部锁定→全部解锁”，并 toast 数量 | 真实窗口：选中 3 行后点行内眼睛，3 行 aria-label 全部变为“显示”，toast“已隐藏 3 个图层”；再点恢复“隐藏”。顶部锁定后 3 行变为“解锁”，toast“已锁定 3 个图层”；再点恢复 |
+| 变换数值面板 | Transform panel | 属性坞对单选与多选都显示 X / Y / W / H；多选 X/Y 平移整组，W/H 以选区左上角缩放；组递归缩放子层；文字按字号 + 水平缩放精确落到目标 W/H；附旋转 ±90°、水平/垂直翻转 | 真实窗口：多选 2 段文字，`276×122` 的选区把 W 输入 `260` 后，W/H 与标题读数精确变为 `260×122`；单测文字 216→260、45→90 均误差 <0.02px |
+| 色板与最近颜色 | Swatches / recent colors | 实色填充、描边、画板底色下方显示 12 色固定色板；所有原生取色器与色板点击都会写入最近颜色（最多 10 个，`localStorage` 持久化）；当前颜色在最近与色板中描边高亮 | 真实窗口：选中“标题”，点色板 `#ff9f0a`，填充色板与画布文字同步变橙；最近行出现橙色 chip，重启后仍在；截图为滚到填充区的属性坞 |
+| 色板取色反馈 | Swatch feedback | 色板按钮有 hover 抬升、focus-visible 轮廓、active 双描边；填充/描边/画板底色共用同一组件，取色后立即进最近列表 | 真实窗口 1280×1000 检查无横向溢出；填充行“不透明度”保持单行 |
+
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（143 modules；`index-Dof4g4IO.js` 470.43 kB / gzip 149.21，`index-C7Qk7DcQ.css` 49.76 kB / gzip 9.69，`pdf-CqBpYk8z.js` 407.16 kB / gzip 169.22）；`npx tsx scripts/smoke.selection.mts` **16 项 PASS**（显示顺序、单击/Ctrl/Shift 选区、批量显隐与锁定语义），`scripts/smoke.transform.mts` **6 项 PASS**（文字宽高精确缩放），`scripts/smoke.layers.mts` **24 项 PASS**（第二十四批复跑无回归）。真实 Tauri/WebView2 窗口用 `scripts/fixtures/layer-panel.vex` 完成多选、批量显隐、批量锁定、多选 W 数值和色板取色；截图 `docs/shots/layers-multi.png`、`layers-batch.png`、`layers-multi-window.png`、`props-transform.png`、`props-transform-after.png`、`props-palette.png`、`props-palette-window.png`。
+
+已知边界：色板是固定 12 色 + 最近 10 色，不含全局色、专色、CMYK、色板命名/删除/导入导出；渐变填充的每个色标仍用原生取色器，快捷色板只出现在实色填充、描边与画板底色；文字 W/H 用字号与水平缩放逼近目标框，路径描边宽度不随框缩放；多选锁定后仍保持选中，方便再点一次批量解锁。
+
+发布验收：`release\Vexa.exe` 已用第二十五至二十七批源码重新构建（7,791,616 B，SHA256 `BB616C84A7F32F377D87868F3D482098B7C2D350C2D501840E97195310420459`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,350,288 B（SHA256 `F83EB15E7C0A80F2201874B8CA14192DFA7CE94F6B288E64783679D48E36F645`）。
+
+## 1.23 第二十八批已对齐（图层搜索 / 颜色标记 / 过滤）
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 图层搜索 | Layer search | 图层面板顶部搜索框按名称子串匹配，也认“路径 / 文本 / 图片 / 组”类型词；不区分大小写；命中子层时保留祖先组作为上下文并自动展开，组自身命中但子层不命中时只显示组行；搜索与颜色筛选按 AND 组合 | 真实窗口搜索“操作提示”只留 `卡片组 / 操作提示` 两行，组自动展开，头显“1 匹配”；截图 `layerfilter-search.png` |
+| 颜色标记 | Layer color labels | Node 新增 `tag`（红 / 橙 / 黄 / 绿 / 蓝 / 紫），旧 `.vex` 缺字段照常打开，非法值在读取时丢弃；属性坞对单选和多选都显示 7 个标记按钮（含“无”），多选打标一次提交一步撤销；行尾显示对应色点，点色点即切到该色筛选 | 真实窗口给 `标题 / 副标题 / 卡片组` 分别标红 / 蓝 / 绿，行尾三点与筛选条计数 `1 / 1 / 1` 同步；多选两段文字标紫后 toast“已标记 2 个图层”，紫计数变 2；截图 `layerfilter-tags.png`、`layerfilter-props.png`、`layerfilter-final.png` |
+| 标记筛选与清除 | Filter by label | 筛选条含“全部”与 6 色 chip，chip 显示数量、无标记时禁用；过滤时保留命中层的祖先组、自动展开、只渲染命中分支；搜索 + 颜色同时启用可得到空集，显示“没有匹配的图层 / 清除筛选”；清除后恢复原展开状态和完整树 | 红色筛选只留 `卡片组 / 标题`，头显“1 匹配”；再叠搜索“操作提示”得到 0 行与空状态；清除后恢复 8 行；截图 `layerfilter-red.png`、`layerfilter-empty.png` |
+| 布局与回归 | Panel layout / regression | 搜索框、7 个色 chip、属性标记按钮均在 303px 面板内不横向溢出；多选、批量显隐/锁定、组展开和拖放逻辑未改 | 真实窗口 `.layers-body / .layer-filter / .layer-tag-filters / .layer-search` 的 `scrollWidth == clientWidth`；多选“标题 + 副标题”后批量按钮仍启用；截图 `layerfilter-window.png` |
+
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（144 modules；`index-eWrnshGC.js` 476.25 kB / gzip 150.85，`index-C-PqTAB4.css` 52.66 kB / gzip 10.10，`pdf-DscykRww.js` 407.16 kB / gzip 169.22）；`npx tsx scripts/smoke.layerfilter.mts` **27 项 PASS**（名称/类型搜索、组上下文、AND 组合、剪裁路径排除、环终止、标记保存/非法值丢弃），`scripts/smoke.selection.mts` **16 项 PASS**、`scripts/smoke.layers.mts` **24 项 PASS** 复跑无回归。真实 Tauri/WebView2 窗口（1280×1000 逻辑，DPR 1.5）完成打标、搜索、筛选、空状态、清除和多选打标；截图 `docs/shots/layerfilter-tags.png`、`layerfilter-search.png`、`layerfilter-red.png`、`layerfilter-empty.png`、`layerfilter-props.png`、`layerfilter-final.png`、`layerfilter-window.png`。
+
+已知边界：颜色标记只用于面板整理，不参与 SVG/PDF/PNG 导出，也不改变画布外观；搜索只匹配名称和类型词，不搜节点内文字内容；过滤时命中子层的组会临时强制展开，不能在此期间手动收起；标记还没有命名、全局色或导入导出。
+
+发布验收：`release\Vexa.exe` 已用第二十八批源码重新构建（7,793,152 B，SHA256 `48DFD55B7D10D1762B038C93CD2C1793A32B2DAC379E98C22FE538B4B587B82F`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,352,669 B（SHA256 `84D7AF7B7C1C761B09DE5A82E50FFAC56CE72D8982FFEAA9AB0AD8E35975B403`）。
 
 ## 2. 部分对齐
 
@@ -310,7 +341,7 @@
 | PDF 导出 | 多画板分页、原生线性/径向渐变、渐变文字、实色/虚线/端帽/连接、透明位图、文字轮廓 | 文字不可选中/搜索；渐变描边、图案填充、渐变网格未做；组透明度按节点复合 alpha 近似；字体只读本机文件 |
 | .vex 文档 | 保存/读取、撤销栈 200 步、多画板、混合模式、剪切蒙版往返 | 画板级导出（单板 PNG）与文档设置面板尚未全流程实测 |
 | 描摹 | Rust VTracer：预设/颜色数/细节/平滑/杂色，单测 3 项通过 | 分层输出、调色板编辑、实时预览、批量 |
-| 面板 | 属性面板（位置/尺寸/填充/描边/不透明度/混合模式/画板）+ 可展开组图层树、组内排序与跨组搬移 | 批量显隐/锁定、色板、样式、符号、变换面板仍缺 |
+| 面板 | 属性面板（位置/尺寸支持单选与多选、组与文字精确缩放、旋转/翻转；填充/描边/画板底色带 12 色板与最近 10 色）+ 可展开组图层树、组内排序与跨组搬移、Ctrl/Shift 多选与批量显隐/锁定 | 样式面板、符号、全局色、专色、CMYK 仍缺；渐变每个色标仍用原生取色器 |
 
 ## 3. 未实现（按批次规划）
 
@@ -318,13 +349,13 @@
 - 曲线保真的偏移与描边轮廓（当前为拍平折线，尖角按斜接近似，端帽只做平头）
 - 路径查找器的细分：分割、修边、合并、裁剪、轮廓
 - 曲线级布尔（替换 polygon-clipping 的退化问题）
-- 自由变换框已支持缩放与旋转，还缺倾斜/斜切、变换数值面板
+- 自由变换框已支持缩放与旋转，数值面板已补 X/Y/W/H 与多选精确缩放，还缺倾斜/斜切
 - 网格与参考线对象化
 
 **P3 · 文档与绘制**
 - 画板预设导入、单画板 PNG 导出
-- 图层作为真实对象：组嵌套显示、组内拖动排序、把子层拖入/拖出组已做，还缺批量显隐/锁定
-- 色板、全局色、专色、CMYK（参考 `doc/cmyk.rs`）
+- 图层作为真实对象：组嵌套显示、组内拖动排序、把子层拖入/拖出组、多选与批量显隐/锁定已完成；图层搜索/过滤与 6 色标记已在第二十八批完成；还缺图层搜索的历史记录、标记命名与全局色
+- 色板与最近颜色已做（固定 12 色、最近 10 色、持久化）；还缺全局色、专色、CMYK（参考 `doc/cmyk.rs`）、色板增删与导入导出
 - 图案填充、渐变网格/自由渐变、渐变描边
 - 符号、样式、画笔（参考 `brush` crate）
 

@@ -1,7 +1,9 @@
 /** 主编辑壳：顶栏 + 文档标签 + 三栏（工具轨 / 选项栏+画布 / 面板坞）+ 状态栏。 */
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from "react";
 import { zh } from "../i18n/zh";
 import { addNode, newId, removeNode } from "../core/docOps";
+import { allLayerFlag, layerDisplayOrder, nextLayerFlagValue, selectLayerIds } from "../core/layerSelection";
+import { EMPTY_LAYER_FILTER, filterLayerTree, isLayerFilterActive, type LayerFilter } from "../core/layerFilter";
 import { booleanSubpaths, type BoolOp } from "../core/bool";
 import {
   alignNodes,
@@ -14,6 +16,7 @@ import {
   groupNodes,
   moveLayerNode,
   rotateNodes,
+  scaleNodes,
   translateNode,
   ungroupNodes,
   type AlignMode,
@@ -25,7 +28,7 @@ import { loadSystemFont } from "../engine/fonts";
 import { offsetPathNode, outlineStrokeNode, smoothPathNode } from "../core/pathfx";
 import { nodeBox, unionBox } from "../core/geom";
 import { groupBox } from "../engine/pick";
-import { noPaint, noStroke, solid, BLEND_MODES, type Artboard, type BlendMode, type GradStop, type GroupNode, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc } from "../core/types";
+import { noPaint, noStroke, solid, BLEND_MODES, LAYER_TAGS, type Artboard, type BlendMode, type GradStop, type GroupNode, type LayerTag, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc } from "../core/types";
 import { insertGradStop, paintPreview, paintStops, stopAlpha, stopCssColor } from "../core/paint";
 import { fitBoard, zoomAt, type View } from "../engine/view";
 import type { ToolId } from "../engine/render";
@@ -131,6 +134,77 @@ const PRESET_OPTS: Array<{ id: TraceOptions["preset"]; label: string; def: Omit<
   { id: "pixel", label: zh.trace.presets[3], def: { colors: 8, detail: 1, smooth: 20, speckle: 0 } },
 ];
 
+const PALETTE_COLORS = [
+  "#0f76d6", "#6fc0ff", "#5ac8fa", "#30d158", "#00c7be", "#ffd60a",
+  "#ff9f0a", "#ff375f", "#af52de", "#5856d6", "#8e8e93", "#ffffff",
+];
+
+const RECENT_COLORS_KEY = "vexa.recent-colors";
+const MAX_RECENT_COLORS = 10;
+
+function readRecentColors(): string[] {
+  try {
+    const raw = window.localStorage.getItem(RECENT_COLORS_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+    return list.filter((c): c is string => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c)).slice(0, MAX_RECENT_COLORS);
+  } catch {
+    return [];
+  }
+}
+
+let recentColors = typeof window === "undefined" ? [] : readRecentColors();
+const recentColorListeners = new Set<() => void>();
+let recentSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function subscribeRecentColors(cb: () => void) {
+  recentColorListeners.add(cb);
+  return () => recentColorListeners.delete(cb);
+}
+
+function rememberColor(color: string) {
+  const hex = color.toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(hex) || recentColors[0] === hex) return;
+  recentColors = [hex, ...recentColors.filter((c) => c !== hex)].slice(0, MAX_RECENT_COLORS);
+  for (const cb of recentColorListeners) cb();
+  if (recentSaveTimer) clearTimeout(recentSaveTimer);
+  recentSaveTimer = setTimeout(() => {
+    try { window.localStorage.setItem(RECENT_COLORS_KEY, JSON.stringify(recentColors)); } catch { /* 忽略存储失败 */ }
+  }, 250);
+}
+
+function ColorSwatches({ value, onPick }: { value?: string; onPick: (color: string) => void }) {
+  const recent = useSyncExternalStore(subscribeRecentColors, () => recentColors, () => recentColors);
+  const active = value?.toLowerCase();
+  const chips = (list: string[]) => list.map((color) => (
+    <button
+      key={color}
+      type="button"
+      className={"color-chip" + (active === color ? " is-on" : "")}
+      style={{ background: color }}
+      title={color}
+      aria-label={`使用颜色 ${color}`}
+      onClick={() => { rememberColor(color); onPick(color); }}
+    />
+  ));
+  return (
+    <div className="color-quick">
+      {recent.length > 0 && (
+        <div className="color-quick-row">
+          <span className="color-quick-label">最近</span>
+          <div className="color-quick-grid">{chips(recent)}</div>
+        </div>
+      )}
+      <div className="color-quick-row">
+        <span className="color-quick-label">色板</span>
+        <div className="color-quick-grid">{chips(PALETTE_COLORS)}</div>
+      </div>
+    </div>
+  );
+}
+
+
 function bboxOf(doc: VexaDoc, ids: string[]) {
   let box = null as ReturnType<typeof unionBox> | null;
   for (const id of ids) {
@@ -140,36 +214,6 @@ function bboxOf(doc: VexaDoc, ids: string[]) {
     if (b) box = unionBox(box, b);
   }
   return box;
-}
-
-function translate(doc: VexaDoc, id: string, dx: number, dy: number): void {
-  const n = doc.nodes[id];
-  if (n) translateNode(doc, n, dx, dy);
-}
-
-function scaleInBox(doc: VexaDoc, id: string, box: { x: number; y: number; w: number; h: number }, sx: number, sy: number): void {
-  const n = doc.nodes[id];
-  if (!n) return;
-  if (n.kind === "path") {
-    for (const sub of n.subpaths) {
-      for (const a of sub.anchors) {
-        a.x = box.x + (a.x - box.x) * sx;
-        a.y = box.y + (a.y - box.y) * sy;
-        if (a.hIn) { a.hIn.x = box.x + (a.hIn.x - box.x) * sx; a.hIn.y = box.y + (a.hIn.y - box.y) * sy; }
-        if (a.hOut) { a.hOut.x = box.x + (a.hOut.x - box.x) * sx; a.hOut.y = box.y + (a.hOut.y - box.y) * sy; }
-      }
-    }
-  } else if (n.kind === "image") {
-    const x = box.x + (n.x - box.x) * sx;
-    const y = box.y + (n.y - box.y) * sy;
-    n.x = x;
-    n.y = y;
-    n.w *= sx;
-    n.h *= sy;
-  } else if (n.kind === "text") {
-    n.x = box.x + (n.x - box.x) * sx;
-    n.y = box.y + (n.y - box.y) * sy;
-  }
 }
 
 /** 把导入结果等比放进画板中央；组按内部叶子统一缩放，剪裁路径也随内容缩放。 */
@@ -1292,12 +1336,12 @@ export default function EditorShell(props: Props) {
               <label className="rail-swatch" title={zh.dock.fill}>
                 <i style={{ background: paintPreview(newFill), borderStyle: newFill.kind === "none" ? "dashed" : "solid" }} />
                 <span>填充</span>
-                <input type="color" value={newFill.color} onChange={(e) => setNewFill((p) => ({ ...p, kind: "solid", color: e.target.value }))} />
+                <input type="color" value={newFill.color} onChange={(e) => { rememberColor(e.target.value); setNewFill((p) => ({ ...p, kind: "solid", color: e.target.value })); }} />
               </label>
               <label className="rail-swatch" title={zh.dock.stroke}>
                 <i style={{ background: newStroke.kind === "none" ? "transparent" : newStroke.color, borderStyle: newStroke.kind === "none" ? "dashed" : "solid" }} />
                 <span>描边</span>
-                <input type="color" value={newStroke.color} onChange={(e) => setNewStroke((p) => ({ ...p, kind: "solid", color: e.target.value }))} />
+                <input type="color" value={newStroke.color} onChange={(e) => { rememberColor(e.target.value); setNewStroke((p) => ({ ...p, kind: "solid", color: e.target.value })); }} />
               </label>
             </div>
           </div>
@@ -1364,13 +1408,13 @@ export default function EditorShell(props: Props) {
                 <label className="opt-swatch" title={zh.dock.fill}>
                   <i style={{ background: paintPreview(newFill), borderStyle: newFill.kind === "none" ? "dashed" : "solid" }} />
                   <span>{zh.dock.fill}</span>
-                  <input type="color" value={newFill.color} onChange={(e) => setNewFill({ kind: "solid", color: e.target.value, opacity: 1 })} />
+                  <input type="color" value={newFill.color} onChange={(e) => { rememberColor(e.target.value); setNewFill({ kind: "solid", color: e.target.value, opacity: 1 }); }} />
                 </label>
               )}
               <label className="opt-swatch" title={zh.dock.stroke}>
                 <i style={{ background: newStroke.color, borderStyle: newStroke.kind === "none" ? "dashed" : "solid" }} />
                 <span>{zh.dock.stroke}</span>
-                <input type="color" value={newStroke.color} onChange={(e) => setNewStroke({ ...newStroke, kind: "solid", color: e.target.value })} />
+                <input type="color" value={newStroke.color} onChange={(e) => { rememberColor(e.target.value); setNewStroke({ ...newStroke, kind: "solid", color: e.target.value }); }} />
               </label>
               <div className="opt-width">
                 <span className="faint">粗细</span>
@@ -1655,6 +1699,9 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
   const [dragLayer, setDragLayer] = useState<string | null>(null);
   const [dropHint, setDropHint] = useState<{ id: string; zone: LayerDropZone } | null>(null);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
+  const [layerQuery, setLayerQuery] = useState("");
+  const [layerTagFilter, setLayerTagFilter] = useState<LayerTag | null>(null);
+  const layerAnchorRef = useRef<string | null>(null);
   const textBeforeRef = useRef<string | null>(null);
   const liveBeforeRef = useRef<string | null>(null);
 
@@ -1759,12 +1806,94 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
     });
   };
 
+  /** 图层面板当前可见的显示顺序，Shift 连选和锚点都以此为准。 */
+  const visibleLayerOrder = layerDisplayOrder(doc, openGroups);
+
+  const selectLayer = (id: string, e: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }) => {
+    const result = selectLayerIds(ids, id, e, layerAnchorRef.current, visibleLayerOrder);
+    onSelect(result.ids);
+    layerAnchorRef.current = result.anchor;
+  };
+
+  /** 行内眼睛/锁：选中多行时作用于整组选中层，否则只作用于当前行。 */
+  const applyLayerFlag = (flag: "visible" | "locked", rowId?: string) => {
+    const targetIds = rowId && !(ids.includes(rowId) && ids.length > 1) ? [rowId] : ids;
+    if (!targetIds.length) return;
+    const nodes = targetIds.map((id) => doc.nodes[id]).filter((n): n is Node => !!n);
+    const next = nextLayerFlagValue(nodes, flag);
+    let applied = 0;
+    store.commit((d) => {
+      for (const id of targetIds) {
+        const n = d.nodes[id];
+        if (!n) continue;
+        if (flag === "visible") n.visible = next;
+        else n.locked = next;
+        applied += 1;
+      }
+    });
+    if (!applied) return;
+    onToast(
+      flag === "visible"
+        ? `${next ? "已显示" : "已隐藏"} ${applied} 个图层`
+        : `${next ? "已锁定" : "已解锁"} ${applied} 个图层`,
+    );
+  };
+
+  const selectedNodes = ids.map((id) => doc.nodes[id]).filter((n): n is Node => !!n);
+  const selectedAllVisible = allLayerFlag(selectedNodes, "visible");
+  const selectedAllLocked = allLayerFlag(selectedNodes, "locked");
+
+  const layerFilter = useMemo<LayerFilter>(
+    () => ({ ...EMPTY_LAYER_FILTER, query: layerQuery, tag: layerTagFilter }),
+    [layerQuery, layerTagFilter],
+  );
+  const layerFilterActive = isLayerFilterActive(layerFilter);
+  const filteredLayers = useMemo(
+    () => filterLayerTree(doc, layerFilter),
+    [doc, layerFilter, store.version],
+  );
+  const tagCounts = useMemo(() => {
+    const counts: Partial<Record<LayerTag, number>> = {};
+    for (const n of Object.values(doc.nodes)) {
+      if (n.tag) counts[n.tag] = (counts[n.tag] ?? 0) + 1;
+    }
+    return counts;
+  }, [doc, store.version]);
+  const activeTag = LAYER_TAGS.find((t) => t.id === layerTagFilter);
+  const selectedTagValues = ids.map((id) => doc.nodes[id]?.tag);
+  const commonTag = selectedTagValues.length && selectedTagValues.every((t) => t === selectedTagValues[0]) ? selectedTagValues[0] : undefined;
+  const mixedTag = selectedTagValues.length > 1 && !selectedTagValues.every((t) => t === selectedTagValues[0]);
+  const applyLayerTag = (tag?: LayerTag) => {
+    if (!ids.length) return;
+    store.commit((d) => {
+      for (const id of ids) {
+        const n = d.nodes[id];
+        if (!n) continue;
+        if (tag) n.tag = tag;
+        else delete n.tag;
+      }
+    });
+    onToast(tag ? `已标记 ${ids.length} 个图层` : `已清除 ${ids.length} 个图层的标记`);
+  };
+  const layerTagSection = ids.length ? (
+    <section className="dock-sec layer-tag-sec">
+      <div className="dock-sec-head">
+        <span>颜色标记</span>
+        <span className="faint">{mixedTag ? "多个标记" : commonTag ? LAYER_TAGS.find((t) => t.id === commonTag)?.label : "未标记"}</span>
+      </div>
+      <LayerTagPicker value={commonTag} onPick={applyLayerTag} />
+      <div className="faint layer-tag-hint">只影响图层面板的整理与筛选，不改变画布和导出。</div>
+    </section>
+  ) : null;
+
   /** 组可展开；剪裁路径是内部实现，不混进用户图层。 */
   const renderLayerRow = (id: string, depth: number): ReactNode => {
     const n = doc.nodes[id];
     if (!n) return <Fragment key={id} />;
+    if (layerFilterActive && !filteredLayers.subtree.has(id)) return <Fragment key={id} />;
     const childIds = n.kind === "group" ? n.children.filter((c) => c !== n.clip && doc.nodes[c]) : [];
-    const open = n.kind === "group" && openGroups.has(id);
+    const open = n.kind === "group" && (openGroups.has(id) || (layerFilterActive && filteredLayers.descendant.has(id)));
+    const tag = n.tag ? LAYER_TAGS.find((t) => t.id === n.tag) : undefined;
     return (
       <Fragment key={id}>
         <li
@@ -1809,8 +1938,10 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
           {n.kind === "group" ? (
             <button
               className={"layer-caret" + (open ? " is-open" : "")}
-              title={open ? "收起组" : "展开组"}
+              title={layerFilterActive && filteredLayers.descendant.has(id) ? "筛选时自动展开命中子层" : open ? "收起组" : "展开组"}
+              aria-label={layerFilterActive && filteredLayers.descendant.has(id) ? "筛选时自动展开命中子层" : open ? "收起组" : "展开组"}
               aria-expanded={open}
+              disabled={layerFilterActive && filteredLayers.descendant.has(id)}
               onClick={(e) => { e.stopPropagation(); toggleOpenGroup(id); }}
             >
               <Icon name="chevron" size={12} />
@@ -1821,9 +1952,10 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
           <button
             className="layer-eye"
             title={n.visible ? zh.dock.hide : zh.dock.show}
+            aria-label={n.visible ? zh.dock.hide : zh.dock.show}
             onClick={(e) => {
               e.stopPropagation();
-              store.commit((d) => { const nn = d.nodes[id]; if (nn) nn.visible = !nn.visible; });
+              applyLayerFlag("visible", id);
             }}
           >
             <Icon name={n.visible ? "eye" : "eye-off"} size={14} />
@@ -1831,27 +1963,98 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
           <button
             className="layer-lock"
             title={n.locked ? zh.dock.unlock : zh.dock.lock}
+            aria-label={n.locked ? zh.dock.unlock : zh.dock.lock}
             onClick={(e) => {
               e.stopPropagation();
-              store.commit((d) => { const nn = d.nodes[id]; if (nn) nn.locked = !nn.locked; });
+              applyLayerFlag("locked", id);
             }}
           >
             <Icon name={n.locked ? "lock" : "unlock"} size={13} />
           </button>
           <button
             className="layer-name"
-            onClick={() => onSelect([id])}
+            aria-pressed={ids.includes(id)}
+            onClick={(e) => selectLayer(id, e)}
             onDoubleClick={() => { if (n.kind === "group") toggleOpenGroup(id); }}
-            title={n.kind === "group" ? `${n.name}（双击展开/收起）` : n.name}
+            title={n.kind === "group" ? `${n.name}（双击展开/收起，Ctrl/Shift 多选）` : `${n.name}（Ctrl/Shift 多选）`}
           >
             {n.name}
           </button>
+          {tag && (
+            <button
+              className={"layer-tag" + (layerTagFilter === tag.id ? " is-on" : "")}
+              type="button"
+              data-layer-tag={tag.id}
+              title={`只看${tag.label}色标记图层`}
+              aria-label={`只看${tag.label}色标记图层`}
+              aria-pressed={layerTagFilter === tag.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                setLayerTagFilter((current) => current === tag.id ? null : tag.id);
+              }}
+            >
+              <span className="layer-tag-dot" style={{ background: tag.color }} />
+            </button>
+          )}
           <span className="layer-kind faint">{kindGlyph(n)}</span>
         </li>
         {open && [...childIds].reverse().map((c) => renderLayerRow(c, depth + 1))}
       </Fragment>
     );
   };
+
+  const translateSelection = (dx: number, dy: number) => {
+    if (!ids.length) return;
+    store.commit((d) => {
+      for (const id of ids) {
+        const n = d.nodes[id];
+        if (n) translateNode(d, n, dx, dy);
+      }
+    });
+  };
+
+  const scaleSelection = (sx: number, sy: number) => {
+    if (!box || !ids.length) return;
+    store.commit((d) => scaleNodes(d, ids, box, sx, sy));
+  };
+
+  const transformSection = box ? (
+    <section className="dock-sec">
+      <div className="dock-sec-head">
+        <span>{zh.dock.position}</span>
+        <span className="faint num">{Math.round(box.w)} × {Math.round(box.h)}</span>
+      </div>
+      <div className="dock-grid">
+        <NumField label="X" value={Math.round(box.x)} onCommit={(v) => translateSelection(v - box.x, 0)} />
+        <NumField label="Y" value={Math.round(box.y)} onCommit={(v) => translateSelection(0, v - box.y)} />
+      </div>
+      <div className="dock-sec-head"><span>{zh.dock.size}</span></div>
+      <div className="dock-grid">
+        <NumField
+          label="W"
+          value={Math.round(box.w)}
+          min={1}
+          onCommit={(v) => {
+            if (box.w > 0) scaleSelection(v / box.w, 1);
+          }}
+        />
+        <NumField
+          label="H"
+          value={Math.round(box.h)}
+          min={1}
+          onCommit={(v) => {
+            if (box.h > 0) scaleSelection(1, v / box.h);
+          }}
+        />
+      </div>
+      <div className="panel-grid cols-2 transform-actions">
+        <button className="panel-btn" type="button" onClick={() => store.commit((d) => rotateNodes(d, ids, -90))}>旋转 -90°</button>
+        <button className="panel-btn" type="button" onClick={() => store.commit((d) => rotateNodes(d, ids, 90))}>旋转 +90°</button>
+        <button className="panel-btn" type="button" onClick={() => store.commit((d) => flipNodes(d, ids, "h"))}>水平翻转</button>
+        <button className="panel-btn" type="button" onClick={() => store.commit((d) => flipNodes(d, ids, "v"))}>垂直翻转</button>
+      </div>
+    </section>
+  ) : null;
 
   return (
     <div className={"ed-dock" + (collapsed ? " is-collapsed" : "")}>
@@ -1874,10 +2077,11 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
           )}
 
           {ids.length > 0 && !single && (
-            <div className="dock-empty">
-              <div className="dock-empty-title">已选中 {ids.length} 个对象</div>
-              <div className="dock-empty-hint">删除或复制可直接在菜单里做。</div>
-            </div>
+            <>
+              {transformSection}
+              {layerTagSection}
+              <div className="dock-multi-note faint">Ctrl 逐选、Shift 连选；X/Y 平移整组，W/H 以选区左上角缩放。</div>
+            </>
           )}
 
           {single && (
@@ -1899,48 +2103,9 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                 </div>
               </section>
 
-              {box && (
-                <section className="dock-sec">
-                  <div className="dock-sec-head"><span>{zh.dock.position}</span></div>
-                  <div className="dock-grid">
-                    <NumField
-                      label="X"
-                      value={Math.round(box.x)}
-                      onCommit={(v) => store.commit((d) => translate(d, single.id, v - box.x, 0))}
-                    />
-                    <NumField
-                      label="Y"
-                      value={Math.round(box.y)}
-                      onCommit={(v) => store.commit((d) => translate(d, single.id, 0, v - box.y))}
-                    />
-                  </div>
-                  {single.kind !== "group" && (
-                    <>
-                      <div className="dock-sec-head"><span>{zh.dock.size}</span></div>
-                      <div className="dock-grid">
-                        <NumField
-                          label="W"
-                          value={Math.round(box.w)}
-                          min={1}
-                          onCommit={(v) => {
-                            if (box.w <= 0) return;
-                            store.commit((d) => scaleInBox(d, single.id, box, v / box.w, 1));
-                          }}
-                        />
-                        <NumField
-                          label="H"
-                          value={Math.round(box.h)}
-                          min={1}
-                          onCommit={(v) => {
-                            if (box.h <= 0) return;
-                            store.commit((d) => scaleInBox(d, single.id, box, 1, v / box.h));
-                          }}
-                        />
-                      </div>
-                    </>
-                  )}
-                </section>
-              )}
+              {layerTagSection}
+
+              {transformSection}
 
               {single.kind === "text" && (
                 <section className="dock-sec">
@@ -2090,7 +2255,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                         <input
                           type="color"
                           value={single.fill.color}
-                          onChange={(e) => setNode((n) => { if ("fill" in n) n.fill = { kind: "solid", color: e.target.value, opacity: n.fill.opacity }; })}
+                          onChange={(e) => { rememberColor(e.target.value); setNode((n) => { if ("fill" in n) n.fill = { kind: "solid", color: e.target.value, opacity: n.fill.opacity }; }); }}
                         />
                       </label>
                       <input
@@ -2104,6 +2269,12 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       <span className="faint">不透明度</span>
                     </div>
                   )}
+                  {single.fill.kind === "solid" && (
+                    <ColorSwatches
+                      value={single.fill.color}
+                      onPick={(color) => setNode((n) => { if ("fill" in n) n.fill = { kind: "solid", color, opacity: n.fill.opacity }; })}
+                    />
+                  )}
                   {(single.fill.kind === "linear" || single.fill.kind === "radial") && (
                     <div className="paint-grad">
                       <div className="grad-bar" style={{ background: paintPreview(single.fill) }} />
@@ -2114,7 +2285,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                               <input
                                 type="color"
                                 value={stop.color}
-                                onChange={(e) => updateFillStops((stops) => stops.map((s, j) => (j === i ? { ...s, color: e.target.value } : s)))}
+                                onChange={(e) => { rememberColor(e.target.value); updateFillStops((stops) => stops.map((s, j) => (j === i ? { ...s, color: e.target.value } : s))); }}
                               />
                             </label>
                             <div className="grad-position">
@@ -2233,7 +2404,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       <input
                         type="color"
                         value={single.stroke.color}
-                        onChange={(e) => setNode((n) => { if (n.kind === "path") { n.stroke = { ...n.stroke, kind: "solid", color: e.target.value }; } })}
+                        onChange={(e) => { rememberColor(e.target.value); setNode((n) => { if (n.kind === "path") { n.stroke = { ...n.stroke, kind: "solid", color: e.target.value }; } }); }}
                       />
                     </label>
                     <NumField
@@ -2247,6 +2418,10 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       {zh.dock.none}
                     </button>
                   </div>
+                  <ColorSwatches
+                    value={single.stroke.color}
+                    onPick={(color) => setNode((n) => { if (n.kind === "path") n.stroke = { ...n.stroke, kind: "solid", color }; })}
+                  />
                   <div className="dash-row">
                     {(
                       [
@@ -2466,8 +2641,92 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
         <div className="dock-body layers-body" key="layers">
           <div className="layers-head">
             <span>{zh.dock.objects}</span>
-            <span className="faint num">{doc.root.length}</span>
+            <div className="layers-head-tools">
+              <span className="faint num">{layerFilterActive ? `${filteredLayers.count} 匹配` : doc.root.length}</span>
+              <button
+                className={"layer-batch" + (selectedAllVisible ? " is-on" : "")}
+                type="button"
+                disabled={!ids.length}
+                aria-pressed={selectedAllVisible}
+                title="显隐选中图层：任一层可见时全部隐藏，全部隐藏时全部显示"
+                onClick={() => applyLayerFlag("visible")}
+              >
+                <Icon name={selectedAllVisible ? "eye" : "eye-off"} size={13} />
+                显隐
+              </button>
+              <button
+                className={"layer-batch" + (selectedAllLocked ? " is-on" : "")}
+                type="button"
+                disabled={!ids.length}
+                aria-pressed={selectedAllLocked}
+                title="锁定选中图层：任一层解锁时全部锁定，全部锁定后点击全部解锁"
+                onClick={() => applyLayerFlag("locked")}
+              >
+                <Icon name={selectedAllLocked ? "lock" : "unlock"} size={12} />
+                锁定
+              </button>
+            </div>
           </div>
+          <div className="layer-filter">
+            <label className="layer-search">
+              <Icon name="search" size={13} />
+              <input
+                value={layerQuery}
+                onChange={(e) => setLayerQuery(e.target.value)}
+                placeholder="搜索图层"
+                aria-label="搜索图层"
+                spellCheck={false}
+              />
+              {layerQuery && (
+                <button type="button" className="layer-search-clear" title="清空搜索" aria-label="清空搜索" onClick={() => setLayerQuery("")}>
+                  <Icon name="close" size={11} />
+                </button>
+              )}
+            </label>
+            <div className="layer-tag-filters" role="group" aria-label="按颜色标记筛选图层">
+              <button
+                type="button"
+                className={"layer-tag-filter is-all" + (!layerTagFilter ? " is-on" : "")}
+                aria-pressed={!layerTagFilter}
+                aria-label="全部标记"
+                onClick={() => setLayerTagFilter(null)}
+              >
+                全部
+              </button>
+              {LAYER_TAGS.map((t) => {
+                const count = tagCounts[t.id] ?? 0;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className={"layer-tag-filter" + (layerTagFilter === t.id ? " is-on" : "")}
+                    aria-pressed={layerTagFilter === t.id}
+                    aria-label={`${t.label}色标记，${count} 个图层`}
+                    data-tag={t.id}
+                    disabled={count === 0 && layerTagFilter !== t.id}
+                    title={`${t.label}色标记 · ${count} 个图层`}
+                    onClick={() => setLayerTagFilter((current) => current === t.id ? null : t.id)}
+                  >
+                    <span className="layer-tag-dot" style={{ background: t.color }} />
+                    {count > 0 && <span className="num">{count}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {layerFilterActive && (
+            <div className="layer-filter-state">
+              <span className="faint">
+                {layerQuery && `“${layerQuery.trim()}”`}
+                {layerQuery && activeTag && " · "}
+                {activeTag ? `${activeTag.label}色标记` : ""}
+                {` · ${filteredLayers.count} 个直接匹配`}
+              </span>
+              <button type="button" className="layer-filter-clear" onClick={() => { setLayerQuery(""); setLayerTagFilter(null); }}>
+                清除
+              </button>
+            </div>
+          )}
           <ul className="layer-list">
             {[...doc.root].reverse().map((id) => renderLayerRow(id, 0))}
           </ul>
@@ -2477,12 +2736,18 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
               <div className="dock-empty-hint">{zh.dock.emptyHint2}</div>
             </div>
           )}
+          {doc.root.length > 0 && layerFilterActive && filteredLayers.count === 0 && (
+            <div className="layer-filter-empty">
+              <span>没有匹配的图层</span>
+              <button type="button" className="btn btn-ghost btn-mini" onClick={() => { setLayerQuery(""); setLayerTagFilter(null); }}>清除筛选</button>
+            </div>
+          )}
           <div className="layers-foot">
             <button className="btn btn-ghost btn-mini" onClick={() => { if (ids.length) { store.commit((d) => { for (const id of ids) removeNode(d, id); }); onSelect([]); } }} disabled={!ids.length}>
               <Icon name="trash" size={14} /> {zh.dock.delete}
             </button>
-            <span className="faint layer-tip">任意行可拖动；组行中间可放入子层</span>
-            <button className="btn btn-ghost btn-mini" onClick={() => onToast("拖动任意图层行可排序；组行上/下缘是同级插入，拖到组行中间会放进组内，拖到根层行可把子层移出组")}>
+            <span className="faint layer-tip" title="拖动任意行可排序；组行中间放入组内">Ctrl/Shift 多选</span>
+            <button className="btn btn-ghost btn-mini" onClick={() => onToast("Ctrl 点或 Shift 连选图层行；选中多行后点行内眼睛/锁或面板顶部“显隐/锁定”会批量作用于整组选中层")}>
               提示
             </button>
           </div>
@@ -2497,6 +2762,36 @@ function kindLabel(n: Node): string {
   if (n.kind === "text") return "文本";
   if (n.kind === "image") return "图片";
   return "组";
+}
+
+function LayerTagPicker({ value, onPick }: { value?: LayerTag; onPick: (tag?: LayerTag) => void }) {
+  return (
+    <div className="layer-tag-picker" role="group" aria-label="颜色标记">
+      <button
+        type="button"
+        className={"layer-tag-choice is-clear" + (!value ? " is-on" : "")}
+        aria-pressed={!value}
+        title="清除颜色标记"
+        onClick={() => onPick(undefined)}
+      >
+        无
+      </button>
+      {LAYER_TAGS.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          className={"layer-tag-choice" + (value === t.id ? " is-on" : "")}
+          aria-pressed={value === t.id}
+          data-tag={t.id}
+          title={`${t.label}色标记`}
+          onClick={() => onPick(t.id)}
+        >
+          <span className="layer-tag-dot" style={{ background: t.color }} />
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function kindGlyph(n: Node): string {
@@ -2569,10 +2864,11 @@ function BoardProps({ doc, store, index, setIndex }: { doc: VexaDoc; store: Retu
         <div className="dock-sec-head"><span>背景</span></div>
         <div className="paint-row">
           <label className="paint-swatch" style={{ background: board.bg }}>
-            <input type="color" value={board.bg} onChange={(e) => setBoard((b) => { b.bg = e.target.value; })} />
+            <input type="color" value={board.bg} onChange={(e) => { rememberColor(e.target.value); setBoard((b) => { b.bg = e.target.value; }); }} />
           </label>
           <span className="faint">画板底色</span>
         </div>
+        <ColorSwatches value={board.bg} onPick={(color) => setBoard((b) => { b.bg = color; })} />
       </section>
       <div className="dock-note">{zh.dock.emptyHint}<br />{zh.dock.emptyHint2}</div>
     </>

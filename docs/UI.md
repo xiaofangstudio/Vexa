@@ -163,7 +163,7 @@
 - 子层选择：点“导入文字 1”直接选中 165×52 px；切到属性页显示“导入文字 1 / 文本 / Arial / 41.28px / 文本 裁切标题”，不再需要先选组。
 - 交互约束：拖拽仍只允许顶层行，子行不可拖，避免结构损坏；组名单击选组、双击展开/收起。
 - 已知边界：组内子层拖动排序、把子层拖出组、批量显隐/锁定尚未做；导入组默认收起。
-- 第二十四批已补齐组内排序与跨组搬移；批量显隐/锁定仍未做。组内排序与拖入/拖出记录见下方第二十四批验收。
+- 第二十四批已补齐组内排序与跨组搬移；第二十五批已补齐批量显隐/锁定。记录见下方第二十四、二十五批验收。
 - 截图：`docs/shots/v20-final-layers.png`、`v20-final-select-text.png`、`v20-final-text-props.png`。
 
 ## 验收记录（2026-11-24，第二十四批）
@@ -176,5 +176,31 @@
 - 落点分区：组行纵向 28% / 44% / 28% 分别为 before / inside / after；普通行按上下半区。只有合法落点才显示反馈并 `preventDefault`，拖自身、普通对象 inside、组进后代都不产生落点。
 - 自动化工具：`tools/shot.ps1` 在独立虚拟桌面启动 release，`--remote-debugging-port` 接 WebView2，`tools/cdp-layer-drag.mjs` 驱动并截取拖放前后状态；截图后虚拟桌面立即关闭。
 - 截图：`docs/shots/layers-drop-before.png`（组内排序落点）、`layers-drop-inside.png`（放入组内）、`layers-drag.png`（三次搬移后的最终树）、`layers-drag-window.png`（真实窗口截图）。
-- 已知边界：批量显隐 / 锁定仍未做；折叠组内的子层不可拖，需先展开；组内排序与跨组搬移一次操作记一步撤销。
+- 已知边界：第二十五批已补齐批量显隐 / 锁定；折叠组内的子层不可拖，需先展开；组内排序与跨组搬移一次操作记一步撤销。
+
+## 验收记录（2026-11-25，第二十五至二十七批）
+
+- `npx tsc --noEmit` 通过；`npm run build` 通过：143 modules，`index-Dof4g4IO.js` 470.43 kB / gzip 149.21，`index-C7Qk7DcQ.css` 49.76 kB / gzip 9.69，`pdf-CqBpYk8z.js` 407.16 kB / gzip 169.22。
+- 图层多选：`scripts/smoke.selection.mts` 16 项 PASS，覆盖折叠/展开显示顺序、单击单选、Ctrl 逐选/反选、Shift 连选、Shift+Ctrl 叠加，以及批量显隐/锁定“任一可见→全隐藏、任一解锁→全锁定”的语义；`scripts/smoke.layers.mts` 24 项复跑无回归。
+- 真实发布版窗口（Tauri/WebView2，1280×1000）：图层页展开“卡片组”，点“标题”→Ctrl 点“副标题”→Shift 点“卡片底”，状态栏“已选 3 · 4 个对象”，三行同时高亮，顶部“显隐/锁定”按钮启用；截图 `docs/shots/layers-multi.png`。
+- 批量显隐：选中 3 行后点行内“标题”的眼睛，3 行的眼睛 aria-label 全部变为“显示”，toast“已隐藏 3 个图层”；再点同一眼睛恢复 3 行可见，toast“已显示 3 个图层”。
+- 批量锁定：顶部“锁定”按钮把 3 行锁图标变为“解锁”，状态栏“未保存”，toast“已锁定 3 个图层”；再点一次恢复解锁。截图 `docs/shots/layers-batch.png`。
+- 变换面板：多选“标题 + 副标题”切到属性页，显示位置 X/Y、尺寸 W/H、旋转 ±90°、水平/垂直翻转与多选说明；`276×122` 选区把 W 输入 `260` 后，W/H 与标题读数精确变为 `260×122`。`scripts/smoke.transform.mts` 6 项 PASS（文字 216→260、45→90，误差 <0.02px）。截图 `docs/shots/props-transform.png`。
+- 色板与最近颜色：选中“标题”，填充区显示 12 色固定色板；点橙色 chip 后填充色板与画布文字同步变橙，最近行出现橙色 chip，`localStorage` 记录 `#ff9f0a`；重启后最近颜色仍在。截图 `docs/shots/props-palette.png`。
+- 布局自检：1280×1000 下图层底部“Ctrl/Shift 多选”保持单行，“删除 / 提示”不挤压；填充行“不透明度”单行显示，输入框收到 64px；色板两行内完整可见，无横向溢出。
+- 已知边界：固定 12 色 + 最近 10 色，不含全局色/专色/CMYK；渐变每个色标仍用原生取色器；文字 W/H 用字号与水平缩放逼近，路径描边宽度不随框缩放；批量锁定后仍保持选中，便于再点一次解锁。
+- 截图：`layers-multi.png`、`layers-batch.png`、`layers-multi-window.png`、`props-transform.png`、`props-transform-after.png`、`props-palette.png`、`props-palette-window.png`。
+
+## 验收记录（2026-11-25，第二十八批：图层搜索 / 颜色标记 / 过滤）
+
+- `npx tsc --noEmit` 通过；`npm run build` 通过：144 modules，`index-eWrnshGC.js` 476.25 kB / gzip 150.85，`index-C-PqTAB4.css` 52.66 kB / gzip 10.10，`pdf-DscykRww.js` 407.16 kB / gzip 169.22。
+- 图层面板结构：对象行上方新增 28px 搜索框与 7 个色标记 chip（“全部” + 红/橙/黄/绿/蓝/紫）。搜索框有放大镜、清除按钮和 `:focus-within` 品牌色描边；无标记的颜色 chip 保留色点但禁用，有标记时显示数量。
+- 打标：选中“标题”后属性坞出现“颜色标记”区，7 个按钮为“无 / 红 / 橙 / 黄 / 绿 / 蓝 / 紫”，当前标记双描边。依次给“标题 / 副标题 / 卡片组”标红 / 蓝 / 绿，行尾出现对应色点，筛选条计数变为 `1 / 1 / 1`；多选两段文字点紫后 toast“已标记 2 个图层”，紫计数变 2。截图 `docs/shots/layerfilter-props.png`、`layerfilter-tags.png`、`layerfilter-final.png`。
+- 搜索：在搜索框输入“操作提示”，列表只保留 `卡片组 / 操作提示`，组自动展开，头显“1 匹配”，筛选状态行显示““操作提示” · 1 个直接匹配 / 清除”；截图 `docs/shots/layerfilter-search.png`。
+- 颜色筛选：点红色 chip 后只保留 `卡片组 / 标题`，头显“1 匹配”，状态行“红色标记 · 1 个直接匹配”；再叠加搜索“操作提示”得到空列表，显示“没有匹配的图层 / 清除筛选”；点“清除”恢复完整 8 行。截图 `docs/shots/layerfilter-red.png`、`layerfilter-empty.png`。
+- 布局自检：真实窗口 1280×1000 逻辑（DPR 1.5）下，`.layers-body`、`.layer-filter`、`.layer-tag-filters`、`.layer-search` 的 `scrollWidth == clientWidth`，没有横向溢出；属性标记按钮一行 7 个宽 257px，完整落在 303px 面板内。
+- 回归：多选“标题 + 副标题”后顶部“显隐/锁定”仍启用；`scripts/smoke.selection.mts` 16 项、`scripts/smoke.layers.mts` 24 项复跑通过；`scripts/smoke.layerfilter.mts` 27 项覆盖名称/类型搜索、祖先组上下文、AND 组合、剪裁路径排除、环终止、标记保存和非法值丢弃。
+- 已知边界：标记不参与导出，不改变画布；搜索不搜节点内文字；过滤时命中子层的组临时强制展开；标记还没有命名、全局色或导入导出。
+- 截图：`layerfilter-tags.png`、`layerfilter-search.png`、`layerfilter-red.png`、`layerfilter-empty.png`、`layerfilter-props.png`、`layerfilter-final.png`、`layerfilter-window.png`。
+
 

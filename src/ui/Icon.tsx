@@ -37,6 +37,7 @@ export type IconName =
   | "sliders"
   | "grid"
   | "magnet"
+  | "search"
   | "close"
   | "image"
   | "trace"
@@ -206,6 +207,12 @@ const paths: Record<IconName, React.ReactNode> = {
       <path d="M3.4 11.2V7.2a4.6 4.6 0 0 1 9.2 0v4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
       <path d="M3.4 10.2h3.2v-3a1.4 1.4 0 0 1 2.8 0v3h3.2" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.65" />
       <path d="M3.4 7.2v-1.6M12.6 7.2v-1.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="7.1" cy="7.1" r="3.9" fill="none" stroke="currentColor" strokeWidth="1.25" />
+      <path d="M10.1 10.1 13.4 13.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </>
   ),
   close: <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />,

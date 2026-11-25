@@ -1,6 +1,6 @@
 /** .vex 工程文件：版本化 JSON，原子写入在 Rust 侧完成。 */
 import type { Node, VexaDoc } from "./types";
-import { BLEND_MODES } from "./types";
+import { BLEND_MODES, LAYER_TAGS } from "./types";
 import { normalizeGradStops } from "./paint";
 import { normalizeWidthPoints } from "./width";
 
@@ -36,12 +36,14 @@ export function parseVex(text: string): VexaDoc {
   doc.seq = doc.seq ?? 1;
   doc.name = doc.name ?? "未命名";
   doc.unit = "px";
+  const layerTagIds = new Set(LAYER_TAGS.map((t) => t.id));
   for (const [id, n] of Object.entries(doc.nodes as Record<string, Node>)) {
     if (!n.id) n.id = id;
     if (n.visible === undefined) n.visible = true;
     if (n.locked === undefined) n.locked = false;
     if (n.opacity === undefined) n.opacity = 1;
     if (n.blend && !BLEND_MODES.includes(n.blend)) delete n.blend;
+    if (n.tag !== undefined && !layerTagIds.has(n.tag)) delete n.tag;
     if (n.kind === "group" && n.clip && !doc.nodes[n.clip]) delete n.clip;
     if (n.kind === "path" || n.kind === "text") {
       if (!n.fill || typeof n.fill !== "object") n.fill = { kind: "none", color: "#000000", opacity: 1 };

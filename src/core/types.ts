@@ -90,6 +90,17 @@ export const BLEND_MODES: BlendMode[] = [
   "difference", "exclusion", "hue", "saturation", "color", "luminosity",
 ];
 
+export type LayerTag = "red" | "orange" | "yellow" | "green" | "blue" | "purple";
+
+export const LAYER_TAGS: Array<{ id: LayerTag; label: string; color: string }> = [
+  { id: "red", label: "红", color: "#d65a4a" },
+  { id: "orange", label: "橙", color: "#d98a3b" },
+  { id: "yellow", label: "黄", color: "#c9a63d" },
+  { id: "green", label: "绿", color: "#4f9b6b" },
+  { id: "blue", label: "蓝", color: "#4c82c4" },
+  { id: "purple", label: "紫", color: "#8b6bb3" },
+];
+
 export interface PathNode {
   kind: "path";
   id: string;
@@ -101,6 +112,8 @@ export interface PathNode {
   visible: boolean;
   locked: boolean;
   blend?: BlendMode;
+  /** 图层颜色标记，仅用于图层面板分组和筛选。 */
+  tag?: LayerTag;
 }
 
 export interface TextNode {
@@ -129,6 +142,8 @@ export interface TextNode {
   visible: boolean;
   locked: boolean;
   blend?: BlendMode;
+  /** 图层颜色标记，仅用于图层面板分组和筛选。 */
+  tag?: LayerTag;
 }
 
 export interface ImageNode {
@@ -144,6 +159,8 @@ export interface ImageNode {
   visible: boolean;
   locked: boolean;
   blend?: BlendMode;
+  /** 图层颜色标记，仅用于图层面板分组和筛选。 */
+  tag?: LayerTag;
 }
 
 export interface GroupNode {
@@ -157,6 +174,8 @@ export interface GroupNode {
   blend?: BlendMode;
   /** 剪切蒙版：子节点 id，用它的路径裁切本组其余内容（该子节点本身不绘制）。 */
   clip?: string;
+  /** 图层颜色标记，仅用于图层面板分组和筛选。 */
+  tag?: LayerTag;
 }
 
 export type Node = PathNode | TextNode | ImageNode | GroupNode;
