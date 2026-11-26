@@ -3,7 +3,7 @@ import { createCanvas } from "@napi-rs/canvas";
 import { createDoc, rectPath } from "../src/core/docOps";
 import { nodeInArtboards, pointInArtboards } from "../src/core/artboards";
 import { renderScene, type RenderState } from "../src/engine/render";
-import { solid, noStroke, type VexaDoc } from "../src/core/types";
+import { solid, noStroke, noPaint, type VexaDoc } from "../src/core/types";
 
 const colors: Record<string, string> = {
   "--canvas-bg": "#ececf0",
@@ -165,6 +165,42 @@ const slow = timeRun(baseState({ cull: false, cacheBackground: false, hideOutsid
 const fast = timeRun(baseState({ cull: true, cacheBackground: true, hideOutsideBoards: true }));
 console.log(`perf 20 frames: old=${slow.toFixed(1)}ms optimized=${fast.toFixed(1)}ms speedup=${(slow / fast).toFixed(2)}x`);
 check("剔除+缓存提速", fast < slow, `${(slow / fast).toFixed(2)}x`);
+
+// 5. 视口内但在画板外的节点，裁剪开启时整棵跳过
+const offDoc = createDoc("板外剔除", 300, 200);
+for (let i = 0; i < 600; i++) {
+  const n = rectPath(`o${i}`, `板外 ${i}`, 340 + (i % 30) * 18, 20 + Math.floor(i / 30) * 18, 40, 30);
+  n.fill = solid(i % 2 ? "#0f76d6" : "#e5484d");
+  n.stroke = noStroke();
+  offDoc.nodes[n.id] = n;
+  offDoc.root.push(n.id);
+}
+const offSize = { w: 800, h: 600 };
+const timeOff = (hideOutsideBoards: boolean) => {
+  const cv = createCanvas(offSize.w, offSize.h);
+  renderScene(cv as any, offDoc, view, baseState({ hideOutsideBoards, cacheBackground: true }), 1, offSize);
+  const t0 = performance.now();
+  for (let i = 0; i < 20; i++) renderScene(cv as any, offDoc, view, baseState({ hideOutsideBoards, cacheBackground: true }), 1, offSize);
+  return performance.now() - t0;
+};
+const offOn = timeOff(true);
+const offOff = timeOff(false);
+check("视口内板外节点直接跳过", offOn < offOff, `${offOff.toFixed(1)}ms → ${offOn.toFixed(1)}ms`);
+
+// 6. 几何在板外、粗描边压进板内的路径不能被整棵剔除
+const edgeDoc = createDoc("描边贴边", 300, 200);
+const edge = rectPath("edge", "贴边描边", -30, 50, 40, 40);
+edge.fill = noPaint();
+edge.stroke.kind = "solid";
+edge.stroke.color = "#e5484d";
+edge.stroke.width = 40;
+edge.stroke.opacity = 1;
+edgeDoc.nodes.edge = edge;
+edgeDoc.root.push("edge");
+const cvG = createCanvas(size.w, size.h);
+renderScene(cvG as any, edgeDoc, view, baseState({}), 1, size);
+const edgePx = pixel(cvG, 22, 45);
+check("粗描边压进画板仍显示", isRed(edgePx), edgePx.join(","));
 
 console.log(`\n${fail.length ? "有失败" : "全部通过"} · PASS ${pass.length} / FAIL ${fail.length}`);
 if (fail.length) process.exit(1);

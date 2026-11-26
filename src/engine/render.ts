@@ -159,14 +159,37 @@ function screenIntersects(b: Box, view: View, w: number, h: number, pad: number)
   return x1 >= -pad && y1 >= -pad && x0 <= w + pad && y0 <= h + pad;
 }
 
+/** 节点盒是否与任一画板相交；没有画板时视为自由画布。 */
+function boxOnArtboards(doc: VexaDoc, b: Box): boolean {
+  if (!doc.artboards.length) return true;
+  return doc.artboards.some((a) => b.x < a.x + a.w && b.x + b.w > a.x && b.y < a.y + a.h && b.y + b.h > a.y);
+}
+
 /** 视口剔除：组取整体包围盒，其余节点取自身盒；空组直接不画。 */
-function nodeVisible(doc: VexaDoc, node: Node, view: View, w: number, h: number): boolean {
+function nodeVisible(
+  doc: VexaDoc,
+  node: Node,
+  view: View,
+  w: number,
+  h: number,
+  hideOutside = false,
+): boolean {
   let b = cullBoxCache.get(node.id);
   if (b === undefined) {
     b = node.kind === "group" ? groupBox(doc, node) : nodeBox(node);
     cullBoxCache.set(node.id, b);
   }
   if (!b) return node.kind !== "group";
+  if (hideOutside) {
+    let pad = 12 / view.zoom;
+    if (node.kind === "path" && node.stroke.kind !== "none" && node.stroke.width > 0) {
+      let factor = 1;
+      for (const p of node.stroke.widthPoints ?? []) factor = Math.max(factor, p.left, p.right);
+      pad += node.stroke.width * factor / 2;
+    }
+    const bb: Box = { x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 };
+    if (!boxOnArtboards(doc, bb)) return false;
+  }
   const strokePad = node.kind === "path" ? node.stroke.width / 2 : 0;
   const pad = (strokePad + 12 / view.zoom) * view.zoom;
   return screenIntersects(b, view, w, h, pad + 8);
@@ -313,9 +336,10 @@ function drawNode(
   onImage: () => void,
   view?: View,
   size?: { w: number; h: number },
+  hideOutside = false,
 ): void {
   if (!node.visible) return;
-  if (view && size && !nodeVisible(doc, node, view, size.w, size.h)) return;
+  if (view && size && !nodeVisible(doc, node, view, size.w, size.h, hideOutside)) return;
   ctx.save();
   ctx.globalAlpha *= node.opacity;
   if (node.blend && node.blend !== "normal") ctx.globalCompositeOperation = node.blend;
@@ -393,7 +417,7 @@ function drawNode(
     for (const id of node.children) {
       if (id === node.clip) continue;
       const child = doc.nodes[id];
-      if (child) drawNode(ctx, doc, child, onImage, view, size);
+      if (child) drawNode(ctx, doc, child, onImage, view, size, hideOutside);
     }
   }
   ctx.restore();
@@ -711,10 +735,11 @@ export function renderScene(
   ctx.save();
   ctx.translate(view.panX, view.panY);
   ctx.scale(view.zoom, view.zoom);
+  const hideOutside = state.hideOutsideBoards !== false && doc.artboards.length > 0;
 
   // 画板外内容裁掉，避免对象跑到灰色粘贴板上仍显示
   ctx.save();
-  if (state.hideOutsideBoards !== false && doc.artboards.length) {
+  if (hideOutside) {
     ctx.beginPath();
     for (const b of doc.artboards) ctx.rect(b.x, b.y, b.w, b.h);
     ctx.clip();
@@ -727,7 +752,7 @@ export function renderScene(
   const cullSize = state.cull === false ? undefined : size;
   for (const id of doc.root) {
     const n = doc.nodes[id];
-    if (n) drawNode(ctx, doc, n, onImage, cullView, cullSize);
+    if (n) drawNode(ctx, doc, n, onImage, cullView, cullSize, hideOutside);
   }
   ctx.restore();
 
@@ -752,7 +777,7 @@ export function renderScene(
   // 选择框、锚点、框选、悬停同样不越过画板边界，
   // 否则对象被裁掉后只剩一圈手柄浮在粘贴板上，仍像“内容露出来了”。
   ctx.save();
-  if (state.hideOutsideBoards !== false && doc.artboards.length) {
+  if (hideOutside) {
     ctx.beginPath();
     for (const b of doc.artboards) ctx.rect(b.x, b.y, b.w, b.h);
     ctx.clip();
