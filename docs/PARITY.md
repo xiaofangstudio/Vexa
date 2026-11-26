@@ -533,11 +533,28 @@
 | Alt 直径取整 | Alt ruler tick | `rulerStep(zoom)` 按缩放选 1/2/5/10/20/50/100 文档单位；`roundDiameter` 沿首点方向把直径（圆心模式按 2×半径）吸到最近刻度，保持方向 | 33% 视图下水平拖 57 CSS px，原始直径 `173.7` → 取整 `150.0`（步进 50），宽高仍相等 |
 | 几何核心 | circle geometry | `circle.ts` 新增 `rulerStep`、`roundDiameter`；`circleFromDrag` 增加 `roundAlt` 与 `zoom` 可选参数，旧调用保持兼容 | `scripts/smoke.circle.mts` 33 项 PASS（三点、共线/重复点、直角三角形、标尺步进、Alt 直径/中心/方向/缩放） |
 
-验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（157 modules；`index-C13KfgCs.js` 529.29 kB / gzip 167.53，`index-BB-PkWTH.css` 61.68 kB / gzip 11.53，`pdf-D_qrKUB4.js` 407.16 kB / gzip 169.22）；`scripts/smoke.circle.mts` 33 项 PASS，全部 19 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口：三点拖动落 `346.0×346.0`、宽高相等、圆心正确；Alt 落 `150.0×150.0`；三点共线释放不落对象，已有 3 个圆不变；上一批的默认直径、从中心、Shift、两次点击、撤销与图层列表全部回归通过。截图 `docs/shots/circle-three.png`、`circle-alt.png`、`circle-three-window.png`。
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（157 modules；`index-C13KfgCs.js` 529.29 kB / gzip 167.53，`index-BB-PkWTH.css` 61.68 kB / gzip 11.53，`pdf-D_qrKUB4.js` 407.16 kB / gzip 169.22）；`scripts/smoke.circle.mts` 33 项 PASS，全部 19 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口：三点拖动落 `346.0×346.0`、宽高相等、圆心正确；Alt 落 `150.0×150.0`；三点共线释放不落对象，已有 3 个圆不变；上一批的默认直径、从中心、Shift、两次点击、撤销与图层列表全部回归通过。该批截图已按清理惯例删除。
 
 已知边界：参考里的虚线预览、中心十字/半径线/直径标注、`dragThird:false` 的“第三次点击定圆”、`standardAnchors` 锚点落在通过点上、`center/radii/diameter/color` 选项尚未做；Quick Pen 长度手柄、Path Precision 内切圆、points 单位偏好、填充/描边 Transform effect 仍在待补清单。
 
 发布验收：`release\Vexa.exe` 已用第四十一批源码重新构建（7,808,000 B，SHA256 `BCBF8C83199BDE6F33447FB92C26ACC7DE70AF4440FAB55533BE8483F3001DB5`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,367,110 B（SHA256 `B64291EDA70F014A4AD2F458A98DB48729C4E20281A62DDCB4E0458583817388`）。
+
+## 1.37 第四十二批已对齐（Path Precision Tools · Add Inscribed Circle）
+
+参考更新：按 `3463266` 的 `crates/engine/src/cmd/addons/pathtools/inscribed.rs`（命令 `addon.pathtools.inscribedCircle`，菜单位置 `Object > Plug-ins > Path Precision Tools > Add Inscribed Circle`）。语义是给每个选中的闭合路径或复合路径画最大内切活圆：孔洞和交叉子路径按填充规则参与，圆用当前 paint，放在当前图层顶部并选中，一次撤销；开放路径、没有面积或过于复杂时报告错误且不改文档。
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 内切圆几何 | Add Inscribed Circle | 新 `src/core/inscribed.ts` 的 `inscribedCircleOf(node, precision=0.05, maxCells=4096)`：闭合子路径自适应拍平 → 去重环 → nonzero winding 判内部 → 点到所有边的最小距离 → polylabel 式最大间隙搜索；半径按参考 `1/1.0003` 略缩，保证圆不压边 | 方形圆心 `(50,50)`、半径 `49.985`；直角三角形圆心/半径 `≈29.289`；L 形 `≈17.56`；方环 `≈35.12` 且圆心不在孔内 |
+| 命令入口 | Object > Plug-ins > Path Precision Tools | 对象菜单新增“插件 · 路径精准工具”子菜单，内层“添加内切圆”；`MenuBar` 支持二级浮层，点父项展开、`Esc`/点外部关闭 | 实机选中闭合矩形后父项与子项均可用，点内层落 1 个内切圆 |
+| 面板入口 | Path Precision Tools panel | 属性坞“路径效果”改为 2×2：偏移路径 / 描边转轮廓 / 平滑 / 内切圆 | 取消选中圆、重选矩形后点面板“内切圆”，半径与菜单入口一致 |
+| 落盘与选择 | current paint / top layer / select new | 新圆 `circlePath` 建 4 锚点闭合路径，名称“内切圆”；复制当前填充/描边；`addNode` 追加到根层顶部；完成后选中新圆；整次操作一个 `commit` | 文档对象数 `1→2`；新圆宽高相等、完全在矩形内、圆心与矩形中心重合；一次 `Ctrl+Z` 移除 |
+| 错误与跳过 | report error, keep doc | 无路径选中提示“请选中闭合路径或复合路径”；开放路径提示“开放路径没有内部”；面积为空提示“选中路径没有可测量的填充面积”；多选时逐个跳过并在 toast 统计 | 开放路径与极小面积核心返回空；UI 不新增对象 |
+
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（158 modules；`index-CEgLpTWi.js` 533.91 kB / gzip 169.02，`index-DApU8VOk.css` 61.88 kB / gzip 11.56，`pdf-E4e-Vh4B.js` 407.16 kB / gzip 169.22）。`scripts/smoke.inscribed.mts` 17 项 PASS；全部 20 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口画 `426.71×365.75` 矩形，内切圆 `365.645×365.645`、半径 `182.822`（期望 `365.755/2/1.0003 = 182.822`），圆心 `(34.357,323.083)` 与矩形中心一致，圆完全在矩形内；菜单与面板两个入口都通过，撤销移除。
+
+已知边界：贝塞尔边按 `precision=0.05` 折线近似，曲线边界的内切半径有极小误差；复合路径按 nonzero 填充规则处理，even-odd 文档尚未映射；单次搜索上限 `maxCells=4096`，极复杂路径会走近似网格结果。Quick Pen 长度手柄、points 单位偏好、填充/描边 Transform effect 仍在待补清单。
+
 
 ## 2. 部分对齐
 

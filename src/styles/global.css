@@ -417,6 +417,20 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+.menu-sub {
+  min-width: 210px;
+  max-height: none;
+  overflow: visible;
+}
+
+.menu-sub-head {
+  padding: 5px var(--sp-2) 6px;
+  font-size: 11px;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--sp-1);
+}
+
 .menu-sep {
   height: 1px;
   margin: var(--sp-1) var(--sp-2);

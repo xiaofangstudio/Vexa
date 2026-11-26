@@ -1,7 +1,7 @@
 /** 主编辑壳：顶栏 + 文档标签 + 三栏（工具轨 / 选项栏+画布 / 面板坞）+ 状态栏。 */
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from "react";
 import { zh } from "../i18n/zh";
-import { addNode, newId, removeNode } from "../core/docOps";
+import { addNode, circlePath, newId, removeNode } from "../core/docOps";
 import {
   alignAnchors,
   anchorsNeedAlign,
@@ -42,6 +42,7 @@ import {
 import { docToSVG, svgToNodes, svgToPathNodes } from "../core/svg";
 import { loadSystemFont } from "../engine/fonts";
 import { offsetPathNode, outlineStrokeNode, smoothPathNode } from "../core/pathfx";
+import { inscribedCircleOf } from "../core/inscribed";
 import { nodeBox, unionBox } from "../core/geom";
 import { groupBox } from "../engine/pick";
 import { noPaint, noStroke, solid, BLEND_MODES, LAYER_TAGS, type AnchorRef, type Artboard, type BlendMode, type GradStop, type GroupNode, type LayerTag, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc, type Swatch, type SwatchKind } from "../core/types";
@@ -1010,6 +1011,50 @@ export default function EditorShell(props: Props) {
     [doc, safeSelected, store, say],
   );
 
+  /** Path Precision Tools：给每个选中闭合路径添加最大内切活圆。 */
+  const addInscribedCircleSel = useCallback(() => {
+    const ids = safeSelected.filter((id) => doc.nodes[id]?.kind === "path");
+    if (!ids.length) {
+      say("请选中闭合路径或复合路径");
+      return;
+    }
+    let added = 0;
+    let open = 0;
+    let empty = 0;
+    const addedIds: string[] = [];
+    store.commit((d) => {
+      for (const id of ids) {
+        const n = d.nodes[id];
+        if (!n || n.kind !== "path") continue;
+        if (!n.subpaths.length || n.subpaths.some((sub) => !sub.closed || sub.anchors.length < 3)) {
+          open++;
+          continue;
+        }
+        const c = inscribedCircleOf(n);
+        if (!c) {
+          empty++;
+          continue;
+        }
+        const nid = newId(d, "n");
+        const node = circlePath(nid, "内切圆", c.cx, c.cy, c.r);
+        node.fill = { ...newFill };
+        node.stroke = { ...newStroke };
+        d.nodes[nid] = node;
+        (containerOf(d, id)?.list ?? d.root).push(nid);
+        addedIds.push(nid);
+        added++;
+      }
+    });
+    if (added) {
+      setSelected(addedIds);
+      say(open || empty ? `已添加 ${added} 个内切圆，跳过 ${open + empty} 个无效路径` : `已添加 ${added} 个内切圆`);
+    } else if (open) {
+      say("开放路径没有内部，请选择闭合路径");
+    } else {
+      say("选中路径没有可测量的填充面积");
+    }
+  }, [doc, safeSelected, store, say, newFill, newStroke]);
+
   const boolSel = useCallback(
     (op: BoolOp) => {
       const paths = sortPathNodesByZ(
@@ -1395,6 +1440,13 @@ export default function EditorShell(props: Props) {
         { label: "偏移路径（6px）", run: () => pathFxSel("offset"), disabled: !hasAnyPath },
         { label: "描边转轮廓", run: () => pathFxSel("outline"), disabled: !hasAnyPath },
         { label: "平滑路径", run: () => pathFxSel("smooth"), disabled: !hasAnyPath },
+        {
+          label: "插件 · 路径精准工具",
+          disabled: !safeSelected.some((id) => doc.nodes[id]?.kind === "path"),
+          children: [
+            { label: "添加内切圆", run: addInscribedCircleSel, disabled: !safeSelected.some((id) => doc.nodes[id]?.kind === "path") },
+          ],
+        },
         { label: "", sep: true },
         { label: "锁定", key: "Ctrl+2", run: toggleLock, disabled: selNone },
         { label: "解锁全部", key: "Ctrl+Alt+2", run: unlockAll },
@@ -1830,6 +1882,7 @@ export default function EditorShell(props: Props) {
           onBool={boolSel}
           onPathfinder={pathfinderSel}
           onArrange={arrange}
+          onInscribedCircle={addInscribedCircleSel}
           collapsed={!dockOpen}
           onCollapse={() => setDockOpen(false)}
           onSwatches={() => setSwatchesOpen(true)}
@@ -1980,12 +2033,13 @@ interface DockProps {
   onBool: (op: BoolOp) => void;
   onPathfinder: (op: PathfinderOp) => void;
   onArrange: (mode: ArrangeMode) => void;
+  onInscribedCircle: () => void;
   collapsed: boolean;
   onCollapse: () => void;
   onSwatches: () => void;
 }
 
-function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBoardIndex, onAlign, onDistribute, onBool, onPathfinder, onArrange, collapsed, onCollapse, onSwatches }: DockProps) {
+function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBoardIndex, onAlign, onDistribute, onBool, onPathfinder, onArrange, onInscribedCircle, collapsed, onCollapse, onSwatches }: DockProps) {
   const single = ids.length === 1 ? doc.nodes[ids[0]] : undefined;
   const fillStops = single && (single.kind === "path" || single.kind === "text") && (single.fill.kind === "linear" || single.fill.kind === "radial")
     ? paintStops(single.fill)
@@ -2904,10 +2958,11 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                     />
                     <span className="faint">px</span>
                   </div>
-                  <div className="panel-grid cols-3">
+                  <div className="panel-grid cols-2">
                     <button className="panel-btn" onClick={() => applyPathFx("offset")}>偏移路径</button>
                     <button className="panel-btn" onClick={() => applyPathFx("outline")}>描边转轮廓</button>
                     <button className="panel-btn" onClick={() => applyPathFx("smooth")}>平滑</button>
+                    <button className="panel-btn" onClick={onInscribedCircle}>内切圆</button>
                   </div>
                 </section>
               )}

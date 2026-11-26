@@ -130,15 +130,16 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 ## 发布构建
 
-- 版本：`0.1.0`（第四十一批：三点圆拖动 / Alt 直径取整）
+- 版本：`0.1.0`（第四十二批：Path Precision Tools · Add Inscribed Circle）
 - 文件：`release\Vexa.exe`
-- 大小：`7,808,000 B`
-- SHA256：`BCBF8C83199BDE6F33447FB92C26ACC7DE70AF4440FAB55533BE8483F3001DB5`
-- 构建时间：`2026-11-26 20:43:22`
+- 大小：`7,809,536 B`
+- SHA256：`D82350BEE4B1D96855D1DE1DB773430C2906738E6CEB05403FBD4D48C0D3658E`
+- 构建时间：`2026-11-26 22:05:45`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,367,110 B`，SHA256 `B64291EDA70F014A4AD2F458A98DB48729C4E20281A62DDCB4E0458583817388`
-- 前端产物：`dist/assets/pdf-D_qrKUB4.js` 407.16 kB / gzip 169.22；`dist/assets/index-C13KfgCs.js` 529.29 kB / gzip 167.53；`dist/assets/index-BB-PkWTH.css` 61.68 kB / gzip 11.53；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
-- 三点圆 / Alt 验收（第四十一批）：`npx tsc --noEmit` 通过；`npm run build` 157 modules 通过；`npx tsx scripts/smoke.circle.mts` 33 项 PASS，全部 19 个冒烟脚本复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1600×1000 窗口在 33% 视图：标定 32 CSS px 圆 `97.5×97.5`；点 `(450,320)` 后按下 `(550,320)` 拖到 `(520,400)` 落三点圆 `346.0×346.0`，圆心 `(500,346.875)`，与直径圆 `324.0` 区分；Alt 水平拖 57 CSS px，直径 `173.7→150.0`，属性坞 `150×150`；三点共线释放不落对象；默认直径、从中心、Shift、两次点击、撤销与图层列表回归通过。截图 `docs/shots/circle-three.png`、`circle-alt.png`、`circle-three-window.png`。
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,368,443 B`，SHA256 `E8B3FA5B3D0C892032E5FA6F0B9FB43B3DAA4AC7A8EDD1B75591DBA2C6760C1A`
+- 前端产物：`dist/assets/pdf-E4e-Vh4B.js` 407.16 kB / gzip 169.22；`dist/assets/index-CEgLpTWi.js` 533.91 kB / gzip 169.02；`dist/assets/index-DApU8VOk.css` 61.88 kB / gzip 11.56；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 内切圆验收（第四十二批）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.inscribed.mts` 17 项 PASS，全部 20 个冒烟脚本复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1600×1000 窗口画 `426.71×365.75` 矩形：对象菜单“插件 · 路径精准工具 → 添加内切圆”与属性坞“路径效果 → 内切圆”两个入口都落 1 个 `365.645×365.645` 圆，半径 `182.822`、圆心与矩形中心重合，圆完全在矩形内；当前填充珊瑚红沿用，原矩形蓝色不变；一次撤销移除。截图 `docs/shots/inscribed-menu.png`、`inscribed-panel.png`、`inscribed-window.png`。
+- 三点圆 / Alt 验收（第四十一批，历史）：`npx tsc --noEmit` 通过；`npm run build` 157 modules 通过；`npx tsx scripts/smoke.circle.mts` 33 项 PASS，全部 19 个冒烟脚本复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1600×1000 窗口在 33% 视图：标定 32 CSS px 圆 `97.5×97.5`；点 `(450,320)` 后按下 `(550,320)` 拖到 `(520,400)` 落三点圆 `346.0×346.0`，圆心 `(500,346.875)`，与直径圆 `324.0` 区分；Alt 水平拖 57 CSS px，直径 `173.7→150.0`，属性坞 `150×150`；三点共线释放不落对象；默认直径、从中心、Shift、两次点击、撤销与图层列表回归通过。该批截图已按清理惯例删除。
 - 圆形工具验收（第四十批，历史）：`npx tsc --noEmit` 通过；`npm run build` 157 modules 通过；`npx tsx scripts/smoke.circle.mts` 19 项 PASS，其余 18 个冒烟脚本全复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1600×1000 窗口按 `⇧L`：选项栏出现“从中心”且默认关闭；默认水平拖圆 `97.5×97.5`、4 锚点闭合；开“从中心”同距离圆 `195.1×195.1`，直径比值 2.00；Shift 斜拖 `175.8×175.8`；两次点击第一次不落对象、第二次落圆，撤销移除；图层面板 3 行“圆形”。1200×900 实际窗口选项栏无溢出。该批截图已按清理惯例删除。
 - 文档色板验收（第三十九批）：`npx tsc --noEmit` 通过；`npm run build` 156 modules 通过；`npx tsx scripts/smoke.swatches.mts` 62 项 PASS，其余 17 个冒烟脚本全复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1920×1500 窗口画两块矩形，打开“管理文档色板”：空弹窗 519/519；新建“品牌蓝” `#0f76d6`（印刷色）与“专色橙” `#ff7a00`（专色），弹窗 520×361、`cw=sw=519`、新建行 487/487，行无溢出。第一块填充链接品牌蓝并显示“全局链接 · 品牌蓝”；第二块填充链接品牌蓝、描边链接专色橙，使用数 2 处 / 1 处。把品牌蓝改 `#e5484d` 保存，两块填充同步变红且链接保留，专色描边不变，提示“已更新「品牌蓝」”。删除品牌蓝后两块填充 `swatch` 清空但颜色保留，撤销恢复品牌蓝与链接。1200×900 弹窗仍 520 宽、无溢出。该批截图已按清理惯例删除。
 - 文档设置批量应用验收（第三十八批）：`npx tsc --noEmit` 通过；`npm run build` 153 modules 通过；`npx tsx scripts/smoke.document.mts` 36 项 PASS，其余 16 个冒烟脚本全复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1920×1500 窗口新建第二块 1080×1080 画板，文档设置单板时批量复选框禁用、文案“全部 1 个画板”；两块时可用，勾选后一起变 1000×700 / `#eef4ff`，第二板名仍“画板 2”、画板坐标与矩形锚点不变，toast“文档设置已同步 2 个画板”；撤销恢复两块 1080×1080 / `#ffffff`；不勾选时只当前板变 800×1080 / `#ffe9d8`，第二板不动。弹窗 560×564、`cw=sw=559`，批量行 525/525；1200×900 仍 560 宽且不溢出。截图 `docs/shots/docs-all-dialog.png`、`docs-all-applied.png`、`docs-all-undo.png`、`docs-all-narrow.png`、`docs-all-window.png`。
