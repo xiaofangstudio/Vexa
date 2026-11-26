@@ -3,6 +3,7 @@ import type { Node, VexaDoc } from "./types";
 import { BLEND_MODES, LAYER_TAGS } from "./types";
 import { normalizeGradStops } from "./paint";
 import { normalizeWidthPoints } from "./width";
+import { normalizeSwatches } from "./swatches";
 
 export interface VexFile {
   format: "vexa";
@@ -36,6 +37,8 @@ export function parseVex(text: string): VexaDoc {
   doc.seq = doc.seq ?? 1;
   doc.name = doc.name ?? "未命名";
   doc.unit = "px";
+  doc.swatches = normalizeSwatches(doc.swatches);
+  const swatchIds = new Set(doc.swatches.map((s) => s.id));
   const layerTagIds = new Set(LAYER_TAGS.map((t) => t.id));
   for (const [id, n] of Object.entries(doc.nodes as Record<string, Node>)) {
     if (!n.id) n.id = id;
@@ -55,6 +58,7 @@ export function parseVex(text: string): VexaDoc {
         n.fill.color = n.fill.grad.stops[0]?.color ?? n.fill.color;
       }
       if (typeof n.fill.opacity !== "number") n.fill.opacity = 1;
+      if (n.fill.swatch && (n.fill.kind !== "solid" || !swatchIds.has(n.fill.swatch))) delete n.fill.swatch;
     }
     if (n.kind === "text") {
       if (typeof n.font !== "string" || !n.font) n.font = "Microsoft YaHei";
@@ -73,6 +77,7 @@ export function parseVex(text: string): VexaDoc {
       if (!n.stroke.arrow) n.stroke.arrow = "none";
       if (n.stroke.cap !== "round" && n.stroke.cap !== "square") n.stroke.cap = "butt";
       if (n.stroke.join !== "round" && n.stroke.join !== "bevel") n.stroke.join = "miter";
+      if (n.stroke.swatch && !swatchIds.has(n.stroke.swatch)) delete n.stroke.swatch;
       if (n.stroke.widthPoints !== undefined) {
         const points = normalizeWidthPoints(n.stroke.widthPoints);
         if (points.length >= 2) n.stroke.widthPoints = points;

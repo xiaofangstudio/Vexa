@@ -19,6 +19,12 @@ export interface DocSettingsStats {
 export interface ApplyDocSettingsResult {
   ok: boolean;
   error?: string;
+  /** 实际写入的画板数：勾选“全部画板”时为全部，否则为 1。 */
+  boards?: number;
+}
+
+export interface ApplyDocSettingsOptions {
+  allBoards?: boolean;
 }
 
 const MIN_SIZE = 1;
@@ -55,18 +61,21 @@ export function normalizeDocSettings(patch: DocSettings, index: number): DocSett
   };
 }
 
-export function applyDocSettings(doc: VexaDoc, index: number, patch: DocSettings): ApplyDocSettingsResult {
+export function applyDocSettings(doc: VexaDoc, index: number, patch: DocSettings, options: ApplyDocSettingsOptions = {}): ApplyDocSettingsResult {
   const board = doc.artboards[index];
   if (!board) return { ok: false, error: "画板不存在" };
   const bad = badSize(patch.width, patch.height);
   if (bad) return { ok: false, error: bad };
   const next = normalizeDocSettings(patch, index);
+  const targets = options.allBoards ? doc.artboards : [board];
   doc.name = next.name;
   board.name = next.boardName;
-  board.w = next.width;
-  board.h = next.height;
-  board.bg = next.background;
-  return { ok: true };
+  for (const b of targets) {
+    b.w = next.width;
+    b.h = next.height;
+    b.bg = next.background;
+  }
+  return { ok: true, boards: targets.length };
 }
 
 /** 表单即时校验，和 apply 使用同一组边界。 */

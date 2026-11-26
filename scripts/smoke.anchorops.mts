@@ -1,6 +1,6 @@
 import { addNode, createDoc, rectPath } from "../src/core/docOps";
-import { alignAnchors, anchorsNeedAlign, canJoinAnchors, joinAnchors } from "../src/core/anchorOps";
-import { noStroke, solid, type Anchor, type AnchorRef, type PathNode, type SubPath, type VexaDoc } from "../src/core/types";
+import { alignAnchors, anchorsNeedAlign, anchorsNeedDistribute, canJoinAnchors, distributeAnchors, joinAnchors } from "../src/core/anchorOps";
+import { noStroke, solid, type Anchor, type AnchorRef, type GroupNode, type PathNode, type SubPath, type VexaDoc } from "../src/core/types";
 
 let failed = 0;
 const check = (name: string, actual: unknown, expected: unknown) => {
@@ -83,6 +83,37 @@ const d8 = mk({
 check("对齐时手柄同步平移", alignAnchors(d8, [ref("a", 0, 1), ref("a", 0, 0)], "left"), 1);
 check("手柄跟着锚点走", ax(d8, "a", 0, 1), [10, 80, [5, 80], [15, 80]]);
 
+// ---------- 锚点分布 ----------
+const d10 = mk({ a: path("a", [sub([pt(0, 10), pt(20, 20), pt(100, 30), pt(150, 40)])]) });
+check("水平分布把一个中间锚点移到中点", distributeAnchors(d10, [ref("a", 0, 0), ref("a", 0, 1), ref("a", 0, 3)], "x"), 1);
+check("水平分布后中间 X=75", ax(d10, "a", 0, 1), [75, 20, null, null]);
+check("未选锚点不动", ax(d10, "a", 0, 2), [100, 30, null, null]);
+check("分布不改变 Y", [ax(d10, "a", 0, 0)[1], ax(d10, "a", 0, 1)[1], ax(d10, "a", 0, 3)[1]], [10, 20, 40]);
+check("水平分布后无需再移动", anchorsNeedDistribute(d10, [ref("a", 0, 0), ref("a", 0, 1), ref("a", 0, 3)], "x"), false);
+
+const d11 = mk({ a: path("a", [sub([pt(150, 0), pt(10, 50), pt(100, 100), pt(0, 150)])]) });
+check("分布按坐标排序与选择顺序无关", distributeAnchors(d11, [ref("a", 0, 1), ref("a", 0, 3), ref("a", 0, 0)], "y"), 1);
+check("垂直分布后中间 Y=75", ax(d11, "a", 0, 1), [10, 75, null, null]);
+
+const d12 = mk({ a: path("a", [sub([hp(10, 20), hp(50, 20), hp(100, 20)])]) });
+check("分布中间锚点手柄跟随", distributeAnchors(d12, [ref("a", 0, 0), ref("a", 0, 1), ref("a", 0, 2)], "x"), 1);
+check("分布后锚点与手柄 X", ax(d12, "a", 0, 1), [55, 20, [50, 20], [60, 20]]);
+
+const d13 = mk({ a: path("a", [sub([pt(0, 0), pt(50, 0)])]) });
+check("少于三个锚点不分布", distributeAnchors(d13, [ref("a", 0, 0), ref("a", 0, 1)], "x"), 0);
+check("少于三个锚点不写历史", anchorsNeedDistribute(d13, [ref("a", 0, 0), ref("a", 0, 1)], "x"), false);
+
+const d14 = mk({ a: path("a", [sub([pt(50, 0), pt(50, 20), pt(50, 100)])]) });
+check("同 X 锚点水平分布不移动", distributeAnchors(d14, [ref("a", 0, 0), ref("a", 0, 1), ref("a", 0, 2)], "x"), 0);
+check("同 X 锚点无需水平分布", anchorsNeedDistribute(d14, [ref("a", 0, 0), ref("a", 0, 1), ref("a", 0, 2)], "x"), false);
+
+const d15 = mk({
+  a: path("a", [sub([pt(0, 0), pt(100, 0)])]),
+  b: path("b", [sub([pt(20, 0)])]),
+});
+check("跨节点分布锚点", distributeAnchors(d15, [ref("a", 0, 0), ref("b", 0, 0), ref("a", 0, 1)], "x"), 1);
+check("跨节点分布后 X=50", ax(d15, "b", 0, 0)[0], 50);
+
 // ---------- 连接 ----------
 const mkJoin = (subpaths: SubPath[], id = "j") => mk({ j: path(id, subpaths) });
 
@@ -132,8 +163,49 @@ const j7 = mkJoin([sub([pt(0, 0), pt(10, 0)]), sub([pt(100, 0), pt(110, 0)])]);
 check("重复引用不能连接", canJoinAnchors(j7, [ref("j", 0, 1), ref("j", 0, 1)]), false);
 
 const ja = mk({ a: path("a", [sub([pt(0, 0), pt(10, 0)])]), b: path("b", [sub([pt(100, 0), pt(110, 0)])]) });
-check("跨节点暂不支持", canJoinAnchors(ja, [ref("a", 0, 1), ref("b", 0, 0)]), false);
-check("跨节点返回中文错误", joinAnchors(ja, [ref("a", 0, 1), ref("b", 0, 0)]).error?.includes("跨路径"), true);
+check("跨节点可连接", canJoinAnchors(ja, [ref("a", 0, 1), ref("b", 0, 0)]), true);
+check("跨节点连接成功", joinAnchors(ja, [ref("a", 0, 1), ref("b", 0, 0)]), { ok: true });
+check("跨节点合并后只剩第一个路径", Object.keys(ja.nodes), ["a"]);
+check("跨节点合并后根层只剩 a", ja.root, ["a"]);
+check("跨节点合并后一条子路径", ja.nodes.a.subpaths.length, 1);
+check("跨节点合并顺序", ja.nodes.a.subpaths[0].anchors.map((a) => a.x), [0, 10, 100, 110]);
+
+const jb = mk({ a: path("a", [sub([pt(0, 0), pt(10, 0)])]), b: path("b", [sub([pt(100, 0), pt(110, 0)])]) });
+check("跨节点反方向连接", joinAnchors(jb, [ref("a", 0, 0), ref("b", 0, 1)]), { ok: true });
+check("跨节点反向后顺序", jb.nodes.a.subpaths[0].anchors.map((a) => a.x), [10, 0, 110, 100]);
+
+const jc = mk({
+  a: path("a", [sub([pt(0, 0), pt(10, 0)])]),
+  b: path("b", [sub([pt(100, 0), pt(110, 0)]), sub([pt(200, 0), pt(210, 0)])]),
+});
+check("源路径还有子路径时保留节点", joinAnchors(jc, [ref("a", 0, 1), ref("b", 0, 0)]), { ok: true });
+check("源路径只剩另一条子路径", jc.nodes.b?.subpaths.length, 1);
+check("源路径剩余子路径不变", jc.nodes.b?.subpaths[0].anchors.map((a) => a.x), [200, 210]);
+
+const jd = createDoc("cross-group", 400, 300);
+addNode(jd, path("a", [sub([pt(0, 0), pt(10, 0)])]));
+const grp: GroupNode = { kind: "group", id: "g", name: "G", children: ["b"], opacity: 1, visible: true, locked: false };
+addNode(jd, grp);
+addNode(jd, path("b", [sub([pt(100, 0), pt(110, 0)])]));
+jd.root = jd.root.filter((id) => id !== "b");
+check("跨节点连接删除空祖先组", joinAnchors(jd, [ref("a", 0, 1), ref("b", 0, 0)]), { ok: true });
+check("空组被删除", jd.nodes.g, undefined);
+check("删除后根层只剩 a", jd.root, ["a"]);
+
+const jf = mk({ a: path("a", [sub([pt(0, 0), pt(10, 0)])]), b: path("b", [sub([pt(100, 0), pt(110, 0)])]) });
+const clipGrp: GroupNode = { kind: "group", id: "clipGroup", name: "蒙版组", children: ["b"], opacity: 1, visible: true, locked: false, clip: "b" };
+addNode(jf, clipGrp);
+jf.root = jf.root.filter((id) => id !== "b");
+check("剪切蒙版路径不能连接", canJoinAnchors(jf, [ref("a", 0, 1), ref("b", 0, 0)]), false);
+check("剪切蒙版路径返回错误", joinAnchors(jf, [ref("a", 0, 1), ref("b", 0, 0)]).error?.includes("剪切"), true);
+
+const jg = mk({
+  a: path("a", [sub([pt(0, 0), { x: 10, y: 0, hIn: { x: 5, y: 0 }, hOut: { x: 15, y: 0 }, smooth: false }])]),
+  b: path("b", [sub([{ x: 10, y: 0, hIn: { x: 9, y: 0 }, hOut: { x: 12, y: 0 }, smooth: false }, pt(20, 0)])]),
+});
+check("跨节点重合端点合并", joinAnchors(jg, [ref("a", 0, 1), ref("b", 0, 0)]), { ok: true });
+check("跨节点重合后锚点数", jg.nodes.a.subpaths[0].anchors.length, 3);
+check("跨节点重合保留外侧手柄", [jg.nodes.a.subpaths[0].anchors[1].hIn, jg.nodes.a.subpaths[0].anchors[1].hOut], [{ x: 5, y: 0 }, { x: 12, y: 0 }]);
 
 const j8 = mkJoin([sub([pt(0, 0), pt(10, 0)]), sub([pt(100, 0), pt(110, 0)])]);
 check("后一条选为基准也能连接", joinAnchors(j8, [ref("j", 1, 1), ref("j", 0, 0)]), { ok: true });

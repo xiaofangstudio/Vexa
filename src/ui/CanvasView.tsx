@@ -1,9 +1,11 @@
 /** 画布：指针交互 + 直接重绘。视口状态由外层持有，这里只算坐标与手势。 */
 import { useCallback, useEffect, useRef, type MouseEvent, type PointerEvent as RPointerEvent } from "react";
 import { anchorAt, type AnchorRef, type Artboard, type Paint, type PathNode, type Pt, type Stroke, type VexaDoc } from "../core/types";
-import { addNode, dragHandle, ellipsePath, findAnchor, findSegment, insertAnchorOnSegment, newId, nudgeAnchors, rectPath, removeNode } from "../core/docOps";
+import { anchorsInBox } from "../core/anchorOps";
+import { addNode, circlePath, dragHandle, ellipsePath, findAnchor, findSegment, insertAnchorOnSegment, newId, nudgeAnchors, rectPath, removeNode } from "../core/docOps";
+import { circleFromDrag } from "../core/circle";
 import { shapeFromDrag } from "../core/shapes";
-import { translateNode, scaleNodes, rotateNodesAround, splitPathAtPoint, segmentPoint, smoothPathNear, makeSmoothLimits, freehandAnchors, type SmoothLimit } from "../core/vectorOps";
+import { translateNode, scaleNodes, rotateNodesAround, shearNodesAround, clampSkewAngle, splitPathAtPoint, segmentPoint, smoothPathNear, makeSmoothLimits, freehandAnchors, type SmoothLimit } from "../core/vectorOps";
 import { boxOfPoints, nodeBox, unionBox, type Box } from "../core/geom";
 import { gradAxis, gradHandlePoints, paintStops, toLinearGradient } from "../core/paint";
 import { erasePathNode } from "../core/eraser";
@@ -26,6 +28,8 @@ interface Props {
   newFill: Paint;
   newStroke: Stroke;
   shapeOpts?: { radius?: number; sides?: number; points?: number; inner?: number };
+  /** 圆形工具：第一点作为圆心 */
+  circleFromCenter?: boolean;
   /** 橡皮直径（屏幕 CSS px） */
   eraserRadius?: number;
   /** 画板辅助网格 */
@@ -52,11 +56,12 @@ interface Props {
 }
 
 type Drag =
-  | { kind: "move"; before: string; last: Pt; ids: string[] }  | { kind: "marquee"; start: Pt }
+  | { kind: "move"; before: string; last: Pt; ids: string[] }  | { kind: "marquee"; start: Pt; anchorIds?: string[]; anchorBase?: AnchorRef[] }
   | { kind: "pan"; startScreen: Pt; startView: View }
   | { kind: "anchor"; before: string; last: Pt; refs: AnchorRef[]; part: "anchor" | "hIn" | "hOut" }
-  | { kind: "create"; shape: "rect" | "ellipse" | "roundrect" | "polygon" | "star"; start: Pt; id: string; before: string }
+  | { kind: "create"; shape: "rect" | "ellipse" | "circle" | "roundrect" | "polygon" | "star"; start: Pt; id: string; before: string; fromCenter?: boolean }
   | { kind: "resize"; before: string; ids: string[]; startBox: Box; anchor: Pt; handle: HandleId }
+  | { kind: "skew"; before: string; ids: string[]; startBox: Box; handle: HandleId; center: Pt; start: Pt; axis: "x" | "y"; sign: 1 | -1; appliedTan: number }
   | { kind: "rotate"; before: string; ids: string[]; center: Pt; startAngle: number; applied: number }
   | { kind: "pen"; before: string }
   | { kind: "line"; before: string; id: string; start: Pt }
@@ -98,6 +103,7 @@ export default function CanvasView(props: Props) {
   const widthHoverRef = useRef<RenderState["widthHover"]>(null);
   const gradientHoverRef = useRef<RenderState["gradientHover"]>(null);
   const anchorSelRef = useRef<AnchorRef[]>([]);
+  const circlePendingRef = useRef<{ first: Pt; fromCenter: boolean } | null>(null);
   const guidesRef = useRef<RenderState["snapGuides"]>([]);
   const propsRef = useRef(props);
    const rafRef = useRef(0);
@@ -105,6 +111,11 @@ export default function CanvasView(props: Props) {
   const wheelCommitRef = useRef<number | undefined>(undefined);
   propsRef.current = props;
   viewRef.current = view;
+
+  useEffect(() => {
+    if (tool !== "circle") circlePendingRef.current = null;
+  }, [tool]);
+
 
   const drawNow = useCallback(() => {
     const cv = canvasRef.current;
@@ -128,6 +139,16 @@ export default function CanvasView(props: Props) {
     };
     renderScene(cv, p.doc, viewRef.current, state, s.dpr, { w: s.w, h: s.h });
   }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || !circlePendingRef.current) return;
+      circlePendingRef.current = null;
+      drawNow();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawNow]);
 
   // 指针高频移动时合并到一帧画一次，避免一移动就全场景重绘
   const draw = useCallback(() => {
@@ -637,10 +658,29 @@ export default function CanvasView(props: Props) {
       return;
     }
 
-    if (prev.tool === "rect" || prev.tool === "ellipse" || prev.tool === "roundrect" || prev.tool === "polygon" || prev.tool === "star") {
+    if (prev.tool === "circle" && circlePendingRef.current) {
+      const pending = circlePendingRef.current;
+      circlePendingRef.current = null;
+      const before = store.snapshot();
+      const id = `${doc.seq}`;
+      const geom = circleFromDrag(pending.first, p, pending.fromCenter, e.shiftKey);
+      store.live((d) => {
+        d.seq += 1;
+        const nid = `n${id}`;
+        const node = circlePath(nid, "圆形", geom.cx, geom.cy, geom.r);
+        node.fill = { ...propsRef.current.newFill };
+        node.stroke = { ...propsRef.current.newStroke };
+        addNode(d, node);
+      });
+      dragRef.current = { kind: "create", shape: "circle", start: pending.first, id: `n${id}`, before, fromCenter: pending.fromCenter };
+      return;
+    }
+
+    if (prev.tool === "rect" || prev.tool === "ellipse" || prev.tool === "circle" || prev.tool === "roundrect" || prev.tool === "polygon" || prev.tool === "star") {
       const before = store.snapshot();
       const shape = prev.tool;
       const id = `${doc.seq}`;
+      const fromCenter = shape === "circle" ? (prev.circleFromCenter ?? false) : false;
       store.live((d) => {
         d.seq += 1;
         const nid = `n${id}`;
@@ -649,12 +689,14 @@ export default function CanvasView(props: Props) {
             ? rectPath(nid, "矩形", p.x, p.y, 0, 0)
             : shape === "ellipse"
               ? ellipsePath(nid, "椭圆", p.x, p.y, 0, 0)
-              : shapeFromDrag(shape, nid, p.x, p.y, p.x, p.y, prev.shapeOpts);
+              : shape === "circle"
+                ? circlePath(nid, "圆形", p.x, p.y, 0)
+                : shapeFromDrag(shape, nid, p.x, p.y, p.x, p.y, prev.shapeOpts);
         node.fill = { ...propsRef.current.newFill };
         node.stroke = { ...propsRef.current.newStroke };
         addNode(d, node);
       });
-      dragRef.current = { kind: "create", shape, start: p, id: `n${id}`, before };
+      dragRef.current = { kind: "create", shape, start: p, id: `n${id}`, before, fromCenter };
       return;
     }
 
@@ -829,7 +871,18 @@ export default function CanvasView(props: Props) {
         };
         return;
       }
-      if (anchorSelRef.current.length) applyAnchorSel([]);
+      const prevAnchors = anchorSelRef.current;
+      if (!e.shiftKey && prevAnchors.length) applyAnchorSel([]);
+      const anchorIds = prev.selected.filter((id) => {
+        const n = prev.doc.nodes[id];
+        return !!n && (n.kind === "path" || n.kind === "group");
+      });
+      if (anchorIds.length) {
+        dragRef.current = { kind: "marquee", start: p, anchorIds, anchorBase: e.shiftKey ? prevAnchors : [] };
+        marqueeRef.current = { x: p.x, y: p.y, w: 0, h: 0 };
+        draw();
+        return;
+      }
     }
 
     // 选择工具：先命中变换手柄（旋转柄 / 八个缩放柄），再命中对象
@@ -846,6 +899,20 @@ export default function CanvasView(props: Props) {
             center: { x: box.x + box.w / 2, y: box.y + box.h / 2 },
             startAngle: (Math.atan2(p.y - (box.y + box.h / 2), p.x - (box.x + box.w / 2)) * 180) / Math.PI,
             applied: 0,
+          };
+        } else if (e.ctrlKey && (hit.id === "n" || hit.id === "s" || hit.id === "e" || hit.id === "w")) {
+          const sideX = hit.id === "e" || hit.id === "w";
+          dragRef.current = {
+            kind: "skew",
+            before,
+            ids: prev.selected,
+            startBox: box,
+            handle: hit.id,
+            center: { x: box.x + box.w / 2, y: box.y + box.h / 2 },
+            start: p,
+            axis: sideX ? "y" : "x",
+            sign: (hit.id === "s" || hit.id === "e" ? 1 : -1) as 1 | -1,
+            appliedTan: 0,
           };
         } else {
           dragRef.current = {
@@ -1243,6 +1310,10 @@ export default function CanvasView(props: Props) {
           const cy = (drag.start.y + p.y) / 2;
           const node = ellipsePath(n.id, n.name, cx, cy, rx, ry);
           n.subpaths = node.subpaths;
+        } else if (drag.shape === "circle") {
+          const geom = circleFromDrag(drag.start, p, drag.fromCenter ?? false, shift);
+          const node = circlePath(n.id, n.name, geom.cx, geom.cy, geom.r);
+          n.subpaths = node.subpaths;
         } else {
           // 圆角矩形 / 多边形 / 星形：按拖拽框实时重算
           let x1 = p.x;
@@ -1302,6 +1373,21 @@ export default function CanvasView(props: Props) {
       return;
     }
 
+    if (drag.kind === "skew") {
+      const half = Math.max(1, drag.axis === "x" ? drag.startBox.h / 2 : drag.startBox.w / 2);
+      const delta = drag.axis === "x" ? p.x - drag.start.x : p.y - drag.start.y;
+      let deg = (Math.atan2(drag.sign * delta, half) * 180) / Math.PI;
+      if (e.shiftKey) deg = Math.round(deg / 15) * 15;
+      deg = clampSkewAngle(deg);
+      const targetTan = Math.tan((deg * Math.PI) / 180);
+      const addTan = targetTan - drag.appliedTan;
+      if (Math.abs(addTan) < 1e-6) return;
+      drag.appliedTan = targetTan;
+      store.live((d) => shearNodesAround(d, drag.ids, drag.center.x, drag.center.y, drag.axis === "x" ? addTan : 0, drag.axis === "y" ? addTan : 0));
+      draw();
+      return;
+    }
+
     if (drag.kind === "rotate") {
       const total =
         (Math.atan2(p.y - drag.center.y, p.x - drag.center.x) * 180) / Math.PI - drag.startAngle;
@@ -1351,6 +1437,22 @@ export default function CanvasView(props: Props) {
     if (drag.kind === "marquee") {
       const box = marqueeRef.current;
       marqueeRef.current = null;
+      if (drag.anchorIds) {
+        if (box && box.w > 2 && box.h > 2) {
+          const hits = anchorsInBox(propsRef.current.doc, drag.anchorIds, box);
+          const base = drag.anchorBase ?? [];
+          const merged: AnchorRef[] = [];
+          for (const r of [...base, ...hits]) {
+            if (!merged.some((m) => m.nodeId === r.nodeId && m.si === r.si && m.ai === r.ai)) merged.push(r);
+          }
+          applyAnchorSel(merged);
+        } else {
+          applyAnchorSel(drag.anchorBase ?? []);
+          if (!drag.anchorBase?.length) propsRef.current.onSelect([]);
+        }
+        draw();
+        return;
+      }
       if (box && box.w > 2 && box.h > 2) propsRef.current.onSelect(boxSelect(propsRef.current.doc, box));
       else propsRef.current.onSelect([]);
       draw();
@@ -1364,6 +1466,9 @@ export default function CanvasView(props: Props) {
         const b = boxOfPoints(n.subpaths.flatMap((s) => s.anchors));
         if (b.w < 2 && b.h < 2) {
           store.live((dd) => removeNode(dd, drag.id));
+          if (drag.shape === "circle") {
+            circlePendingRef.current = { first: drag.start, fromCenter: drag.fromCenter ?? false };
+          }
         } else {
           store.finish(drag.before);
           propsRef.current.onSelect([drag.id]);
@@ -1476,7 +1581,7 @@ export default function CanvasView(props: Props) {
       return;
     }
 
-    if (drag.kind === "move" || drag.kind === "anchor" || drag.kind === "resize" || drag.kind === "rotate") {
+    if (drag.kind === "move" || drag.kind === "anchor" || drag.kind === "resize" || drag.kind === "rotate" || drag.kind === "skew") {
       store.finish(drag.before);
       return;
     }
@@ -1543,7 +1648,7 @@ export default function CanvasView(props: Props) {
       ? "grab"
       : tool === "pen" || tool === "line" || tool === "pencil" || tool === "width" || tool === "eyedropper" || tool === "gradient" || tool === "eraser" || tool === "scissors" || tool === "smooth" || tool === "artboard"
         ? "crosshair"
-        : tool === "rect" || tool === "roundrect" || tool === "ellipse" || tool === "polygon" || tool === "star" || tool === "text"
+        : tool === "rect" || tool === "roundrect" || tool === "ellipse" || tool === "circle" || tool === "polygon" || tool === "star" || tool === "text"
           ? "crosshair"
           : tool === "zoom"
             ? "zoom-in"

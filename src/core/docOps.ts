@@ -13,6 +13,7 @@ export function createDoc(name: string, w: number, h: number, bg = "#ffffff"): V
     nodes: {},
     root: [],
     seq: 2,
+    swatches: [],
   };
 }
 
@@ -54,6 +55,10 @@ export function rectPath(id: string, name: string, x: number, y: number, w: numb
     visible: true,
     locked: false,
   };
+}
+
+export function circlePath(id: string, name: string, cx: number, cy: number, r: number): PathNode {
+  return ellipsePath(id, name, cx, cy, Math.max(0, r), Math.max(0, r));
 }
 
 export function ellipsePath(id: string, name: string, cx: number, cy: number, rx: number, ry: number): PathNode {

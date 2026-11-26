@@ -22,6 +22,7 @@ export type ToolId =
   | "rect"
   | "roundrect"
   | "ellipse"
+  | "circle"
   | "polygon"
   | "star"
   | "text"

@@ -18,6 +18,7 @@ export type IconName =
   | "polygon"
   | "star"
   | "ellipse"
+  | "circle"
   | "text"
   | "artboard"
   | "hand"
@@ -117,6 +118,7 @@ const paths: Record<IconName, React.ReactNode> = {
   polygon: <path d="M8 2.4 13.4 6.7 11.4 13 4.6 13 2.6 6.7z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />,
   star: <path d="m8 2.2 1.75 3.9 4.25.42-3.2 2.86 1 4.14L8 11.4l-3.8 2.12 1-4.14L2 6.52l4.25-.42z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />,
   ellipse: <ellipse cx="8" cy="8" rx="5.5" ry="4.6" fill="none" stroke="currentColor" strokeWidth="1.3" />,
+  circle: <circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" strokeWidth="1.3" />,
   text: (
     <>
       <path d="M3.4 4.2h9.2M8 4.2v8.2M5.9 12.4h4.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />

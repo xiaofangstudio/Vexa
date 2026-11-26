@@ -812,6 +812,10 @@
   margin-top: 5px;
 }
 
+.skew-apply {
+  grid-column: 1 / -1;
+}
+
 .color-quick {
   display: flex;
   flex-direction: column;
@@ -862,6 +866,61 @@
 .color-chip:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.color-doc-chip {
+  position: relative;
+}
+
+.color-doc-chip.is-spot::after {
+  content: "";
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 1px solid #fff;
+  pointer-events: none;
+}
+
+.color-manage {
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-3);
+  font-size: 10px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.color-manage:hover {
+  color: var(--text);
+  border-color: var(--text-3);
+}
+
+.color-link-note {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 17px;
+  padding: 1px 2px;
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.color-link-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
 }
 
 .dock-multi-note {

@@ -24,6 +24,18 @@ export interface Paint {
   color: string;
   opacity: number;
   grad?: LinearGrad;
+  /** 链接的文档色板 id；仅实色填充/描边有效，改色板时同步换色。 */
+  swatch?: string;
+}
+
+/** 文档色板。process 为印刷色，spot 为专色（当前按 sRGB 近似显示）。 */
+export type SwatchKind = "process" | "spot";
+
+export interface Swatch {
+  id: string;
+  name: string;
+  color: string;
+  kind: SwatchKind;
 }
 
 /** 宽度点：t 为沿子路径长度的比例；left / right 是相对描边宽度的倍数。 */
@@ -50,6 +62,8 @@ export interface Stroke {
   arrow?: "none" | "triangle" | "open" | "diamond";
   /** 非均匀描边宽度点；缺省或少于 2 个时按均匀宽度绘制。 */
   widthPoints?: WidthPoint[];
+  /** 链接的文档色板 id；仅实色描边有效。 */
+  swatch?: string;
 }
 
 /** 锚点。hIn / hOut 是绝对坐标；null 表示该侧没有手柄（直线段）。 */
@@ -207,6 +221,8 @@ export interface VexaDoc {
   /** 根层叠顺序，末尾在最上。 */
   root: string[];
   seq: number;
+  /** 文档级色板；老工程可缺省。 */
+  swatches?: Swatch[];
 }
 
 export const solid = (color: string, opacity = 1): Paint => ({ kind: "solid", color, opacity });

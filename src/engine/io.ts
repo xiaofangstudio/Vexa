@@ -68,6 +68,26 @@ export async function pickPresetSave(defaultName: string): Promise<string | null
   return typeof r === "string" ? r : null;
 }
 
+export async function pickSwatchOpen(): Promise<string | null> {
+  if (!isTauri()) return null;
+  const r = await openDialog({
+    title: "导入文档色板",
+    multiple: false,
+    filters: [{ name: "Vexa 文档色板", extensions: ["json"] }],
+  });
+  return typeof r === "string" ? r : null;
+}
+
+export async function pickSwatchSave(defaultName: string): Promise<string | null> {
+  if (!isTauri()) return null;
+  const r = await saveDialog({
+    title: "导出文档色板",
+    defaultPath: `${defaultName || "Vexa-文档色板"}.json`,
+    filters: [{ name: "Vexa 文档色板", extensions: ["json"] }],
+  });
+  return typeof r === "string" ? r : null;
+}
+
 export async function pickExport(defaultName: string, ext: "svg" | "png" | "pdf"): Promise<string | null> {
   if (!isTauri()) return null;
   const r = await saveDialog({

@@ -2,7 +2,18 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from "react";
 import { zh } from "../i18n/zh";
 import { addNode, newId, removeNode } from "../core/docOps";
-import { alignAnchors, anchorsNeedAlign, canJoinAnchors, joinAnchors, type AnchorAlignMode } from "../core/anchorOps";
+import {
+  alignAnchors,
+  anchorsNeedAlign,
+  anchorsNeedDistribute,
+  canJoinAnchors,
+  deleteAnchors,
+  distributeAnchors,
+  hasDeletableAnchors,
+  joinAnchors,
+  type AnchorAlignMode,
+  type AnchorDistributeAxis,
+} from "../core/anchorOps";
 import { BOARD_PRESETS, applyBoardPreset, duplicateArtboard, fitBoardToContent, moveArtboard, type DuplicateBoardResult } from "../core/artboards";
 import { allLayerFlag, layerDisplayOrder, nextLayerFlagValue, selectLayerIds } from "../core/layerSelection";
 import { EMPTY_LAYER_FILTER, filterLayerTree, isLayerFilterActive, type LayerFilter } from "../core/layerFilter";
@@ -19,7 +30,10 @@ import {
   moveLayerNode,
   rotateNodes,
   scaleNodes,
+  skewNodes,
   translateNode,
+  clampSkewAngle,
+  MAX_SKEW_ANGLE,
   ungroupNodes,
   type AlignMode,
   type ArrangeMode,
@@ -30,8 +44,9 @@ import { loadSystemFont } from "../engine/fonts";
 import { offsetPathNode, outlineStrokeNode, smoothPathNode } from "../core/pathfx";
 import { nodeBox, unionBox } from "../core/geom";
 import { groupBox } from "../engine/pick";
-import { noPaint, noStroke, solid, BLEND_MODES, LAYER_TAGS, type AnchorRef, type Artboard, type BlendMode, type GradStop, type GroupNode, type LayerTag, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc } from "../core/types";
+import { noPaint, noStroke, solid, BLEND_MODES, LAYER_TAGS, type AnchorRef, type Artboard, type BlendMode, type GradStop, type GroupNode, type LayerTag, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc, type Swatch, type SwatchKind } from "../core/types";
 import { insertGradStop, paintPreview, paintStops, stopAlpha, stopCssColor } from "../core/paint";
+import { addSwatch, deleteSwatch, linkFill, linkStroke, mergeSwatches, swatchById, swatchesOf, updateSwatch, type MergeSwatchesResult, type SwatchResult } from "../core/swatches";
 import { fitBoard, zoomAt, type View } from "../engine/view";
 import type { ToolId } from "../engine/render";
 import { useDocStore } from "../stores/docStore";
@@ -47,6 +62,7 @@ import MenuBar, { type MenuGroup } from "./MenuBar";
 import AboutDialog from "./AboutDialog";
 import BoardPresetDialog from "./BoardPresetDialog";
 import DocumentDialog from "./DocumentDialog";
+import SwatchesDialog from "./SwatchesDialog";
 import "./EditorShell.css";
 
 const BLEND_LABELS: Record<BlendMode, string> = {
@@ -98,6 +114,7 @@ const TOOLS: Array<{ id: ToolId; icon: IconName; label: string; key: string }> =
   { id: "rect", icon: "rect", label: zh.tool.rect, key: "R" },
   { id: "roundrect", icon: "roundrect", label: zh.tool.roundrect, key: "U" },
   { id: "ellipse", icon: "ellipse", label: zh.tool.ellipse, key: "L" },
+  { id: "circle", icon: "circle", label: zh.tool.circle, key: "⇧L" },
   { id: "polygon", icon: "polygon", label: zh.tool.polygon, key: "Y" },
   { id: "star", icon: "star", label: zh.tool.star, key: "S" },
   { id: "text", icon: "text", label: zh.tool.text, key: "T" },
@@ -112,12 +129,12 @@ const TOOL_GROUPS: Array<{ label: string; ids: ToolId[] }> = [
   { label: "路径与笔", ids: ["pen", "line", "pencil", "width"] },
   { label: "修形", ids: ["eraser", "scissors", "smooth"] },
   { label: "颜色", ids: ["eyedropper", "gradient"] },
-  { label: "形状", ids: ["rect", "roundrect", "ellipse", "polygon", "star", "text"] },
+  { label: "形状", ids: ["rect", "roundrect", "ellipse", "circle", "polygon", "star", "text"] },
   { label: "画板", ids: ["artboard"] },
   { label: "视图", ids: ["hand", "zoom"] },
 ];
 
-const PAINT_TOOLS: ToolId[] = ["pen", "rect", "roundrect", "ellipse", "polygon", "star", "text", "gradient"];
+const PAINT_TOOLS: ToolId[] = ["pen", "rect", "roundrect", "ellipse", "circle", "polygon", "star", "text", "gradient"];
 const STROKE_ONLY_TOOLS: ToolId[] = ["line", "pencil"];
 
 const FONTS: Array<[label: string, value: string]> = [
@@ -180,9 +197,9 @@ function rememberColor(color: string) {
   }, 250);
 }
 
-function ColorSwatches({ value, onPick }: { value?: string; onPick: (color: string) => void }) {
+function ColorSwatches({ value, swatchId, swatches = [], onPick, onManage }: { value?: string; swatchId?: string; swatches?: Swatch[]; onPick: (color: string, swatchId?: string) => void; onManage?: () => void }) {
   const recent = useSyncExternalStore(subscribeRecentColors, () => recentColors, () => recentColors);
-  const active = value?.toLowerCase();
+  const active = swatchId ? undefined : value?.toLowerCase();
   const chips = (list: string[]) => list.map((color) => (
     <button
       key={color}
@@ -194,12 +211,42 @@ function ColorSwatches({ value, onPick }: { value?: string; onPick: (color: stri
       onClick={() => { rememberColor(color); onPick(color); }}
     />
   ));
+  const docChips = swatches.map((s) => (
+    <button
+      key={s.id}
+      type="button"
+      className={"color-chip color-doc-chip" + (swatchId === s.id ? " is-on" : "") + (s.kind === "spot" ? " is-spot" : "")}
+      style={{ background: s.color }}
+      title={`${s.name} · ${s.kind === "spot" ? "专色" : "印刷色"} · ${s.color}`}
+      aria-label={`使用文档色板 ${s.name}`}
+      aria-pressed={swatchId === s.id}
+      onClick={() => { rememberColor(s.color); onPick(s.color, s.id); }}
+    />
+  ));
+  const link = swatchId ? swatches.find((s) => s.id === swatchId) : undefined;
   return (
     <div className="color-quick">
+      {link && (
+        <div className="color-link-note">
+          <span className="color-link-dot" style={{ background: link.color }} />
+          全局链接 · {link.name}
+        </div>
+      )}
       {recent.length > 0 && (
         <div className="color-quick-row">
           <span className="color-quick-label">最近</span>
           <div className="color-quick-grid">{chips(recent)}</div>
+        </div>
+      )}
+      {(swatches.length > 0 || onManage) && (
+        <div className="color-quick-row">
+          <span className="color-quick-label">文档</span>
+          <div className="color-quick-grid">
+            {docChips}
+            {onManage && (
+              <button type="button" className="color-manage" onClick={onManage} title="管理文档色板" aria-label="管理文档色板">管理</button>
+            )}
+          </div>
         </div>
       )}
       <div className="color-quick-row">
@@ -312,12 +359,14 @@ export default function EditorShell(props: Props) {
   const [about, setAbout] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [docSettingsOpen, setDocSettingsOpen] = useState(false);
+  const [swatchesOpen, setSwatchesOpen] = useState(false);
   const [tracePath, setTracePath] = useState<string | null>(props.pendingTrace);
   const [fileName, setFileName] = useState<string | null>(props.initialPath);
   const [savedVersion, setSavedVersion] = useState(0);
   const [newFill, setNewFill] = useState<Paint>(solid("#0f76d6"));
   const [newStroke, setNewStroke] = useState<Stroke>(noStroke("#17171c"));
   const [shapeOpts, setShapeOpts] = useState({ radius: 12, sides: 5, points: 5, inner: 0.5 });
+  const [circleFromCenter, setCircleFromCenter] = useState(false);
   const [eraserDia, setEraserDia] = useState(24);
 
   const toastTimer = useRef<number | undefined>(undefined);
@@ -499,19 +548,55 @@ export default function EditorShell(props: Props) {
   );
 
   const applyDocumentSettings = useCallback(
-    (patch: DocSettings) => {
+    (patch: DocSettings, allBoards: boolean) => {
       const issue = validateDocSettings(patch);
       if (issue) {
         say(issue);
         return;
       }
+      let count = 1;
       store.commit((d) => {
-        applyDocSettings(d, boardIndex, patch);
+        const r = applyDocSettings(d, boardIndex, patch, { allBoards });
+        count = r.boards ?? 1;
       });
       setDocSettingsOpen(false);
-      say("文档设置已应用");
+      say(allBoards && count > 1 ? `文档设置已同步 ${count} 个画板` : "文档设置已应用");
     },
     [boardIndex, say, store],
+  );
+
+  const addDocSwatch = useCallback(
+    (input: { name: string; color: string; kind: SwatchKind }): SwatchResult => {
+      let result: SwatchResult = { ok: false, error: "色板未写入" };
+      store.commit((d) => { result = addSwatch(d, input); });
+      return result;
+    },
+    [store],
+  );
+
+  const updateDocSwatch = useCallback(
+    (id: string, patch: Partial<Pick<Swatch, "name" | "color" | "kind">>): SwatchResult => {
+      let result: SwatchResult = { ok: false, error: "色板未写入" };
+      store.commit((d) => { result = updateSwatch(d, id, patch); });
+      return result;
+    },
+    [store],
+  );
+
+  const removeDocSwatch = useCallback(
+    (id: string) => {
+      store.commit((d) => { deleteSwatch(d, id); });
+    },
+    [store],
+  );
+
+  const mergeDocSwatches = useCallback(
+    (list: Swatch[]): MergeSwatchesResult => {
+      let result: MergeSwatchesResult = { added: 0 };
+      store.commit((d) => { result = mergeSwatches(d, list); });
+      return result;
+    },
+    [store],
   );
 
   const doPlaceImage = useCallback(
@@ -608,13 +693,38 @@ export default function EditorShell(props: Props) {
     }
   }, [board, doc.seq, say, store]);
 
+  const deleteAnchorSelection = useCallback((): boolean => {
+    if (!anchorSel.length) return false;
+    if (!hasDeletableAnchors(doc, anchorSel)) {
+      say("选中的锚点已经不存在");
+      setAnchorSel([]);
+      setAnchorReset((n) => n + 1);
+      return true;
+    }
+    let removed = 0;
+    store.commit((d) => {
+      removed = deleteAnchors(d, anchorSel);
+    });
+    setSelected((prev) =>
+      prev.filter((id) => {
+        const n = doc.nodes[id];
+        return !!n && (n.kind !== "path" || n.subpaths.length > 0);
+      }),
+    );
+    setAnchorSel([]);
+    setAnchorReset((n) => n + 1);
+    say(`已删除 ${removed} 个锚点`);
+    return true;
+  }, [anchorSel, doc, say, store]);
+
   const deleteSelected = useCallback(() => {
+    if (deleteAnchorSelection()) return;
     if (!safeSelected.length) return;
     store.commit((d) => {
       for (const id of safeSelected) removeNode(d, id);
     });
     setSelected([]);
-  }, [safeSelected, store]);
+  }, [deleteAnchorSelection, safeSelected, store]);
 
   const duplicate = useCallback(() => {
     if (!safeSelected.length) return;
@@ -741,9 +851,25 @@ export default function EditorShell(props: Props) {
     [anchorSel, doc, say, store],
   );
 
+  const distributeAnchorSel = useCallback(
+    (axis: AnchorDistributeAxis) => {
+      if (anchorSel.length < 3) return;
+      if (!anchorsNeedDistribute(doc, anchorSel, axis)) {
+        say("选中的锚点已经分布");
+        return;
+      }
+      let moved = 0;
+      store.commit((d) => {
+        moved = distributeAnchors(d, anchorSel, axis);
+      });
+      say(moved ? `已分布 ${moved} 个锚点` : "选中的锚点已经分布");
+    },
+    [anchorSel, doc, say, store],
+  );
+
   const joinAnchorSel = useCallback(() => {
     if (!canJoinAnchors(doc, anchorSel)) {
-      say("请选中同一路径的两个开放端点");
+      say("请选中两个开放端点");
       return;
     }
     let result: { ok: boolean; error?: string } = { ok: false, error: "没有可连接的锚点" };
@@ -1145,7 +1271,7 @@ export default function EditorShell(props: Props) {
         case "m": setTool("smooth"); break;
         case "r": setTool("rect"); break;
         case "u": setTool("roundrect"); break;
-        case "l": setTool("ellipse"); break;
+        case "l": setTool(e.shiftKey ? "circle" : "ellipse"); break;
         case "y": setTool("polygon"); break;
         case "s": setTool("star"); break;
         case "t": setTool("text"); break;
@@ -1215,7 +1341,7 @@ export default function EditorShell(props: Props) {
         { label: "复制", key: "Ctrl+C", run: () => doCopy(false), disabled: !safeSelected.length },
         { label: "剪切", key: "Ctrl+X", run: () => doCopy(true), disabled: !safeSelected.length },
         { label: "粘贴", key: "Ctrl+V", run: doPaste },
-        { label: "删除", key: "Delete", run: deleteSelected, disabled: !safeSelected.length },
+        { label: anchorCount ? `删除 ${anchorCount} 个锚点` : "删除", key: "Delete", run: deleteSelected, disabled: !safeSelected.length && !anchorCount },
         { label: "全选", key: "Ctrl+A", run: () => setSelected(doc.root.slice()) },
       ],
     },
@@ -1248,6 +1374,8 @@ export default function EditorShell(props: Props) {
         { label: "锚点顶对齐", run: () => alignAnchorSel("top"), disabled: anchorCount < 2 },
         { label: "锚点垂直居中", run: () => alignAnchorSel("vcenter"), disabled: anchorCount < 2 },
         { label: "锚点底对齐", run: () => alignAnchorSel("bottom"), disabled: anchorCount < 2 },
+        { label: "锚点水平分布", run: () => distributeAnchorSel("x"), disabled: anchorCount < 3 },
+        { label: "锚点垂直分布", run: () => distributeAnchorSel("y"), disabled: anchorCount < 3 },
         { label: "", sep: true },
         { label: "顺时针旋转 90°", run: () => rotateSel(90), disabled: selNone },
         { label: "逆时针旋转 90°", run: () => rotateSel(-90), disabled: selNone },
@@ -1312,6 +1440,7 @@ export default function EditorShell(props: Props) {
         { label: "右侧属性 / 图层面板", checked: dockOpen, run: () => setDockOpen((v) => !v) },
         { label: "打开属性面板", run: () => { setTab("props"); setDockOpen(true); } },
         { label: "打开图层面板", run: () => { setTab("layers"); setDockOpen(true); } },
+        { label: "文档色板…", run: () => setSwatchesOpen(true) },
         { label: "", sep: true },
         { label: "恢复默认工作区", run: () => { setTab("props"); setDockOpen(true); fit(); } },
       ],
@@ -1560,6 +1689,18 @@ export default function EditorShell(props: Props) {
               </div>
             </div>
             ) : null}
+            {tool === "circle" && (
+              <button
+                type="button"
+                className={"opt-toggle" + (circleFromCenter ? " is-on" : "")}
+                title="第一点作为圆心，第二点定半径"
+                aria-pressed={circleFromCenter}
+                onClick={() => setCircleFromCenter((v) => !v)}
+              >
+                <Icon name="circle" size={14} />
+                从中心
+              </button>
+            )}
             <div className="spacer" />
             <div className="opt-quick">
               <button
@@ -1639,7 +1780,7 @@ export default function EditorShell(props: Props) {
                 )}
               </div>
             )}
-            <span className="opt-hint">{tool === "direct" && anchorCount > 0 ? `锚点 ${anchorCount} · Shift 多选 · 方向键微移` : zh.hint[tool]}</span>
+            <span className="opt-hint">{tool === "direct" && anchorCount > 0 ? `锚点 ${anchorCount} · Shift 多选 · Delete 删点` : zh.hint[tool]}</span>
           </div>
 
           <CanvasView
@@ -1670,6 +1811,7 @@ export default function EditorShell(props: Props) {
             onContext={(x, y) => setCtxMenu({ x, y })}
             onAnchorSelection={setAnchorSel}
             anchorReset={anchorReset}
+            circleFromCenter={circleFromCenter}
           />
         </div>
 
@@ -1690,6 +1832,7 @@ export default function EditorShell(props: Props) {
           onArrange={arrange}
           collapsed={!dockOpen}
           onCollapse={() => setDockOpen(false)}
+          onSwatches={() => setSwatchesOpen(true)}
         />
         {!dockOpen && (
           <button type="button" className="dock-reopen" title="展开右侧面板" onClick={() => setDockOpen(true)}>
@@ -1789,6 +1932,16 @@ export default function EditorShell(props: Props) {
           onClose={() => setDocSettingsOpen(false)}
         />
       )}
+      {swatchesOpen && (
+        <SwatchesDialog
+          doc={store.doc}
+          onAdd={addDocSwatch}
+          onUpdate={updateDocSwatch}
+          onRemove={removeDocSwatch}
+          onMerge={mergeDocSwatches}
+          onClose={() => setSwatchesOpen(false)}
+        />
+      )}
       {exportOpen && (
         <ExportModal
           board={board}
@@ -1829,9 +1982,10 @@ interface DockProps {
   onArrange: (mode: ArrangeMode) => void;
   collapsed: boolean;
   onCollapse: () => void;
+  onSwatches: () => void;
 }
 
-function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBoardIndex, onAlign, onDistribute, onBool, onPathfinder, onArrange, collapsed, onCollapse }: DockProps) {
+function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBoardIndex, onAlign, onDistribute, onBool, onPathfinder, onArrange, collapsed, onCollapse, onSwatches }: DockProps) {
   const single = ids.length === 1 ? doc.nodes[ids[0]] : undefined;
   const fillStops = single && (single.kind === "path" || single.kind === "text") && (single.fill.kind === "linear" || single.fill.kind === "radial")
     ? paintStops(single.fill)
@@ -1916,6 +2070,14 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
 
 
   const [offsetAmt, setOffsetAmt] = useState(6);
+  const [skewX, setSkewX] = useState("");
+  const [skewY, setSkewY] = useState("");
+  const selectionKey = ids.join("|");
+  useEffect(() => {
+    setSkewX("");
+    setSkewY("");
+  }, [selectionKey]);
+
   const applyPathFx = (kind: "offset" | "outline" | "smooth") => {
     if (!single || single.kind !== "path") return;
     if (kind === "outline" && (single.stroke.kind === "none" || single.stroke.width <= 0)) {
@@ -2161,6 +2323,28 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
     store.commit((d) => scaleNodes(d, ids, box, sx, sy));
   };
 
+  const hasSkewablePath = (id: string): boolean => {
+    const n = doc.nodes[id];
+    if (!n) return false;
+    if (n.kind === "path") return true;
+    return n.kind === "group" && n.children.some(hasSkewablePath);
+  };
+  const canSkew = !ids.length || ids.some(hasSkewablePath);
+
+  const applySkew = () => {
+    const ax = clampSkewAngle(Number(skewX) || 0);
+    const ay = clampSkewAngle(Number(skewY) || 0);
+    if (!ax && !ay) {
+      onToast("请输入斜切角度");
+      return;
+    }
+    store.commit((d) => skewNodes(d, ids, ax, ay));
+    setSkewX("");
+    setSkewY("");
+    const parts = [ax ? `X ${ax}°` : "", ay ? `Y ${ay}°` : ""].filter(Boolean);
+    onToast(`已斜切 ${parts.join(" / ")}`);
+  };
+
   const transformSection = box ? (
     <section className="dock-sec">
       <div className="dock-sec-head">
@@ -2190,6 +2374,34 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
           }}
         />
       </div>
+      <div className="dock-sec-head"><span>斜切</span><span className="faint">Ctrl 拖边柄</span></div>
+      <div className="panel-grid cols-2 transform-actions">
+        <input
+          className="field-input"
+          type="number"
+          min={-MAX_SKEW_ANGLE}
+          max={MAX_SKEW_ANGLE}
+          step={1}
+          placeholder="斜切 X°"
+          aria-label="斜切 X 角度"
+          value={skewX}
+          onChange={(e) => setSkewX(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") applySkew(); }}
+        />
+        <input
+          className="field-input"
+          type="number"
+          min={-MAX_SKEW_ANGLE}
+          max={MAX_SKEW_ANGLE}
+          step={1}
+          placeholder="斜切 Y°"
+          aria-label="斜切 Y 角度"
+          value={skewY}
+          onChange={(e) => setSkewY(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") applySkew(); }}
+        />
+        <button className="panel-btn skew-apply" type="button" disabled={!canSkew} onClick={applySkew}>应用斜切</button>
+      </div>
       <div className="panel-grid cols-2 transform-actions">
         <button className="panel-btn" type="button" onClick={() => store.commit((d) => rotateNodes(d, ids, -90))}>旋转 -90°</button>
         <button className="panel-btn" type="button" onClick={() => store.commit((d) => rotateNodes(d, ids, 90))}>旋转 +90°</button>
@@ -2216,7 +2428,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
       {tab === "props" ? (
         <div className="dock-body" key="props">
           {ids.length === 0 && (
-            <BoardProps doc={doc} store={store} index={boardIndex} setIndex={onBoardIndex} onToast={onToast} onSelect={onSelect} />
+            <BoardProps doc={doc} store={store} index={boardIndex} setIndex={onBoardIndex} onToast={onToast} onSelect={onSelect} onSwatches={onSwatches} />
           )}
 
           {ids.length > 0 && !single && (
@@ -2415,7 +2627,15 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                   {single.fill.kind === "solid" && (
                     <ColorSwatches
                       value={single.fill.color}
-                      onPick={(color) => setNode((n) => { if ("fill" in n) n.fill = { kind: "solid", color, opacity: n.fill.opacity }; })}
+                      swatchId={single.fill.swatch}
+                      swatches={swatchesOf(doc)}
+                      onPick={(color, swatchId) => setNode((n) => {
+                        if (!("fill" in n)) return;
+                        const sw = swatchId ? swatchById(doc, swatchId) : undefined;
+                        if (sw) linkFill(n.fill, sw);
+                        else n.fill = { kind: "solid", color, opacity: n.fill.opacity };
+                      })}
+                      onManage={() => onSwatches()}
                     />
                   )}
                   {(single.fill.kind === "linear" || single.fill.kind === "radial") && (
@@ -2563,7 +2783,18 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                   </div>
                   <ColorSwatches
                     value={single.stroke.color}
-                    onPick={(color) => setNode((n) => { if (n.kind === "path") n.stroke = { ...n.stroke, kind: "solid", color }; })}
+                    swatchId={single.stroke.swatch}
+                    swatches={swatchesOf(doc)}
+                    onPick={(color, swatchId) => setNode((n) => {
+                      if (n.kind !== "path") return;
+                      const sw = swatchId ? swatchById(doc, swatchId) : undefined;
+                      if (sw) linkStroke(n.stroke, sw);
+                      else {
+                        n.stroke = { ...n.stroke, kind: "solid", color };
+                        delete n.stroke.swatch;
+                      }
+                    })}
+                    onManage={() => onSwatches()}
                   />
                   <div className="dash-row">
                     {(
@@ -2951,7 +3182,7 @@ function kindGlyph(n: Node): string {
   return "G";
 }
 
-function BoardProps({ doc, store, index, setIndex, onToast, onSelect }: { doc: VexaDoc; store: ReturnType<typeof useDocStore>; index: number; setIndex: (i: number) => void; onToast: (msg: string) => void; onSelect: (ids: string[]) => void }) {
+function BoardProps({ doc, store, index, setIndex, onToast, onSelect, onSwatches }: { doc: VexaDoc; store: ReturnType<typeof useDocStore>; index: number; setIndex: (i: number) => void; onToast: (msg: string) => void; onSelect: (ids: string[]) => void; onSwatches: () => void }) {
   const board = doc.artboards[index] ?? doc.artboards[0];
   const customPresets = useCustomPresets();
   const [presetOpen, setPresetOpen] = useState(false);
@@ -3095,7 +3326,7 @@ function BoardProps({ doc, store, index, setIndex, onToast, onSelect }: { doc: V
           </label>
           <span className="faint">画板底色</span>
         </div>
-        <ColorSwatches value={board.bg} onPick={(color) => setBoard((b) => { b.bg = color; })} />
+        <ColorSwatches value={board.bg} swatches={swatchesOf(doc)} onPick={(color) => setBoard((b) => { b.bg = color; })} onManage={() => onSwatches()} />
       </section>
       <div className="dock-note">{zh.dock.emptyHint}<br />{zh.dock.emptyHint2}</div>
       {presetOpen && (

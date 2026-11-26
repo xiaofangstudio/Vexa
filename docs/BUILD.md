@@ -66,6 +66,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - **直接选择多锚点**：`AnchorRef {nodeId,si,ai}` 由 `CanvasView` 持有；`Shift` 点击切换锚点，拖动任一已选锚点时 `docOps.nudgeAnchors` 同步平移所有选中锚点与手柄；方向键在 `window` 捕获阶段拦截并只推锚点，避免同时触发对象级 `nudge`（`scripts/smoke.anchors.mts`）。
 - **撤销**：每次提交前把整篇文档 JSON 压栈（上限 200）。拖拽过程走 `live()` 不进栈，抬指后再 `finish()` 补一次。
 - **渲染**：Canvas 2D 自绘，DOM 只做面板；任何改文档的动作都会 bump 版本号触发重绘。
+- **圆形工具**：`src/core/circle.ts` 的 `circleFromDrag` 统一直径/从中心两种模式；`constrain45` 在 Shift 时只吸附方向、保持半径；`CanvasView` 第一次点击只存 `circlePendingRef`，第二次点击才建节点；`docOps.circlePath` 直接复用椭圆路径的四段贝塞尔。
 - **描摹**：Rust 用 `image` 解码 → `vtracer` 输出 SVG 字符串 → 前端 `parseD` 成 Vexa 路径 → 等比放进画板中央。
 - **SVG 导入**：`svgToPathNodes()` 用 `DOMParser` 解析；`collectPaths()` 逐层继承 fill/stroke/`fill-opacity`/`stroke-opacity`/opacity 与 transform。`gradientPaint()` 读取 `<linearGradient>` / `<radialGradient>` 的 stop（颜色支持 hex/rgb/rgba/命名色/HSL，透明度支持小数与百分比），沿 `href` / `xlink:href` 追最多 4 层；线性用 `x1/y1 → x2/y2` 经当前矩阵推角度，径向按 Vexa 的 bbox 圆心/半径重建。单色标退化为实色，缺失引用变 `none`；解析异常返回空结果，由界面提示。
 - **编组**：`GroupNode.children` 存子 id，`drawNode` 递归绘制；选择工具命中组时返回**组 id**（Illustrator 语义），直接选择工具才钻进子节点。组内成员位置照常存绝对坐标，组只做层级与整体操作。
@@ -110,12 +111,12 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 ## 已知边界（下一步）
 
 - 路径布尔是**多边形级**（曲线先拍平），曲线级保真布尔还没做；偏移/描边轮廓是折线近似（尖角斜接、平头端帽），路径效果生成的轮廓尚未支持圆头/方头端帽与曲线保真
-- 直接选择已支持 `Shift` 多锚点、跨节点同步拖动、方向键微移、同路径开放子路径连接与六向锚点对齐；还没做锚点框选、锚点等距分布、跨路径节点连接；`Delete` 仍删整个选中对象，不删单个锚点；长按方向键会产生多步撤销
+- 直接选择已支持 `Shift` 多锚点、跨节点同步拖动、方向键微移、开放子路径连接、六向锚点对齐、锚点水平/垂直等距分布、跨路径节点开放端点连接、拖框选锚点与 `Delete` 删单个锚点；框选只从当前已选路径/组收集，不能一次框选未选中路径；删到剩 2 个锚点的闭合路径保留成线；剪切蒙版路径不可删；长按方向键仍会产生多步撤销；分布只做等距，跨路径连接只合并端点所在子路径
 - 可变宽度描边已支持宽度点、单侧加宽、余弦过渡与 SVG/`.vex` 往返；均匀描边已支持平/圆/方端帽与尖角/圆角/斜角连接，但可变宽度轮廓不跟随这些设置，仍按平头外框绘制；虚线暂不随轮廓走（有宽度点时按实线轮廓输出），箭头仍按基础线宽；宽度手柄只画在第一条子路径，复合路径各子路径共用同一 `t` 轮廓
 - 渐变支持线性/径向多色标、独立透明度、插值中点与画布轴线/色标直拖；径向渐变的圆心固定在 bbox 中心、半径固定为半对角线，画布手柄只沿右侧半径显示；尚缺网格/自由渐变、渐变描边、图案填充、符号、画笔、图形样式
 - SVG 导入已覆盖基础图形、变换、线性/径向渐变、色标透明度、`href` 继承、`fill/stroke-opacity`、`<use>` / 嵌套 use、`<clipPath>` 嵌套交集裁切、symbol viewBox/width 缩放与 `<text>` / `<tspan>` 可编辑文字；尚缺图案、滤镜、`mask`、`objectBoundingBox` 剪裁、`gradientTransform` / `spreadMethod` 的完整语义，文本旋转/斜切只映射位置与缩放、不旋转字形
 - 文字已支持单点文字 + 字符面板（字重/字形/行距/字距/对齐/横纵缩放/基线），但还没有段落文字、区域文字、沿路径排版、避头尾、文字转路径
-- 旋转/翻转对文本与位图只做位置级变换（没有旋转属性，见 `docs/PARITY.md`）
+- 旋转/翻转对文本与位图只做位置级变换（没有旋转属性，见 `docs/PARITY.md`）；第三十六批斜切同样只变换路径锚点与手柄，纯文字/位图不参与，组内混排文字跳过，角度限 ±80°，不生成 SVG 斜切矩阵，导出为变形后的路径坐标
 - 拖拽撤销粒度较粗（一次拖拽一步）
 - 图层树已支持组内排序、把子层拖出组、把顶层拖入组、Ctrl/Shift 多选与批量显隐/锁定，第二十八批补了名称/类型搜索、6 色标记和按标记筛选；折叠组内的子层需先展开才能拖动。颜色标记不参与导出，搜索不搜节点内文字。
 - 画板面板已在第二十九批补六个尺寸预设、适配内容、复制画板（连内容）与上下换序；第三十二批补了自定义预设保存/导入/删除（本地 `vexa.board-presets.v1`，最多 20 个，导入只补新尺寸），适配内容改为一并计入路径描边半宽、忽略隐藏根层与组内隐藏子层；复制仍只克隆与源板相交的根层，换序只改列表与导出顺序。
@@ -129,14 +130,18 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 ## 发布构建
 
-- 版本：`0.1.0`（第三十四批：锚点连接 / 六向对齐）
+- 版本：`0.1.0`（第四十批：圆形工具 / 从中心）
 - 文件：`release\Vexa.exe`
-- 大小：`7,800,320 B`
-- SHA256：`10EF286D9FB0AEB0ADC783ED4B2CE2DFB5BEFF9F7DE61D689B8BC9576F392F2A`
-- 构建时间：`2026-11-25 23:09:15`
+- 大小：`7,805,952 B`
+- SHA256：`D95BF2F2ECC1661F9BBBC314192858B92AAD26C3530D1ECAF1BD26A00B9C6A15`
+- 构建时间：`2026-11-26 14:30:13`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,359,840 B`，SHA256 `5CA7DADD20DC847F95ED56B88475D3EE62EB2A27BF20A2C70520B16DD85A6BE7`
-- 前端产物：`dist/assets/pdf-C-f7b5j_.js` 407.16 kB / gzip 169.22；`dist/assets/index-N3WvSOuM.js` 506.73 kB / gzip 160.62；`dist/assets/index-B25ahhqp.css` 58.86 kB / gzip 11.05；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,364,842 B`，SHA256 `9076806323F40598709B65D687775FCD72AA1CC19F2452D762DF7ACFDD4FE565`
+- 前端产物：`dist/assets/pdf-B0yhJxcO.js` 407.16 kB / gzip 169.22；`dist/assets/index-Dk9Dir8c.js` 527.36 kB / gzip 166.86；`dist/assets/index-BB-PkWTH.css` 61.68 kB / gzip 11.53；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 圆形工具验收（第四十批）：`npx tsc --noEmit` 通过；`npm run build` 157 modules 通过；`npx tsx scripts/smoke.circle.mts` 19 项 PASS，其余 18 个冒烟脚本全复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1600×1000 窗口按 `⇧L`：选项栏出现“从中心”且默认关闭；默认水平拖圆 `97.5×97.5`、4 锚点闭合；开“从中心”同距离圆 `195.1×195.1`，直径比值 2.00；Shift 斜拖 `175.8×175.8`；两次点击第一次不落对象、第二次落圆，撤销移除；图层面板 3 行“圆形”。1200×900 实际窗口选项栏无溢出。截图 `docs/shots/circle-center.png`、`circle-tool.png`、`circle-narrow.png`、`circle-window.png`。
+- 文档色板验收（第三十九批）：`npx tsc --noEmit` 通过；`npm run build` 156 modules 通过；`npx tsx scripts/smoke.swatches.mts` 62 项 PASS，其余 17 个冒烟脚本全复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1920×1500 窗口画两块矩形，打开“管理文档色板”：空弹窗 519/519；新建“品牌蓝” `#0f76d6`（印刷色）与“专色橙” `#ff7a00`（专色），弹窗 520×361、`cw=sw=519`、新建行 487/487，行无溢出。第一块填充链接品牌蓝并显示“全局链接 · 品牌蓝”；第二块填充链接品牌蓝、描边链接专色橙，使用数 2 处 / 1 处。把品牌蓝改 `#e5484d` 保存，两块填充同步变红且链接保留，专色描边不变，提示“已更新「品牌蓝」”。删除品牌蓝后两块填充 `swatch` 清空但颜色保留，撤销恢复品牌蓝与链接。1200×900 弹窗仍 520 宽、无溢出。截图 `docs/shots/swatch-empty.png`、`swatch-dialog.png`、`swatch-linked.png`、`swatch-recolor.png`、`swatch-undo.png`、`swatch-narrow.png`、`swatch-window.png`。
+- 文档设置批量应用验收（第三十八批）：`npx tsc --noEmit` 通过；`npm run build` 153 modules 通过；`npx tsx scripts/smoke.document.mts` 36 项 PASS，其余 16 个冒烟脚本全复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1920×1500 窗口新建第二块 1080×1080 画板，文档设置单板时批量复选框禁用、文案“全部 1 个画板”；两块时可用，勾选后一起变 1000×700 / `#eef4ff`，第二板名仍“画板 2”、画板坐标与矩形锚点不变，toast“文档设置已同步 2 个画板”；撤销恢复两块 1080×1080 / `#ffffff`；不勾选时只当前板变 800×1080 / `#ffe9d8`，第二板不动。弹窗 560×564、`cw=sw=559`，批量行 525/525；1200×900 仍 560 宽且不溢出。截图 `docs/shots/docs-all-dialog.png`、`docs-all-applied.png`、`docs-all-undo.png`、`docs-all-narrow.png`、`docs-all-window.png`。
+- 锚点框选 / 单锚点删除验收（第三十七批）：`npx tsc --noEmit` 通过；`npm run build` 153 modules 通过；`npx tsx scripts/smoke.anchordelete.mts` 46 项 PASS，其余 16 个冒烟脚本全复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1920×1500 窗口画矩形（`[[262.2,271.654],[671.317,271.654],[671.317,549.854],[262.2,549.854]]`）：直接选择从左上空白拖框选中顶部 2 个锚点，状态“锚点 2”；`Delete` 后路径节点保留、剩 2 个闭合锚点、`409×278→409×0`，toast“已删除 2 个锚点”；撤销恢复 4 锚点。`Shift` 再从底部框选累加到 4 个锚点，`Delete` 后路径节点与根层条目消失，toast“已删除 4 个锚点”，撤销恢复整条路径。1200×900 选项栏 808/808、提示 151/151，不截断。截图 `docs/shots/marquee-drag.png`、`marquee-anchors.png`、`marquee-deleted.png`、`marquee-undo.png`、`marquee-shift.png`、`marquee-narrow.png`、`marquee-window.png`。
 - 锚点连接 / 对齐验收（第三十四批）：`npx tsc --noEmit` 通过；`npm run build` 153 modules 通过；`npx tsx scripts/smoke.anchorops.mts` 50 项 PASS，`smoke.anchors` 21 项及其余 14 个冒烟脚本全复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1920×1500 窗口用钢笔现场画 3 锚点开放路径（`[188.6,302.2] [875.9,514.9] [368.6,825.9]`）：1 个锚点时连接与 6 项对齐禁用，首尾端点时连接启用；菜单“锚点左对齐”把尾锚点 X 从 `368.6` 移到 `188.6`，中点与 Y 不变；重复对齐只提示“已经对齐”，撤销栈长度仍为 2；工具栏撤销恢复尾锚点；菜单连接后 `closed=true`，撤销恢复开放，`Ctrl+J` 可再连；连接/撤销后锚点选择均清空。1200×900 菜单 217/217、top 41 / bottom 885，选项栏与选择区无横向溢出。截图 `docs/shots/anchorjoin-menu-disabled.png`、`anchorjoin-menu-enabled.png`、`anchorjoin-align.png`、`anchorjoin-joined.png`、`anchorjoin-narrow.png`、`anchorjoin-window.png`。
 - 自定义预设验收（第三十二批）：`npx tsc --noEmit` 通过；`npm run build` 152 modules 通过；`npx tsx scripts/smoke.boardpresets.mts` 25 项 PASS，`smoke.artboards` 25 项、`smoke.document` 25 项复跑通过。`npm run tauri:build` 通过，生成上方 `vexa.exe` 与 NSIS；真实 Tauri/WebView2 窗口在启动页保存“名片”`90×54`、重复尺寸报错、导入 `scripts/fixtures/presets-import.json` 后只新增“海报”`400×300`，应用后启动页变 `400×300` 且 chip 高亮；编辑器保存当前 `900×600` 后得到第三个 chip，应用“海报”后画板变 `400×300`，点“适配内容”回到内容包围盒 `900×600`；删除“名片”3→2、`Esc` 后焦点回 `btn-link preset-open`，再次导入补回。弹窗 659 px、行 613 px、名称输入 323 px、宽高输入 65 px，全部 `scrollWidth == clientWidth`。截图 `docs/shots/presets-start-error.png`、`presets-start-dialog.png`、`presets-start-applied.png`、`presets-editor-dialog.png`、`presets-editor-panel.png`、`presets-start-window.png`、`presets-editor-window.png`。
 - 文档设置验收（第三十一批）：`npx tsc --noEmit` 通过；`npm run build` 148 modules 通过；`npx tsx scripts/smoke.document.mts` 25 项 PASS，`smoke.artboards` 19 项复跑通过。`npm run tauri:build` 通过，生成上方 `vexa.exe` 与 NSIS；真实 Tauri/WebView2 窗口用 `scripts/fixtures/pathfinder.vex` 从“文件 → 文档设置…”打开，初始 `900×600 / #f7f3e9`，宽输入 `0` 显示“画板尺寸不能小于 1 px”且弹窗不关，改为文档名 `文档设置验收`、画板名 `主画板`、`1000×700`、`#eef4ff` 后一次应用，对象数保持 6，再次打开读回新值，撤销全部还原；`Esc` 关闭后焦点回到 `.menubtn`；弹窗 559 px 无横向溢出。截图 `docs/shots/doc-settings-panel.png`、`doc-settings-error.png`、`doc-settings-applied.png`、`doc-settings-undo.png`、`doc-settings-window.png`。

@@ -329,6 +329,70 @@ export function rotateNodes(doc: VexaDoc, ids: string[], deg: number): void {
   rotateNodesAround(doc, ids, box.x + box.w / 2, box.y + box.h / 2, deg);
 }
 
+function mapSkewPoints(doc: VexaDoc, n: Node, fn: (p: Pt) => Pt): void {
+  if (n.kind === "path") {
+    for (const sub of n.subpaths) {
+      for (const a of sub.anchors) {
+        const p = fn({ x: a.x, y: a.y });
+        a.x = p.x;
+        a.y = p.y;
+        if (a.hIn) {
+          const i = fn(a.hIn);
+          a.hIn.x = i.x;
+          a.hIn.y = i.y;
+        }
+        if (a.hOut) {
+          const o = fn(a.hOut);
+          a.hOut.x = o.x;
+          a.hOut.y = o.y;
+        }
+      }
+    }
+  } else if (n.kind === "group") {
+    for (const cid of n.children) {
+      const c = doc.nodes[cid];
+      if (c) mapSkewPoints(doc, c, fn);
+    }
+  }
+}
+
+/** 斜切角上限，避免 tan(90°) 把坐标推到无穷。 */
+export const MAX_SKEW_ANGLE = 80;
+
+export function clampSkewAngle(deg: number): number {
+  if (!Number.isFinite(deg)) return 0;
+  return Math.max(-MAX_SKEW_ANGLE, Math.min(MAX_SKEW_ANGLE, deg));
+}
+
+/** 以指定中心做剪切矩阵 [[1,tx],[ty,1]]；tx/ty 是 tan(角度)，供拖拽按累计切线增量精确叠加。 */
+export function shearNodesAround(doc: VexaDoc, ids: string[], cx: number, cy: number, tx: number, ty: number): void {
+  if (!tx && !ty) return;
+  const fn = (p: Pt): Pt => ({
+    x: p.x + tx * (p.y - cy),
+    y: p.y + ty * (p.x - cx),
+  });
+  for (const id of ids) {
+    const n = doc.nodes[id];
+    if (n) mapSkewPoints(doc, n, fn);
+  }
+}
+
+/** 以指定中心斜切：ax 为水平剪切（X 随 Y 偏移），ay 为垂直剪切；路径锚点与手柄精确变换，文字/位图保持不动。 */
+export function skewNodesAround(doc: VexaDoc, ids: string[], cx: number, cy: number, axDeg: number, ayDeg: number): void {
+  const ax = clampSkewAngle(axDeg);
+  const ay = clampSkewAngle(ayDeg);
+  if (!ax && !ay) return;
+  shearNodesAround(doc, ids, cx, cy, Math.tan((ax * Math.PI) / 180), Math.tan((ay * Math.PI) / 180));
+}
+
+/** 以选区中心斜切；路径锚点与手柄精确变换，文字/位图保持不动。 */
+export function skewNodes(doc: VexaDoc, ids: string[], axDeg: number, ayDeg: number): void {
+  if (!axDeg && !ayDeg) return;
+  const box = selectionBox(doc, ids);
+  if (!box) return;
+  skewNodesAround(doc, ids, box.x + box.w / 2, box.y + box.h / 2, axDeg, ayDeg);
+}
+
 /** 水平/垂直翻转（绕选区中心）。 */
 export function flipNodes(doc: VexaDoc, ids: string[], axis: "h" | "v"): void {
   const box = selectionBox(doc, ids);

@@ -7,7 +7,7 @@ import "./DocumentDialog.css";
 interface Props {
   doc: VexaDoc;
   boardIndex: number;
-  onApply: (patch: DocSettings) => void;
+  onApply: (patch: DocSettings, allBoards: boolean) => void;
   onClose: () => void;
 }
 
@@ -21,6 +21,7 @@ export default function DocumentDialog({ doc, boardIndex, onApply, onClose }: Pr
   const [width, setWidth] = useState(String(initial?.width ?? 1));
   const [height, setHeight] = useState(String(initial?.height ?? 1));
   const [background, setBackground] = useState(initial?.background ?? "#ffffff");
+  const [allBoards, setAllBoards] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,7 +62,7 @@ export default function DocumentDialog({ doc, boardIndex, onApply, onClose }: Pr
       setError(issue);
       return;
     }
-    onApply(patch);
+    onApply(patch, allBoards && stats.artboards > 1);
   };
 
   return (
@@ -165,6 +166,17 @@ export default function DocumentDialog({ doc, boardIndex, onApply, onClose }: Pr
             </div>
           </div>
 
+          <label className="doc-all" htmlFor="doc-all-boards">
+            <input
+              id="doc-all-boards"
+              type="checkbox"
+              checked={allBoards}
+              disabled={stats.artboards <= 1}
+              onChange={(e) => { setAllBoards(e.target.checked); setError(null); }}
+            />
+            <span>把尺寸与背景应用到全部 {stats.artboards} 个画板</span>
+          </label>
+
           <div className="doc-meta" aria-label="文档信息">
             <div className="doc-meta-item"><span>单位</span><b>px</b></div>
             <div className="doc-meta-item"><span>颜色模式</span><b>RGB / 8 位</b></div>
@@ -173,7 +185,7 @@ export default function DocumentDialog({ doc, boardIndex, onApply, onClose }: Pr
           </div>
 
           {error && <div className="doc-error" role="alert">{error}</div>}
-          <p className="doc-note">调整画板尺寸只改画板边界，不移动现有对象；超出部分仍保留在画布上。</p>
+          <p className="doc-note">调整画板尺寸只改画板边界，不移动现有对象；超出部分仍保留在画布上。勾选全部画板时只同步尺寸与背景，画板名称仍只改当前画板。</p>
         </div>
         <div className="modal-foot">
           <button type="button" className="btn btn-ghost" onClick={onClose}>取消</button>
