@@ -1,4 +1,4 @@
-/** 圆形工具几何：直径两点、中心半径、三点外接圆与 Shift 45° 约束。 */
+/** 圆形工具几何：直径两点、中心半径、三点外接圆、Shift 45° 约束与 Alt 直径取整。 */
 import type { Pt } from "./types";
 
 export interface Circle {
@@ -33,9 +33,36 @@ export function circleFromDiameter(a: Pt, b: Pt, snap45 = false): Circle {
   };
 }
 
+/** 当前缩放下标尺主刻度的间距：屏幕上大致保持 20–60px 一格。 */
+export function rulerStep(zoom: number): number {
+  const z = Math.max(0.01, zoom);
+  if (z >= 8) return 1;
+  if (z >= 4) return 2;
+  if (z >= 2) return 5;
+  if (z >= 1) return 10;
+  if (z >= 0.5) return 20;
+  if (z >= 0.25) return 50;
+  return 100;
+}
+
+/** Alt：沿 first→p 的方向把直径取整到标尺刻度；圆心模式按 2×半径计算。 */
+export function roundDiameter(from: Pt, p: Pt, fromCenter: boolean, zoom: number): Pt {
+  const d = Math.hypot(p.x - from.x, p.y - from.y);
+  const diameter = d * (fromCenter ? 2 : 1);
+  const step = rulerStep(zoom);
+  const rounded = Math.max(step, Math.round(diameter / step) * step);
+  if (!(d > 0) || !Number.isFinite(rounded)) return { ...p };
+  const k = rounded / diameter;
+  return { x: from.x + (p.x - from.x) * k, y: from.y + (p.y - from.y) * k };
+}
+
 /** 圆形工具拖动：fromCenter 时第一点是圆心，否则两点是直径端点。 */
-export function circleFromDrag(start: Pt, p: Pt, fromCenter: boolean, snap45 = false): Circle {
-  return fromCenter ? circleFromCenter(start, p, snap45) : circleFromDiameter(start, p, snap45);
+export function circleFromDrag(start: Pt, p: Pt, fromCenter: boolean, snap45 = false, roundAlt = false, zoom = 1): Circle {
+  let end = snap45 ? constrain45(start, p) : p;
+  if (roundAlt) end = roundDiameter(start, end, fromCenter, zoom);
+  return fromCenter
+    ? { cx: start.x, cy: start.y, r: Math.hypot(end.x - start.x, end.y - start.y) }
+    : { cx: (start.x + end.x) / 2, cy: (start.y + end.y) / 2, r: Math.hypot(end.x - start.x, end.y - start.y) / 2 };
 }
 
 /** 三点外接圆；三点共线或重合时返回 null。 */

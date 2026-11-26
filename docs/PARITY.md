@@ -498,7 +498,7 @@
 | 色板增删改 | Swatch management | 文档色板弹窗：新建名称/颜色/类型、逐行改名/改色/改类型（保存后一次入撤销栈）、删除；删除时断开所有引用但保留当前颜色；右侧属性坞填充/描边/画板底色下方新增“文档”色板行与“管理”入口，选中态显示“全局链接 · 名称” | 新建、改色保存、删除品牌蓝均成功；删除后两块填充仍 `#e5484d` 但 `swatch` 为空；一次撤销恢复品牌蓝与两块链接 |
 | 导入导出 | Swatch JSON | `vexa-swatches` v1 JSON（格式头 + `swatches`），也接受直接色板数组；导入合并时同名同色跳过，受 64 个上限约束；导出写全部文档色板 | 核心测试：导出格式/版本/数量、往返、数组导入、坏 JSON、错误格式、空文件、重复跳过、上限；真实窗口的导入/导出按钮与原生文件对话框未自动点选 |
 
-验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（156 modules；`index-4u2hxkyl.js` 525.19 kB / gzip 166.08，`index-BB-PkWTH.css` 61.68 kB / gzip 11.53，`pdf-YDRMVsVs.js` 407.16 kB / gzip 169.22）；`scripts/smoke.swatches.mts` **62 项 PASS**，其余 17 个冒烟脚本全复跑通过。真实 Tauri/WebView2 1920×1500 窗口：选中矩形打开“管理文档色板”，空弹窗 519/519；新建两色板后 2/64、行 519/519、新建行 487/487，无横向溢出；点文档色板后填充变蓝并显示“全局链接 · 品牌蓝”；改色板后 2 处填充同步，保存反馈“已更新「品牌蓝」”；删除后填充断开链接、颜色保留，撤销恢复；1200×900 弹窗仍 520 宽、无溢出。截图 `docs/shots/swatch-empty.png`、`swatch-dialog.png`、`swatch-linked.png`、`swatch-recolor.png`、`swatch-undo.png`、`swatch-narrow.png`、`swatch-window.png`。
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（156 modules；`index-4u2hxkyl.js` 525.19 kB / gzip 166.08，`index-BB-PkWTH.css` 61.68 kB / gzip 11.53，`pdf-YDRMVsVs.js` 407.16 kB / gzip 169.22）；`scripts/smoke.swatches.mts` **62 项 PASS**，其余 17 个冒烟脚本全复跑通过。真实 Tauri/WebView2 1920×1500 窗口：选中矩形打开“管理文档色板”，空弹窗 519/519；新建两色板后 2/64、行 519/519、新建行 487/487，无横向溢出；点文档色板后填充变蓝并显示“全局链接 · 品牌蓝”；改色板后 2 处填充同步，保存反馈“已更新「品牌蓝」”；删除后填充断开链接、颜色保留，撤销恢复；1200×900 弹窗仍 520 宽、无溢出。该批截图已按清理惯例删除。
 
 已知边界：全局链接只覆盖实色填充与实色描边（文字填充支持，图片/组无填充），渐变、图案与画板底色不链接；专色只做类型标记和 sRGB 显示，没有分色/油墨通道，CMYK 仍未做；导入导出只处理 JSON，未接 ASE/ACO；删除色板保留对象当前颜色而不是回退到默认色。导入/导出的原生文件选择器未在 CDP 中自动化，核心读写与往返已覆盖。
 
@@ -516,11 +516,28 @@
 | Shift 45° | Shift constraint | 圆心/直径两种模式都把方向吸附到 45° 步进，半径长度保持 | 斜向拖 `(24,16)` 后宽高均为 `175.8` |
 | 几何核心 | circle geometry | `src/core/circle.ts`：`constrain45`、`circleFromCenter`、`circleFromDiameter`、`circleFromDrag`、`circleThroughThree`；`docOps.circlePath` 复用椭圆路径 | `scripts/smoke.circle.mts` 19 项 PASS（45°、中心/直径、比值、三点外接圆、共线、闭合路径） |
 
-验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（157 modules；`index-Dk9Dir8c.js` 527.36 kB / gzip 166.86，`index-BB-PkWTH.css` 61.68 kB / gzip 11.53，`pdf-B0yhJxcO.js` 407.16 kB / gzip 169.22）；`scripts/smoke.circle.mts` 19 项 PASS，其余 18 个冒烟脚本全复跑通过。真实 Tauri/WebView2 1600×1000 窗口：`⇧L` 显示“从中心”开关且默认关闭；默认拖圆 4 锚点、宽高相等；开开关后同距离直径翻倍；Shift 斜拖仍正圆；两次点击第一次不落地、第二次落地，撤销移除；图层面板列出“圆形”3 行；1200×900 实际窗口选项栏无横向溢出。截图 `docs/shots/circle-center.png`、`circle-tool.png`、`circle-narrow.png`、`circle-window.png`。
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（157 modules；`index-Dk9Dir8c.js` 527.36 kB / gzip 166.86，`index-BB-PkWTH.css` 61.68 kB / gzip 11.53，`pdf-B0yhJxcO.js` 407.16 kB / gzip 169.22）；`scripts/smoke.circle.mts` 19 项 PASS，其余 18 个冒烟脚本全复跑通过。真实 Tauri/WebView2 1600×1000 窗口：`⇧L` 显示“从中心”开关且默认关闭；默认拖圆 4 锚点、宽高相等；开开关后同距离直径翻倍；Shift 斜拖仍正圆；两次点击第一次不落地、第二次落地，撤销移除；图层面板列出“圆形”3 行；1200×900 实际窗口选项栏无横向溢出。该批截图已按清理惯例删除。
 
 已知边界：只做圆形工具的直径拖拽、从中心拖拽与两次点击直径；未做参考里的三点圆交互（核心 `circleThroughThree` 已备但未接 UI）、按住 Alt 按标尺刻度取整、虚线预览与中心十字/半径线/直径标注；参考新基线里的 Quick Pen 长度手柄、Path Precision 内切圆、points 单位偏好、填充/描边 Transform effect 尚未补。
 
 发布验收：`release\Vexa.exe` 已用第四十批源码重新构建（7,805,952 B，SHA256 `D95BF2F2ECC1661F9BBBC314192858B92AAD26C3530D1ECAF1BD26A00B9C6A15`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,364,842 B（SHA256 `9076806323F40598709B65D687775FCD72AA1CC19F2452D762DF7ACFDD4FE565`）。
+
+## 1.36 第四十一批已对齐（三点圆拖动 / Alt 直径取整）
+
+参考更新：继续按 `3463266` 的 `crates/tools/src/circle.rs`。参考默认 `dragThird:true`：第一点点击后，第二次按下若拖动，第二点是过圆点、释放点是第三点，三点定圆；第二次按下不拖则仍用两点定直径。参考 Alt 把直径按当前缩放下的标尺刻度取整，Shift 只约束第二点方向。
+
+| 能力 | VectorCraft 对应 | Vexa 实现 | 验收 |
+|---|---|---|---|
+| 三点圆 | Circle drag-third | `circleThroughThree(a,b,c)` 求外接圆；`CanvasView` 第一次点击只存起点，第二次按下记第二点，移动超过 2 CSS px 后实时改为三点外接圆；释放时用最终第三点重算 | 实机点 `(450,320)`，按下 `(550,320)` 拖到 `(520,400)`，得到 `346.0×346.0` 正圆，圆心落在 `(500,346.875)`，与首点-第三点直径圆的 `324.0` 不同 |
+| 单击仍是直径 | Click-click diameter | 第二次按下到释放不足 2 CSS px 时按直径落地；直接按住首点拖出仍按直径；首点 3 CSS px 内按下视为点回首点，不落对象，拖出则直径 | 回归脚本两次点击仍 `97.5×97.5`，第一次点击对象数不变 |
+| Alt 直径取整 | Alt ruler tick | `rulerStep(zoom)` 按缩放选 1/2/5/10/20/50/100 文档单位；`roundDiameter` 沿首点方向把直径（圆心模式按 2×半径）吸到最近刻度，保持方向 | 33% 视图下水平拖 57 CSS px，原始直径 `173.7` → 取整 `150.0`（步进 50），宽高仍相等 |
+| 几何核心 | circle geometry | `circle.ts` 新增 `rulerStep`、`roundDiameter`；`circleFromDrag` 增加 `roundAlt` 与 `zoom` 可选参数，旧调用保持兼容 | `scripts/smoke.circle.mts` 33 项 PASS（三点、共线/重复点、直角三角形、标尺步进、Alt 直径/中心/方向/缩放） |
+
+验收记录：`npx tsc --noEmit` 通过；`npm run build` 通过（157 modules；`index-C13KfgCs.js` 529.29 kB / gzip 167.53，`index-BB-PkWTH.css` 61.68 kB / gzip 11.53，`pdf-D_qrKUB4.js` 407.16 kB / gzip 169.22）；`scripts/smoke.circle.mts` 33 项 PASS，全部 19 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口：三点拖动落 `346.0×346.0`、宽高相等、圆心正确；Alt 落 `150.0×150.0`；三点共线释放不落对象，已有 3 个圆不变；上一批的默认直径、从中心、Shift、两次点击、撤销与图层列表全部回归通过。截图 `docs/shots/circle-three.png`、`circle-alt.png`、`circle-three-window.png`。
+
+已知边界：参考里的虚线预览、中心十字/半径线/直径标注、`dragThird:false` 的“第三次点击定圆”、`standardAnchors` 锚点落在通过点上、`center/radii/diameter/color` 选项尚未做；Quick Pen 长度手柄、Path Precision 内切圆、points 单位偏好、填充/描边 Transform effect 仍在待补清单。
+
+发布验收：`release\Vexa.exe` 已用第四十一批源码重新构建（7,808,000 B，SHA256 `BCBF8C83199BDE6F33447FB92C26ACC7DE70AF4440FAB55533BE8483F3001DB5`），NSIS 安装包 `Vexa_0.1.0_x64-setup.exe` 2,367,110 B（SHA256 `B64291EDA70F014A4AD2F458A98DB48729C4E20281A62DDCB4E0458583817388`）。
 
 ## 2. 部分对齐
 
@@ -539,7 +556,7 @@
 ## 3. 未实现（按批次规划）
 
 **P2 · 路径与几何**
-- 圆形工具已在第四十批完成直径拖拽、从中心开关、两次点击与 Shift 45°；仍缺参考的三点圆交互、Alt 标尺取整与圆形预览标注
+- 圆形工具已在第四十/四十一批完成直径拖拽、从中心开关、两次点击、Shift 45°、三点拖动与 Alt 直径取整；仍缺参考的虚线预览、中心十字/半径线/直径标注、`dragThird:false` 的三次点击定圆与 `standardAnchors` 选项
 - Quick Pen 长度手柄（新版 `crates/tools/src/quickpen/length.rs`）未做：Vexa 的钢笔还没有起点/终点外侧的拉长/缩短手柄
 - Path Precision 内切圆插件（新版 `crates/pathops/src/addons/pathtools/inscribed.rs`）未做：还没有“给每个闭合路径画最大内切活圆”的插件入口
 - 曲线保真的偏移与描边轮廓（当前为拍平折线，尖角按斜接近似，端帽只做平头）

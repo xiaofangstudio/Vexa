@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, type MouseEvent, type PointerEvent as R
 import { anchorAt, type AnchorRef, type Artboard, type Paint, type PathNode, type Pt, type Stroke, type VexaDoc } from "../core/types";
 import { anchorsInBox } from "../core/anchorOps";
 import { addNode, circlePath, dragHandle, ellipsePath, findAnchor, findSegment, insertAnchorOnSegment, newId, nudgeAnchors, rectPath, removeNode } from "../core/docOps";
-import { circleFromDrag } from "../core/circle";
+import { circleFromDrag, circleThroughThree, constrain45 } from "../core/circle";
 import { shapeFromDrag } from "../core/shapes";
 import { translateNode, scaleNodes, rotateNodesAround, shearNodesAround, clampSkewAngle, splitPathAtPoint, segmentPoint, smoothPathNear, makeSmoothLimits, freehandAnchors, type SmoothLimit } from "../core/vectorOps";
 import { boxOfPoints, nodeBox, unionBox, type Box } from "../core/geom";
@@ -59,7 +59,7 @@ type Drag =
   | { kind: "move"; before: string; last: Pt; ids: string[] }  | { kind: "marquee"; start: Pt; anchorIds?: string[]; anchorBase?: AnchorRef[] }
   | { kind: "pan"; startScreen: Pt; startView: View }
   | { kind: "anchor"; before: string; last: Pt; refs: AnchorRef[]; part: "anchor" | "hIn" | "hOut" }
-  | { kind: "create"; shape: "rect" | "ellipse" | "circle" | "roundrect" | "polygon" | "star"; start: Pt; id: string; before: string; fromCenter?: boolean }
+  | { kind: "create"; shape: "rect" | "ellipse" | "circle" | "roundrect" | "polygon" | "star"; start: Pt; id: string; before: string; fromCenter?: boolean; second?: Pt; last?: Pt; invalid?: boolean }
   | { kind: "resize"; before: string; ids: string[]; startBox: Box; anchor: Pt; handle: HandleId }
   | { kind: "skew"; before: string; ids: string[]; startBox: Box; handle: HandleId; center: Pt; start: Pt; axis: "x" | "y"; sign: 1 | -1; appliedTan: number }
   | { kind: "rotate"; before: string; ids: string[]; center: Pt; startAngle: number; applied: number }
@@ -663,7 +663,8 @@ export default function CanvasView(props: Props) {
       circlePendingRef.current = null;
       const before = store.snapshot();
       const id = `${doc.seq}`;
-      const geom = circleFromDrag(pending.first, p, pending.fromCenter, e.shiftKey);
+      const second = e.shiftKey ? constrain45(pending.first, p) : p;
+      const geom = circleFromDrag(pending.first, second, pending.fromCenter, false, e.altKey, prev.view.zoom);
       store.live((d) => {
         d.seq += 1;
         const nid = `n${id}`;
@@ -672,7 +673,16 @@ export default function CanvasView(props: Props) {
         node.stroke = { ...propsRef.current.newStroke };
         addNode(d, node);
       });
-      dragRef.current = { kind: "create", shape: "circle", start: pending.first, id: `n${id}`, before, fromCenter: pending.fromCenter };
+      dragRef.current = {
+        kind: "create",
+        shape: "circle",
+        start: pending.first,
+        id: `n${id}`,
+        before,
+        fromCenter: pending.fromCenter,
+        second,
+        last: p,
+      };
       return;
     }
 
@@ -1288,6 +1298,35 @@ export default function CanvasView(props: Props) {
     }
 
     if (drag.kind === "create") {
+      if (drag.shape === "circle" && drag.second) {
+        drag.last = p;
+        const zoom = propsRef.current.view.zoom;
+        const nearFirst = Math.hypot(drag.second.x - drag.start.x, drag.second.y - drag.start.y) <= 3 / zoom;
+        const moved = Math.hypot(p.x - drag.second.x, p.y - drag.second.y) >= 2 / zoom;
+        let geom: { cx: number; cy: number; r: number } | null;
+        if (drag.fromCenter) {
+          geom = circleFromDrag(drag.start, p, true, e.shiftKey, e.altKey, zoom);
+        } else if (nearFirst) {
+          geom = circleFromDrag(drag.start, p, false, e.shiftKey, e.altKey, zoom);
+        } else if (moved) {
+          geom = circleThroughThree(drag.start, drag.second, p);
+        } else {
+          geom = circleFromDrag(drag.start, drag.second, false, false, e.altKey, zoom);
+        }
+        drag.invalid = !geom || geom.r < 1e-6;
+        store.live((d) => {
+          const n = d.nodes[drag.id];
+          if (!n || n.kind !== "path") return;
+          if (drag.invalid || !geom) {
+            n.subpaths = [];
+            return;
+          }
+          const node = circlePath(n.id, n.name, geom.cx, geom.cy, geom.r);
+          n.subpaths = node.subpaths;
+        });
+        draw();
+        return;
+      }
       const shift = e.shiftKey;
       store.live((d) => {
         const n = d.nodes[drag.id];
@@ -1311,7 +1350,7 @@ export default function CanvasView(props: Props) {
           const node = ellipsePath(n.id, n.name, cx, cy, rx, ry);
           n.subpaths = node.subpaths;
         } else if (drag.shape === "circle") {
-          const geom = circleFromDrag(drag.start, p, drag.fromCenter ?? false, shift);
+          const geom = circleFromDrag(drag.start, p, drag.fromCenter ?? false, shift, e.altKey, propsRef.current.view.zoom);
           const node = circlePath(n.id, n.name, geom.cx, geom.cy, geom.r);
           n.subpaths = node.subpaths;
         } else {
@@ -1463,6 +1502,38 @@ export default function CanvasView(props: Props) {
       const d = propsRef.current.doc;
       const n = d.nodes[drag.id];
       if (n && n.kind === "path") {
+        if (drag.shape === "circle" && drag.second) {
+          const zoom = propsRef.current.view.zoom;
+          const last = drag.last ?? drag.second;
+          const nearFirst = Math.hypot(drag.second.x - drag.start.x, drag.second.y - drag.start.y) <= 3 / zoom;
+          const moved = Math.hypot(last.x - drag.second.x, last.y - drag.second.y) >= 2 / zoom;
+          let geom: { cx: number; cy: number; r: number } | null = null;
+          if (drag.fromCenter) {
+            const through = moved ? last : drag.second;
+            geom = circleFromDrag(drag.start, through, true, false, e.altKey, zoom);
+          } else if (nearFirst) {
+            geom = moved ? circleFromDrag(drag.start, last, false, false, e.altKey, zoom) : null;
+          } else if (moved) {
+            geom = circleThroughThree(drag.start, drag.second, last);
+          } else {
+            geom = circleFromDrag(drag.start, drag.second, false, false, e.altKey, zoom);
+          }
+          if (geom && geom.r > 1e-6) {
+            store.live((dd) => {
+              const node = dd.nodes[drag.id];
+              if (!node || node.kind !== "path") return;
+              const next = circlePath(node.id, node.name, geom.cx, geom.cy, geom.r);
+              node.subpaths = next.subpaths;
+            });
+            store.finish(drag.before);
+            propsRef.current.onSelect([drag.id]);
+          } else {
+            store.live((dd) => removeNode(dd, drag.id));
+            circlePendingRef.current = nearFirst ? { first: drag.start, fromCenter: drag.fromCenter ?? false } : null;
+          }
+          draw();
+          return;
+        }
         const b = boxOfPoints(n.subpaths.flatMap((s) => s.anchors));
         if (b.w < 2 && b.h < 2) {
           store.live((dd) => removeNode(dd, drag.id));
