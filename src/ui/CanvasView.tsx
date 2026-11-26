@@ -10,6 +10,7 @@ import { boxOfPoints, nodeBox, unionBox, type Box } from "../core/geom";
 import { gradAxis, gradHandlePoints, paintStops, toLinearGradient } from "../core/paint";
 import { erasePathNode } from "../core/eraser";
 import { nearestOnNode, normalizeWidthPoints, removeWidthPoint, setWidthPoint, widthHandles } from "../core/width";
+import { nodeInArtboards, pointInArtboards } from "../core/artboards";
 import { pickTop, boxSelect, groupBox } from "../engine/pick";
 import { hitHandle, resizeAnchor, type HandleId } from "../engine/handles";
 import { renderScene, type PenState, type RenderState, type ToolId } from "../engine/render";
@@ -736,7 +737,7 @@ export default function CanvasView(props: Props) {
     }
 
     if (prev.tool === "eyedropper") {
-      const hitId = pickTop(prev.doc, p, 4, true);
+      const hitId = pointInArtboards(prev.doc, p) ? pickTop(prev.doc, p, 4, true) : null;
       if (!hitId) {
         if (!prev.selected.length) prev.onSelect([]);
         return;
@@ -810,7 +811,7 @@ export default function CanvasView(props: Props) {
       };
       let ids = prev.selected.flatMap(collect);
       if (!ids.length) {
-        const hit = pickTop(prev.doc, p, 4, true);
+        const hit = pointInArtboards(prev.doc, p) ? pickTop(prev.doc, p, 4, true) : null;
         if (hit) ids = collect(hit);
       }
       if (!ids.length) return;
@@ -939,7 +940,7 @@ export default function CanvasView(props: Props) {
     }
 
     // 选择 / 直接选择：先命中
-    const hitId = pickTop(prev.doc, p, 4, prev.tool === "direct");
+    const hitId = pointInArtboards(prev.doc, p) ? pickTop(prev.doc, p, 4, prev.tool === "direct") : null;
     if (hitId) {
       let ids = prev.selected;
       if (e.shiftKey) {
@@ -1070,7 +1071,7 @@ export default function CanvasView(props: Props) {
         draw();
         return;
       }
-      const hit = pickTop(current.doc, p, 4, current.tool === "direct");
+      const hit = pointInArtboards(current.doc, p) ? pickTop(current.doc, p, 4, current.tool === "direct") : null;
       if (hit !== hoverRef.current) {
         hoverRef.current = hit;
         draw();
@@ -1492,7 +1493,10 @@ export default function CanvasView(props: Props) {
         draw();
         return;
       }
-      if (box && box.w > 2 && box.h > 2) propsRef.current.onSelect(boxSelect(propsRef.current.doc, box));
+      if (box && box.w > 2 && box.h > 2) {
+        const doc = propsRef.current.doc;
+        propsRef.current.onSelect(boxSelect(doc, box).filter((id) => nodeInArtboards(doc, id)));
+      }
       else propsRef.current.onSelect([]);
       draw();
       return;
@@ -1705,7 +1709,7 @@ export default function CanvasView(props: Props) {
       penCommit();
     }
     const p = docPt(e);
-    const hit = pickTop(prev.doc, p, 3 / prev.view.zoom);
+    const hit = pointInArtboards(prev.doc, p) ? pickTop(prev.doc, p, 3 / prev.view.zoom) : null;
     if (hit) {
       if (!prev.selected.includes(hit)) prev.onSelect([hit]);
     } else if (prev.selected.length) {

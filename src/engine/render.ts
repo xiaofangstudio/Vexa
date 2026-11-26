@@ -2,6 +2,7 @@
 import { flatten, nodeBox, textBox, unionBox, type Box } from "../core/geom";
 import { canvasPaint, gradAxis, gradHandlePoints, paintStops, stopAlpha, stopCssColor } from "../core/paint";
 import { widthHandles, widthOutline, widthPreview } from "../core/width";
+import { pointInArtboards } from "../core/artboards";
 import { groupBox } from "./pick";
 import { handleLayout } from "./handles";
 import type { Anchor, AnchorRef, Node, PathNode, Pt, VexaDoc } from "../core/types";
@@ -58,6 +59,12 @@ export interface RenderState {
   gradientHover?: { nodeId: string; index: number } | null;
   /** 直接选择里高亮的锚点 */
   anchorSel?: AnchorRef[];
+  /** 画板外内容裁掉（默认开） */
+  hideOutsideBoards?: boolean;
+  /** 视口外节点剔除（默认开） */
+  cull?: boolean;
+  /** 粘贴板/画板/网格静态层缓存（默认开） */
+  cacheBackground?: boolean;
 }
 
 const imageCache = new Map<string, HTMLImageElement>();
@@ -136,8 +143,97 @@ function drawBoardGrid(ctx: CanvasRenderingContext2D, doc: VexaDoc, view: View):
   ctx.restore();
 }
 
-function loopsToPath(ctx: CanvasRenderingContext2D, loops: Pt[][]): void {
-  for (const loop of loops) {
+interface BackgroundCache {
+  key: string;
+  canvas: HTMLCanvasElement;
+}
+let bgCache: BackgroundCache | null = null;
+
+const cullBoxCache = new Map<string, Box | null>();
+
+function screenIntersects(b: Box, view: View, w: number, h: number, pad: number): boolean {
+  const x0 = b.x * view.zoom + view.panX;
+  const y0 = b.y * view.zoom + view.panY;
+  const x1 = (b.x + b.w) * view.zoom + view.panX;
+  const y1 = (b.y + b.h) * view.zoom + view.panY;
+  return x1 >= -pad && y1 >= -pad && x0 <= w + pad && y0 <= h + pad;
+}
+
+/** 视口剔除：组取整体包围盒，其余节点取自身盒；空组直接不画。 */
+function nodeVisible(doc: VexaDoc, node: Node, view: View, w: number, h: number): boolean {
+  let b = cullBoxCache.get(node.id);
+  if (b === undefined) {
+    b = node.kind === "group" ? groupBox(doc, node) : nodeBox(node);
+    cullBoxCache.set(node.id, b);
+  }
+  if (!b) return node.kind !== "group";
+  const strokePad = node.kind === "path" ? node.stroke.width / 2 : 0;
+  const pad = (strokePad + 12 / view.zoom) * view.zoom;
+  return screenIntersects(b, view, w, h, pad + 8);
+}
+
+function drawBoards(ctx: CanvasRenderingContext2D, doc: VexaDoc, view: View, activeBoardId?: string): void {
+  const paper = css("--paper", "#fff");
+  const accent = css("--accent", "#0f76d6");
+  for (const b of doc.artboards) {
+    ctx.save();
+    ctx.shadowColor = "rgba(20,20,30,0.10)";
+    ctx.shadowBlur = 18 / view.zoom;
+    ctx.shadowOffsetY = 6 / view.zoom;
+    ctx.fillStyle = b.bg || paper;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.restore();
+    const active = b.id === activeBoardId;
+    ctx.strokeStyle = active ? accent : "rgba(20,20,30,0.10)";
+    ctx.lineWidth = (active ? 1.4 : 1) / view.zoom;
+    ctx.strokeRect(b.x, b.y, b.w, b.h);
+  }
+}
+
+function backgroundKey(doc: VexaDoc, view: View, size: { w: number; h: number }, dpr: number, showGrid: boolean, activeBoardId?: string): string {
+  const boards = doc.artboards.map((b) => `${b.id},${b.x},${b.y},${b.w},${b.h},${b.bg ?? ""}`).join(";");
+  return `${size.w}x${size.h}@${dpr}|${view.zoom}|${view.panX}|${view.panY}|${showGrid ? 1 : 0}|${activeBoardId ?? ""}|${document.documentElement.dataset.theme ?? ""}|${boards}`;
+}
+
+/** 粘贴板点阵 + 画板纸面 + 网格只在视口/文档变化时重画，对象拖动时直接贴图。 */
+function drawBackground(
+  ctx: CanvasRenderingContext2D,
+  doc: VexaDoc,
+  view: View,
+  state: RenderState,
+  size: { w: number; h: number },
+  dpr: number,
+): void {
+  const showGrid = state.showGrid !== false;
+  if (state.cacheBackground === false) {
+    drawPasteboard(ctx, size.w, size.h, view);
+    ctx.save();
+    ctx.translate(view.panX, view.panY);
+    ctx.scale(view.zoom, view.zoom);
+    drawBoards(ctx, doc, view, state.activeBoardId);
+    if (showGrid) drawBoardGrid(ctx, doc, view);
+    ctx.restore();
+    return;
+  }
+  const key = backgroundKey(doc, view, size, dpr, showGrid, state.activeBoardId);
+  if (!bgCache || bgCache.key !== key) {
+    const off = document.createElement("canvas");
+    off.width = Math.max(1, Math.round(size.w * dpr));
+    off.height = Math.max(1, Math.round(size.h * dpr));
+    const octx = ctxFor(off, dpr);
+    drawPasteboard(octx, size.w, size.h, view);
+    octx.save();
+    octx.translate(view.panX, view.panY);
+    octx.scale(view.zoom, view.zoom);
+    drawBoards(octx, doc, view, state.activeBoardId);
+    if (showGrid) drawBoardGrid(octx, doc, view);
+    octx.restore();
+    bgCache = { key, canvas: off };
+  }
+  ctx.drawImage(bgCache.canvas, 0, 0, size.w, size.h);
+}
+
+function loopsToPath(ctx: CanvasRenderingContext2D, loops: Pt[][]): void {  for (const loop of loops) {
     if (loop.length < 2) continue;
     ctx.moveTo(loop[0].x, loop[0].y);
     for (let i = 1; i < loop.length; i++) ctx.lineTo(loop[i].x, loop[i].y);
@@ -215,8 +311,11 @@ function drawNode(
   doc: VexaDoc,
   node: Node,
   onImage: () => void,
+  view?: View,
+  size?: { w: number; h: number },
 ): void {
   if (!node.visible) return;
+  if (view && size && !nodeVisible(doc, node, view, size.w, size.h)) return;
   ctx.save();
   ctx.globalAlpha *= node.opacity;
   if (node.blend && node.blend !== "normal") ctx.globalCompositeOperation = node.blend;
@@ -294,7 +393,7 @@ function drawNode(
     for (const id of node.children) {
       if (id === node.clip) continue;
       const child = doc.nodes[id];
-      if (child) drawNode(ctx, doc, child, onImage);
+      if (child) drawNode(ctx, doc, child, onImage, view, size);
     }
   }
   ctx.restore();
@@ -307,6 +406,8 @@ function drawOverlay(
   view: View,
 ): void {
   const accent = css("--accent", "#0f76d6");
+  // 画板裁剪开启时，手柄中心落在板外的整颗都不画，避免沿着板边留下半个白方块。
+  const chromeInside = (p: Pt) => state.hideOutsideBoards === false || !doc.artboards.length || pointInArtboards(doc, p);
   if (state.eraser && state.eraser.points.length) {
     const pts = state.eraser.points;
     ctx.save();
@@ -346,19 +447,22 @@ function drawOverlay(
     if (state.tool !== "direct") {
       const layout = handleLayout(box, view.zoom);
       // 旋转柄：顶边中点引一条 26px 的短线 + 圆形手柄
-      ctx.strokeStyle = accent;
-      ctx.lineWidth = 1 / view.zoom;
-      ctx.beginPath();
-      ctx.moveTo(layout.lineTop.x, layout.lineTop.y);
-      ctx.lineTo(layout.rotate.x, layout.rotate.y);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(layout.rotate.x, layout.rotate.y, layout.rotSize / 2, 0, Math.PI * 2);
-      ctx.fillStyle = accent;
-      ctx.fill();
+      if (chromeInside(layout.rotate)) {
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 1 / view.zoom;
+        ctx.beginPath();
+        ctx.moveTo(layout.lineTop.x, layout.lineTop.y);
+        ctx.lineTo(layout.rotate.x, layout.rotate.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(layout.rotate.x, layout.rotate.y, layout.rotSize / 2, 0, Math.PI * 2);
+        ctx.fillStyle = accent;
+        ctx.fill();
+      }
 
       const hs = layout.size;
       for (const h of layout.points) {
+        if (!chromeInside(h.p)) continue;
         const p = h.p;
         ctx.fillStyle = css("--anchor", "#fff");
         ctx.fillRect(p.x - hs / 2, p.y - hs / 2, hs, hs);
@@ -392,7 +496,7 @@ function drawOverlay(
         ctx.globalAlpha = 1;
         points.forEach((q, i) => {
           const s = stops[i];
-          if (!s) return;
+          if (!s || !chromeInside(q)) return;
           const hovered = i === hoverIndex;
           const r = (hovered ? 7.4 : 5.6) / view.zoom;
           ctx.beginPath();
@@ -429,6 +533,7 @@ function drawOverlay(
     for (const n of selected) {
       if (n.kind !== "path" || n.stroke.kind === "none" || n.stroke.width <= 0) continue;
       for (const h of widthHandles(n)) {
+        if (!chromeInside(h.center)) continue;
         ctx.globalAlpha = 0.72;
         ctx.beginPath();
         ctx.moveTo(h.left.x, h.left.y);
@@ -441,6 +546,7 @@ function drawOverlay(
         ctx.fill();
         const s = 4.6 * unit;
         for (const q of [h.left, h.right]) {
+          if (!chromeInside(q)) continue;
           ctx.fillStyle = css("--anchor", "#fff");
           ctx.fillRect(q.x - s / 2, q.y - s / 2, s, s);
           ctx.strokeStyle = accent;
@@ -481,6 +587,7 @@ function drawOverlay(
         const sub = n.subpaths[si];
         for (let ai = 0; ai < sub.anchors.length; ai++) {
           const a = sub.anchors[ai];
+          if (!chromeInside(a)) continue;
           if (a.hIn || a.hOut) {
             ctx.strokeStyle = css("--handle", "#0f76d6");
             ctx.lineWidth = 1 / view.zoom;
@@ -490,6 +597,7 @@ function drawOverlay(
               ctx.moveTo(a.x, a.y);
               ctx.lineTo(h.x, h.y);
               ctx.stroke();
+              if (!chromeInside(h)) continue;
               ctx.beginPath();
               ctx.arc(h.x, h.y, 3 / view.zoom, 0, Math.PI * 2);
               ctx.fillStyle = css("--handle", "#0f76d6");
@@ -597,39 +705,33 @@ export function renderScene(
 ): void {
   const ctx = ctxFor(cv, dpr);
   ctx.clearRect(0, 0, size.w, size.h);
-  drawPasteboard(ctx, size.w, size.h, view);
+  drawBackground(ctx, doc, view, state, size, dpr);
 
+  cullBoxCache.clear();
   ctx.save();
   ctx.translate(view.panX, view.panY);
   ctx.scale(view.zoom, view.zoom);
 
-  // 画板：白纸 + 细边 + 板名（板名画在屏幕系，避免缩放后字号变形）
-  const paper = css("--paper", "#fff");
-  const accent = css("--accent", "#0f76d6");
-  for (const b of doc.artboards) {
-    ctx.save();
-    ctx.shadowColor = "rgba(20,20,30,0.10)";
-    ctx.shadowBlur = 18 / view.zoom;
-    ctx.shadowOffsetY = 6 / view.zoom;
-    ctx.fillStyle = b.bg || paper;
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    ctx.restore();
-    const active = b.id === state.activeBoardId;
-    ctx.strokeStyle = active ? accent : "rgba(20,20,30,0.10)";
-    ctx.lineWidth = (active ? 1.4 : 1) / view.zoom;
-    ctx.strokeRect(b.x, b.y, b.w, b.h);
+  // 画板外内容裁掉，避免对象跑到灰色粘贴板上仍显示
+  ctx.save();
+  if (state.hideOutsideBoards !== false && doc.artboards.length) {
+    ctx.beginPath();
+    for (const b of doc.artboards) ctx.rect(b.x, b.y, b.w, b.h);
+    ctx.clip();
   }
-
-  // 网格要压在画板底色之上、对象之下，否则被白纸盖住
-  if (state.showGrid !== false) drawBoardGrid(ctx, doc, view);
 
   const onImage = () => {
     renderScene(cv, doc, view, state, dpr, size);
   };
+  const cullView = state.cull === false ? undefined : view;
+  const cullSize = state.cull === false ? undefined : size;
   for (const id of doc.root) {
     const n = doc.nodes[id];
-    if (n) drawNode(ctx, doc, n, onImage);
+    if (n) drawNode(ctx, doc, n, onImage, cullView, cullSize);
   }
+  ctx.restore();
+
+  const accent = css("--accent", "#0f76d6");
 
   // 画板工具：当前板的八个缩放柄
   if (state.tool === "artboard") {
@@ -647,7 +749,16 @@ export function renderScene(
     }
   }
 
+  // 选择框、锚点、框选、悬停同样不越过画板边界，
+  // 否则对象被裁掉后只剩一圈手柄浮在粘贴板上，仍像“内容露出来了”。
+  ctx.save();
+  if (state.hideOutsideBoards !== false && doc.artboards.length) {
+    ctx.beginPath();
+    for (const b of doc.artboards) ctx.rect(b.x, b.y, b.w, b.h);
+    ctx.clip();
+  }
   drawOverlay(ctx, doc, state, view);
+  ctx.restore();
   ctx.restore();
 
   // 画板名（屏幕坐标）

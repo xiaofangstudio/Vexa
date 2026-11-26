@@ -26,6 +26,23 @@ export function applyBoardPreset(board: Artboard, preset: BoardPreset): void {
   board.h = preset.h;
 }
 
+/** 文档坐标是否落在任一画板内；没有画板时视为自由画布。 */
+export function pointInArtboards(doc: VexaDoc, p: { x: number; y: number }): boolean {
+  if (!doc.artboards.length) return true;
+  for (const b of doc.artboards) {
+    if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return true;
+  }
+  return false;
+}
+
+/** 节点包围盒是否与任一画板相交；没有画板时视为自由画布。 */
+export function nodeInArtboards(doc: VexaDoc, id: string): boolean {
+  if (!doc.artboards.length) return true;
+  const box = nodeBounds(doc, id);
+  if (!box) return false;
+  return doc.artboards.some((b) => overlaps(box, b));
+}
+
 /** 路径描边在几何外侧的近似半径；非均匀宽度取最大倍率。 */
 function strokePad(node: Node): number {
   if (node.kind !== "path" || node.stroke.kind === "none") return 0;
