@@ -64,6 +64,26 @@ assert.ok(pl.lines[0].baseline > top.lines[0].baseline, "垂直居中把文本�
 const tight: TextNode = { ...node, boxH: 28 };
 assert.equal(textLayout(tight).overflow, true, "压缩框高应检出溢出");
 
+const columns: TextNode = {
+  ...node,
+  text: "区域文字分栏会先把第一栏填满再流到第二栏，跨栏保留段落顺序并继续换行。",
+  boxW: 300,
+  boxH: 100,
+  size: 20,
+  columns: 2,
+  columnGutter: 10,
+};
+const cl = textLayout(columns);
+const colW = (300 - AREA_INSET * 2 - 10) / 2;
+assert.ok(cl.lines.length > 3, "分栏文字应产生多行");
+assert.equal(cl.lines[0].x, 100 + AREA_INSET, "第一栏从内框左边开始");
+assert.ok(cl.lines.some((l) => Math.abs(l.x - (100 + AREA_INSET + colW + 10)) < 0.01), "第二栏从内框右半边开始");
+for (const line of cl.lines) assert.ok(line.width <= colW + 0.01, `分栏行宽 ${line.width} 不应超过 ${colW}`);
+assert.ok(cl.lines.filter((l) => l.x < 200).length > 0 && cl.lines.filter((l) => l.x > 200).length > 0, "两栏都有文字");
+assert.equal(cl.overflow, false, "文字在两栏内排完不应误报溢出");
+assert.equal(cl.lines.map((l) => l.text).join(""), columns.text.replace(/\n/g, ""), "跨栏不丢字且顺序保持");
+assert.equal(textLayout({ ...columns, text: columns.text.repeat(4), boxH: 80 }).overflow, true, "四栏都填满后应溢出");
+
 const point: TextNode = { ...node };
 convertTextMode(point, "area");
 assert.equal(point.textMode, "area");
@@ -75,9 +95,11 @@ assert.ok(!back.boxW && !back.boxH);
 assert.equal(back.areaVAlign, undefined);
 assert.equal(back.firstIndent, undefined);
 assert.equal(back.paraSpace, undefined);
+assert.equal(back.columns, undefined);
+assert.equal(back.columnGutter, undefined);
 
 const doc: VexaDoc = createDoc("区域文字", 400, 300);
-const saved: TextNode = { ...node, areaVAlign: "middle", firstIndent: 24, paraSpace: 12 };
+const saved: TextNode = { ...node, areaVAlign: "middle", firstIndent: 24, paraSpace: 12, columns: 2, columnGutter: 10 };
 doc.nodes.t1 = saved;
 doc.root.push("t1");
 const svg = docToSVG(doc);
@@ -92,6 +114,8 @@ assert.equal(rt.boxH, 80);
 assert.equal(rt.areaVAlign, "middle");
 assert.equal(rt.firstIndent, 24);
 assert.equal(rt.paraSpace, 12);
+assert.equal(rt.columns, 2);
+assert.equal(rt.columnGutter, 10);
 
 const pdf = await exportPDF(doc, {
   fontLoader: () => new Uint8Array(fs.readFileSync("C:/Windows/Fonts/simhei.ttf")),

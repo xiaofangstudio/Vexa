@@ -175,6 +175,10 @@ export interface TextNode {
   firstIndent?: number;
   /** 段间距，单位 px；仅区域文字。 */
   paraSpace?: number;
+  /** 区域文字分栏数，默认 1；仅区域文字。 */
+  columns?: number;
+  /** 分栏之间的栏距，单位 px；仅区域文字。 */
+  columnGutter?: number;
   fill: Paint;
   opacity: number;
   visible: boolean;

@@ -130,15 +130,16 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 ## 发布构建
 
-- 版本：`0.1.0`（第四十八批：路径文字）
+- 版本：`0.1.0`（第四十九批：区域文字分栏）
 - 文件：`release\Vexa.exe`
-- 大小：`7,816,192 B`
-- SHA256：`A6AD4E743B91E0D2FABC098A56614750FD1C407F6E2885C06DE53C1E330DA6A6`
-- 构建时间：`2026-11-27 23:09:40`
+- 大小：`7,816,704 B`
+- SHA256：`DFCDC405BEA17BB5FD56D4A32E72C5574809CF8C70938C59446B41E42A724A57`
+- 构建时间：`2026-11-27 23:40:02`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,374,064 B`，SHA256 `1220CA71ABAB5191564AA9DC592CAA42348CBA2B74ABB24C57CD0F14E9653446`
-- 前端产物：`dist/assets/pdf-CwfKLqUk.js` 19.65 kB / gzip 7.89；`dist/assets/index-CxG1iaRQ.js` 389.40 kB / gzip 161.95；`dist/assets/index-Ders2-87.js` 553.18 kB / gzip 175.00；`dist/assets/index-DApU8VOk.css` 61.88 kB / gzip 11.56；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
-- 路径文字验收（第四十八批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.path-text.mts` 通过（320px 水平路径 6 字全部落点，首字 x=100；`pathStart=50` 首字 x=150；左右侧基线 y=88/112；包围盒盖住路径与字形；SVG 首字 `translate(100 88) rotate(0)`；PDF `warnings 0`；`.vex` 往返保留 `textMode/pathSubpaths/pathStart/pathSide`；路径文字转轮廓得到 6 个字形）；全部 24 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：`Shift` 椭圆拖出路径后，文字菜单出现“转为路径文字”，转换后路径消失、路径文字对象出现并继承 `#0f76d6` 实色填充；`Ctrl+Z` 恢复原路径、`Ctrl+Y` 恢复路径文字；切回选择工具点击路径文字可重新选中，输入 34px 文本后逐字绕椭圆切线旋转，属性坞显示“路径”类型、“起点”与“路径侧 上/下”，改起点 10 后画面同步；窗口无横向溢出。截图 `docs/shots/path-text.png`。
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,376,364 B`，SHA256 `AEC09D84F5073CF6F903292D7BFB9D3AA4B86E077D711ABCDF50FB185DA663C1`
+- 前端产物：`dist/assets/pdf-BQHMxDJd.js` 19.65 kB / gzip 7.89；`dist/assets/index-CxG1iaRQ.js` 389.40 kB / gzip 161.95；`dist/assets/index-N7ZWlOp6.js` 555.13 kB / gzip 175.59；`dist/assets/index-DApU8VOk.css` 61.88 kB / gzip 11.56；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 区域文字分栏验收（第四十九批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.area-text.mts` 通过（`300×100` 两栏、栏距 10 时首栏 x=104、第二栏 x=255，行宽不超 141；跨栏拼回原文不丢字，两栏内排完 `overflow=false`，四栏仍有余字 `overflow=true`；`.vex` 往返保留 `columns/columnGutter`）。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：文字工具拖框后输入三段长文，设 22px、`520×370`、分栏 2、栏距 24、首行 24、段距 12；第一栏填满后余字流入第二栏，跨栏顺序不丢字；属性坞显示“分栏 2 / 栏距 24”，撤销回单栏、重做恢复两栏，窗口无横向溢出。全部 24 个冒烟脚本复跑通过。截图 `docs/shots/text-columns.png`。
+- 路径文字验收（第四十八批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.path-text.mts` 通过（320px 水平路径 6 字全部落点，首字 x=100；`pathStart=50` 首字 x=150；左右侧基线 y=88/112；包围盒盖住路径与字形；SVG 首字 `translate(100 88) rotate(0)`；PDF `warnings 0`；`.vex` 往返保留 `textMode/pathSubpaths/pathStart/pathSide`；路径文字转轮廓得到 6 个字形）。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：`Shift` 椭圆拖出路径后，文字菜单出现“转为路径文字”，转换后路径消失、路径文字对象出现并继承 `#0f76d6` 实色填充；`Ctrl+Z` 恢复原路径、`Ctrl+Y` 恢复路径文字；切回选择工具点击路径文字可重新选中，输入 34px 文本后逐字绕椭圆切线旋转，属性坞显示“路径”类型、“起点”与“路径侧 上/下”，改起点 10 后画面同步；窗口无横向溢出。截图 `docs/shots/path-text.png`。
 - 区域文字段落验收（第四十六批）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.area-text.mts` 通过（首行缩进 30px 时首行 x=134、第二行 x=104；段距 20px 时两段基线差 = 25+20；垂直居中首基线比顶对齐下移；`.vex` 往返保留 `areaVAlign/firstIndent/paraSpace`；SVG/PDF 通过）。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：`360×230` 区域框，输入两段文字，属性坞设首行 24px、段距 12px、垂直“中”；画布两段之间出现 12px 段距，文本块在框内垂直居中，单点/区域菜单互转与 `Ctrl+Z` 恢复通过；窗口无横向溢出。截图 `docs/shots/area-text.png`。
 - 区域文字验收（第四十五批）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.area-text.mts` 通过（180×80 框、20px 字断 5 行，行宽不越内框；框高压到 28px 检出溢出；模式互转与 `.vex` 往返保留 `textMode/boxW/boxH`）。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：文字工具拖出 `360×170` 区域框，输入 34 字后自动 3 行；属性坞显示“类型 单点 [区域] 自动换行”与“框宽/框高”；文字菜单提供“转区域文字 / 转单点文字”，转单点后框字段清空，`Ctrl+Z` 恢复。该批截图已按清理惯例删除，当前合并到第四十六批截图。
 - 画板裁剪验收（第四十三批）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.render.mts` 16 项 PASS，全部 21 个冒烟脚本复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1600×1000 窗口在画板左边界跨画 `457.19×365.75` 矩形（X `-234.116`）：板外像素 `236,236,240`、板内 `15,118,214`；板外整段不显示，选择框/缩放柄/旋转柄只留在板内，中心在板外的手柄整颗跳过；板外点击“已选 0”、板内“已选 1”；画板外完全不可见矩形框选后仍“已选 0”。1500 个视口外节点 × 20 帧 `407.4ms → 23.3ms`（`17.49x`），600 个视口内板外节点 × 20 帧 `199.9ms → 10.5ms`。该批截图已按清理惯例删除。

@@ -563,6 +563,8 @@ export default function EditorShell(props: Props) {
       delete text.areaVAlign;
       delete text.firstIndent;
       delete text.paraSpace;
+      delete text.columns;
+      delete text.columnGutter;
       removeNode(d, pathId);
     });
     if (!madeId) {
@@ -2768,6 +2770,25 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                           min={0}
                           unit="px"
                           onCommit={(v) => setNode((n) => { if (n.kind === "text") n.paraSpace = Math.max(0, v); })}
+                        />
+                        <NumField
+                          label="分栏"
+                          value={Math.round(single.columns ?? 1)}
+                          min={1}
+                          unit="栏"
+                          onCommit={(v) => setNode((n) => {
+                            if (n.kind !== "text") return;
+                            const c = Math.max(1, Math.min(6, Math.round(v)));
+                            if (c > 1) n.columns = c;
+                            else { delete n.columns; delete n.columnGutter; }
+                          })}
+                        />
+                        <NumField
+                          label="栏距"
+                          value={Math.round(single.columnGutter ?? 0)}
+                          min={0}
+                          unit="px"
+                          onCommit={(v) => setNode((n) => { if (n.kind === "text") n.columnGutter = Math.max(0, v); })}
                         />
                       </>
                     )}

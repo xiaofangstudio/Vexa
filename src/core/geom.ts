@@ -327,6 +327,84 @@ function wrapAreaText(node: TextNode, innerW: number): string[][] {
   });
 }
 
+/** 区域文字分栏：先填满第一栏再流到下一栏，跨栏保留段落与首行缩进。 */
+function layoutAreaColumns(
+  node: TextNode,
+  box: Box,
+  columns: number,
+  colW: number,
+  gutter: number,
+  lh: number,
+  hs: number,
+  indent: number,
+  paraSpace: number,
+  baselineOffset: number,
+): { lines: TextLineLayout[]; overflow: boolean } {
+  const lines: TextLineLayout[] = [];
+  const paras = node.text.split("\n");
+  const maxBaseline = box.y + box.h - AREA_INSET - node.size * 0.25;
+  const topBaseline = box.y + AREA_INSET + node.size * 1.2 - baselineOffset;
+  const align = node.align ?? "left";
+  const tracking = node.tracking ?? 0;
+  let pi = 0;
+  let ci = 0;
+  let overflow = false;
+
+  for (let col = 0; col < columns && pi < paras.length; col++) {
+    const colX = box.x + AREA_INSET + col * (colW + gutter);
+    let baseline = topBaseline;
+    let firstLine = true;
+    while (pi < paras.length) {
+      if (baseline > maxBaseline) { break; }
+      const chars = Array.from(paras[pi]);
+      if (!chars.length) {
+        lines.push({ text: "", x: colX + (firstLine ? indent : 0), baseline, width: 0 });
+        baseline += lh;
+        firstLine = false;
+        pi++;
+        ci = 0;
+        if (pi < paras.length) baseline += paraSpace;
+        continue;
+      }
+      const lineIndent = firstLine ? indent : 0;
+      const limit = Math.max(1, colW - lineIndent);
+      let line = "";
+      let width = 0;
+      while (ci < chars.length) {
+        const ch = chars[ci];
+        const cw = textEmWidth(ch) * node.size;
+        const nextW = line ? width + tracking + cw : cw;
+        if (line && nextW * hs > limit) break;
+        line += ch;
+        width = nextW;
+        ci++;
+      }
+      const scaled = width * hs;
+      const x =
+        colX + lineIndent +
+        (align === "center" ? Math.max(0, limit - scaled) / 2 : align === "right" ? Math.max(0, limit - scaled) : 0);
+      lines.push({ text: line, x, baseline, width });
+      baseline += lh;
+      firstLine = false;
+      if (ci >= chars.length) {
+        pi++;
+        ci = 0;
+        if (pi < paras.length) baseline += paraSpace;
+      }
+    }
+  }
+  if (pi < paras.length) overflow = true;
+
+  if (lines.length) {
+    const last = lines.reduce((m, l) => Math.max(m, l.baseline), topBaseline);
+    const free = maxBaseline - last;
+    const vAlign = node.areaVAlign ?? "top";
+    const shift = free > 0 && vAlign === "middle" ? free / 2 : free > 0 && vAlign === "bottom" ? free : 0;
+    if (shift) for (const l of lines) l.baseline += shift;
+  }
+  return { lines, overflow };
+}
+
 /** 统一的文本行布局：单点文字与区域文字共用渲染、导出的换行/对齐结果。 */
 export function textLayout(node: TextNode): TextLayout {
   const mode = node.textMode ?? "point";
@@ -344,6 +422,13 @@ export function textLayout(node: TextNode): TextLayout {
     const innerH = Math.max(1, box.h - AREA_INSET * 2);
     const indent = Math.max(0, Math.min(node.firstIndent ?? 0, innerW - 1));
     const paraSpace = Math.max(0, node.paraSpace ?? 0);
+    const columns = Math.max(1, Math.min(6, Math.round(node.columns ?? 1)));
+    const gutter = Math.max(0, node.columnGutter ?? 0);
+    if (columns > 1) {
+      const colW = Math.max(1, (innerW - gutter * (columns - 1)) / columns);
+      const colLayout = layoutAreaColumns(node, box, columns, colW, gutter, lh, hs, indent, paraSpace, baselineOffset);
+      return { mode, lines: colLayout.lines, box, overflow: colLayout.overflow };
+    }
     const plan = wrapAreaText(node, innerW);
     const gaps = Math.max(0, plan.length - 1);
     const lineCount = plan.reduce((n, para) => n + para.length, 0);
@@ -438,6 +523,8 @@ export function convertTextMode(node: TextNode, mode: "point" | "area"): void {
   delete node.areaVAlign;
   delete node.firstIndent;
   delete node.paraSpace;
+  delete node.columns;
+  delete node.columnGutter;
 }
 
 export function nodeBox(node: Node): Box {

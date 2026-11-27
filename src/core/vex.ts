@@ -78,6 +78,8 @@ export function parseVex(text: string): VexaDoc {
         delete n.areaVAlign;
         delete n.firstIndent;
         delete n.paraSpace;
+        delete n.columns;
+        delete n.columnGutter;
       } else if (n.textMode === "area") {
         delete n.pathSubpaths;
         delete n.pathStart;
@@ -87,6 +89,9 @@ export function parseVex(text: string): VexaDoc {
         if (n.areaVAlign !== "top" && n.areaVAlign !== "middle" && n.areaVAlign !== "bottom") delete n.areaVAlign;
         if (typeof n.firstIndent !== "number" || !Number.isFinite(n.firstIndent) || n.firstIndent < 0) delete n.firstIndent;
         if (typeof n.paraSpace !== "number" || !Number.isFinite(n.paraSpace) || n.paraSpace < 0) delete n.paraSpace;
+        if (typeof n.columns !== "number" || !Number.isFinite(n.columns) || n.columns < 2 || n.columns > 6) delete n.columns;
+        else n.columns = Math.round(n.columns);
+        if (typeof n.columnGutter !== "number" || !Number.isFinite(n.columnGutter) || n.columnGutter < 0) delete n.columnGutter;
       } else {
         delete n.textMode;
         delete n.boxW;
@@ -94,6 +99,8 @@ export function parseVex(text: string): VexaDoc {
         delete n.areaVAlign;
         delete n.firstIndent;
         delete n.paraSpace;
+        delete n.columns;
+        delete n.columnGutter;
         delete n.pathSubpaths;
         delete n.pathStart;
         delete n.pathSide;
