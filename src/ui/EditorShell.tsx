@@ -41,6 +41,7 @@ import {
 } from "../core/vectorOps";
 import { docToSVG, svgToNodes, svgToPathNodes } from "../core/svg";
 import { loadSystemFont } from "../engine/fonts";
+import { loadOutlineFace, outlineText, replaceTextWithOutlines } from "../core/textOutline";
 import { offsetPathNode, outlineStrokeNode, smoothPathNode } from "../core/pathfx";
 import { inscribedCircleOf } from "../core/inscribed";
 import { convertTextMode, nodeBox, unionBox } from "../core/geom";
@@ -468,6 +469,38 @@ export default function EditorShell(props: Props) {
     (mode: "point" | "area") => patchText((n) => convertTextMode(n, mode)),
     [patchText],
   );
+  const outlineTextSel = useCallback(async () => {
+    if (!textNodes.length) {
+      say("请先选中文字");
+      return;
+    }
+    const jobs = await Promise.all(
+      textNodes.map(async (n) => {
+        try {
+          const bytes = await loadSystemFont(n.font, !!n.bold, !!n.italic);
+          return { id: n.id, glyphs: outlineText(n, await loadOutlineFace(bytes, !!n.bold, !!n.italic)) };
+        } catch {
+          return { id: n.id, glyphs: [] as ReturnType<typeof outlineText> };
+        }
+      }),
+    );
+    if (!jobs.some((j) => j.glyphs.length)) {
+      say("文字转路径失败：没有找到可用的本机字体轮廓");
+      return;
+    }
+    let made: string[] = [];
+    let converted = 0;
+    store.commit((d) => {
+      for (const job of jobs) {
+        const ids = replaceTextWithOutlines(d, job.id, job.glyphs);
+        if (!ids.length) continue;
+        made = made.concat(ids);
+        converted++;
+      }
+    });
+    setSelected(made);
+    say(converted ? `已把 ${converted} 个文字转为可编辑路径` : "没有转换成功");
+  }, [say, store, textNodes]);
   const stepTextSize = useCallback(
     (delta: number) => patchText((n) => { n.size = Math.max(1, Math.min(400, n.size + delta)); }),
     [patchText],
@@ -1262,6 +1295,7 @@ export default function EditorShell(props: Props) {
     },
     bold: () => toggleTextStyle("bold"),
     italic: () => toggleTextStyle("italic"),
+    outlineText: () => void outlineTextSel(),
     settings: props.onSettings,
   };
 
@@ -1275,13 +1309,14 @@ export default function EditorShell(props: Props) {
         e.preventDefault();
         return;
       }
-      if (e.shiftKey && e.key.toLowerCase() === "o") {
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "o") {
         e.preventDefault();
         setTool("artboard");
         return;
       }
       if (e.ctrlKey || e.metaKey) {
         const k = e.key.toLowerCase();
+        if (k === "o" && e.shiftKey) { e.preventDefault(); a.outlineText(); return; }
         if (k === "z") { e.preventDefault(); if (e.shiftKey) a.redo(); else a.undo(); return; }
         if (k === "y") { e.preventDefault(); a.redo(); return; }
         if (k === "s") { e.preventDefault(); if (e.shiftKey) a.saveAs(); else a.save(); return; }
@@ -1478,6 +1513,7 @@ export default function EditorShell(props: Props) {
         { label: "", sep: true },
         { label: "转区域文字", run: () => setTextMode("area"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => n.textMode === "area") },
         { label: "转单点文字", run: () => setTextMode("point"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => (n.textMode ?? "point") === "point") },
+        { label: "文字转路径", key: "Ctrl+Shift+O", run: () => void outlineTextSel(), disabled: !textNodes.length },
         { label: "", sep: true },
         { label: "字号 +2", run: () => stepTextSize(2), disabled: !textNodes.length },
         { label: "字号 -2", run: () => stepTextSize(-2), disabled: !textNodes.length },
@@ -1896,6 +1932,7 @@ export default function EditorShell(props: Props) {
           onPathfinder={pathfinderSel}
           onArrange={arrange}
           onInscribedCircle={addInscribedCircleSel}
+          onOutlineText={() => void outlineTextSel()}
           collapsed={!dockOpen}
           onCollapse={() => setDockOpen(false)}
           onSwatches={() => setSwatchesOpen(true)}
@@ -2047,12 +2084,13 @@ interface DockProps {
   onPathfinder: (op: PathfinderOp) => void;
   onArrange: (mode: ArrangeMode) => void;
   onInscribedCircle: () => void;
+  onOutlineText: () => void;
   collapsed: boolean;
   onCollapse: () => void;
   onSwatches: () => void;
 }
 
-function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBoardIndex, onAlign, onDistribute, onBool, onPathfinder, onArrange, onInscribedCircle, collapsed, onCollapse, onSwatches }: DockProps) {
+function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBoardIndex, onAlign, onDistribute, onBool, onPathfinder, onArrange, onInscribedCircle, onOutlineText, collapsed, onCollapse, onSwatches }: DockProps) {
   const single = ids.length === 1 ? doc.nodes[ids[0]] : undefined;
   const fillStops = single && (single.kind === "path" || single.kind === "text") && (single.fill.kind === "linear" || single.fill.kind === "radial")
     ? paintStops(single.fill)
@@ -2564,6 +2602,12 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       title="区域文字：在框内自动换行"
                     >区域</button>
                     {single.textMode === "area" && <span className="faint">自动换行</span>}
+                    <span className="char-divider" />
+                    <button
+                      className="char-btn"
+                      onClick={() => void onOutlineText()}
+                      title="用本机字体轮廓替换文字，转为可编辑路径（Ctrl+Shift+O）"
+                    >转路径</button>
                   </div>
                   <div className="char-row">
                     <span className="faint">字体</span>

@@ -130,14 +130,15 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 ## 发布构建
 
-- 版本：`0.1.0`（第四十六批：区域文字段落选项）
+- 版本：`0.1.0`（第四十七批：文字转路径）
 - 文件：`release\Vexa.exe`
-- 大小：`7,812,096 B`
-- SHA256：`8CEFFE189018AD8E8805B769FE080A605852BBDDE7AAA620BA3A0B74A8DAB507`
-- 构建时间：`2026-11-27 20:01:39`
+- 大小：`7,813,632 B`
+- SHA256：`4246B9D41716F484A336B802FF0B680A7A8ADCFBF1D786F26BB6F0B4A1914479`
+- 构建时间：`2026-11-27 21:19:26`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,371,198 B`，SHA256 `28EEE3AEBD32E854D70BECF050DB5D8040065540650BBAFEFA0EAB434A8213B7`
-- 前端产物：`dist/assets/pdf-BQEwgWSU.js` 407.52 kB / gzip 169.34；`dist/assets/index-BzaFrLeU.js` 542.58 kB / gzip 171.67；`dist/assets/index-DApU8VOk.css` 61.88 kB / gzip 11.56；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,373,066 B`，SHA256 `14597B395CEB3D0A0D7B46FFC6DC768F2EC87EEF22B84B93D54B2897C66AFD8B`
+- 前端产物：`dist/assets/pdf-Dp53mX14.js` 18.24 kB / gzip 7.44；`dist/assets/index-CxG1iaRQ.js` 389.40 kB / gzip 161.95；`dist/assets/index-DPRcoDWx.js` 546.66 kB / gzip 173.22；`dist/assets/index-DApU8VOk.css` 61.88 kB / gzip 11.56；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 文字转路径验收（第四十七批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.text-outline.mts` 通过（`Ag中` 三个字形各生成闭合轮廓，区域文字两行轮廓基线分离，实色文字替换为 3 个字形路径并继承 `#c2410c` 填充，渐变文字合成单个复合路径避免逐字重复渐变，SVG 不再输出 `<text>`，`.vex` 往返保留路径与组，PDF `warnings 0`）；全部 23 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：文字工具落下 64px「Vexa 矢量文字」，属性坞显示“转路径”，文字菜单提供“文字转路径”；执行后文字节点消失，生成 8 个字形路径并包成“文本 轮廓”组，填充继承 `#0f76d6`，组保持选中；图层面板展开显示 8 个“文本 字形”子层；窗口无横向溢出；`Ctrl+Z` 恢复原文字、`Ctrl+Y` 恢复轮廓。截图 `docs/shots/text-outline.png`。
 - 区域文字段落验收（第四十六批）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.area-text.mts` 通过（首行缩进 30px 时首行 x=134、第二行 x=104；段距 20px 时两段基线差 = 25+20；垂直居中首基线比顶对齐下移；`.vex` 往返保留 `areaVAlign/firstIndent/paraSpace`；SVG/PDF 通过）。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：`360×230` 区域框，输入两段文字，属性坞设首行 24px、段距 12px、垂直“中”；画布两段之间出现 12px 段距，文本块在框内垂直居中，单点/区域菜单互转与 `Ctrl+Z` 恢复通过；窗口无横向溢出。截图 `docs/shots/area-text.png`。
 - 区域文字验收（第四十五批）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.area-text.mts` 通过（180×80 框、20px 字断 5 行，行宽不越内框；框高压到 28px 检出溢出；模式互转与 `.vex` 往返保留 `textMode/boxW/boxH`）。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：文字工具拖出 `360×170` 区域框，输入 34 字后自动 3 行；属性坞显示“类型 单点 [区域] 自动换行”与“框宽/框高”；文字菜单提供“转区域文字 / 转单点文字”，转单点后框字段清空，`Ctrl+Z` 恢复。该批截图已按清理惯例删除，当前合并到第四十六批截图。
 - 画板裁剪验收（第四十三批）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.render.mts` 16 项 PASS，全部 21 个冒烟脚本复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1600×1000 窗口在画板左边界跨画 `457.19×365.75` 矩形（X `-234.116`）：板外像素 `236,236,240`、板内 `15,118,214`；板外整段不显示，选择框/缩放柄/旋转柄只留在板内，中心在板外的手柄整颗跳过；板外点击“已选 0”、板内“已选 1”；画板外完全不可见矩形框选后仍“已选 0”。1500 个视口外节点 × 20 帧 `407.4ms → 23.3ms`（`17.49x`），600 个视口内板外节点 × 20 帧 `199.9ms → 10.5ms`。该批截图已按清理惯例删除。
