@@ -155,10 +155,11 @@ export function textBox(node: TextNode): Box {
   return { x, y: node.y - (node.baseline ?? 0) - node.size * 1.2, w, h };
 }
 
-/** 按字符贪心换行；CJK 可逐字断，拉丁长词也会在框内断开。 */
+/** 按字符贪心换行；CJK 可逐字断，拉丁长词也会在框内断开。首行缩进只作用于每个段落第一行。 */
 function wrapAreaText(node: TextNode, innerW: number): string[][] {
   const tracking = node.tracking ?? 0;
   const hs = Math.abs((node.hScale ?? 100) / 100) || 1;
+  const indent = Math.max(0, Math.min(node.firstIndent ?? 0, innerW - 1));
   const paragraphs = node.text.split("\n");
   return paragraphs.map((para) => {
     const chars = Array.from(para);
@@ -166,13 +167,15 @@ function wrapAreaText(node: TextNode, innerW: number): string[][] {
     const lines: string[] = [];
     let cur = "";
     let curW = 0;
+    let limit = Math.max(1, innerW - indent);
     for (const ch of chars) {
       const cw = textEmWidth(ch) * node.size;
       const nextW = cur ? curW + tracking + cw : cw;
-      if (cur && (nextW * hs > innerW || nextW * hs < 0)) {
+      if (cur && (nextW * hs > limit || nextW * hs < 0)) {
         lines.push(cur);
         cur = ch;
         curW = cw;
+        limit = innerW;
       } else {
         cur += ch;
         curW = nextW;
@@ -193,21 +196,34 @@ export function textLayout(node: TextNode): TextLayout {
   if (mode === "area") {
     const box = textBox(node);
     const innerW = Math.max(1, box.w - AREA_INSET * 2);
+    const innerH = Math.max(1, box.h - AREA_INSET * 2);
+    const indent = Math.max(0, Math.min(node.firstIndent ?? 0, innerW - 1));
+    const paraSpace = Math.max(0, node.paraSpace ?? 0);
     const plan = wrapAreaText(node, innerW);
-    const firstBaseline = box.y + AREA_INSET + node.size * 1.2 - baselineOffset;
+    const gaps = Math.max(0, plan.length - 1);
+    const lineCount = plan.reduce((n, para) => n + para.length, 0);
+    const blockH = node.size * 1.2 + Math.max(0, lineCount - 1) * lh + gaps * paraSpace + node.size * 0.25;
+    const free = innerH - blockH;
+    const vAlign = node.areaVAlign ?? "top";
+    const topOffset = free > 0 ? (vAlign === "middle" ? free / 2 : vAlign === "bottom" ? free : 0) : 0;
+    let baseline = box.y + AREA_INSET + node.size * 1.2 - baselineOffset + topOffset;
     const lines: TextLineLayout[] = [];
-    for (const para of plan) {
-      for (const text of para) {
+    plan.forEach((para, pi) => {
+      para.forEach((text, li) => {
+        const lineIndent = li === 0 ? indent : 0;
+        const avail = Math.max(1, innerW - lineIndent);
         const width =
           textEmWidth(text) * node.size +
           Math.max(0, Array.from(text).length - 1) * (node.tracking ?? 0);
         const scaled = width * hs;
         const x =
-          box.x + AREA_INSET +
-          (align === "center" ? Math.max(0, innerW - scaled) / 2 : align === "right" ? Math.max(0, innerW - scaled) : 0);
-        lines.push({ text, x, baseline: firstBaseline + lines.length * lh, width });
-      }
-    }
+          box.x + AREA_INSET + lineIndent +
+          (align === "center" ? Math.max(0, avail - scaled) / 2 : align === "right" ? Math.max(0, avail - scaled) : 0);
+        lines.push({ text, x, baseline, width });
+        baseline += lh;
+      });
+      if (pi < plan.length - 1) baseline += paraSpace;
+    });
     const maxBaseline = box.y + box.h - AREA_INSET - node.size * 0.25;
     const overflow = lines.length > 0 && lines[lines.length - 1].baseline > maxBaseline;
     return { mode, lines, box, overflow };
@@ -252,6 +268,9 @@ export function convertTextMode(node: TextNode, mode: "point" | "area"): void {
   node.baseline = 0;
   delete node.boxW;
   delete node.boxH;
+  delete node.areaVAlign;
+  delete node.firstIndent;
+  delete node.paraSpace;
 }
 
 export function nodeBox(node: Node): Box {

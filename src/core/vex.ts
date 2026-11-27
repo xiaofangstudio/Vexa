@@ -77,6 +77,9 @@ export function parseVex(text: string): VexaDoc {
       } else {
         if (typeof n.boxW !== "number" || !(n.boxW > 0)) n.boxW = 120;
         if (typeof n.boxH !== "number" || !(n.boxH > 0)) n.boxH = 60;
+        if (n.areaVAlign !== "top" && n.areaVAlign !== "middle" && n.areaVAlign !== "bottom") delete n.areaVAlign;
+        if (typeof n.firstIndent !== "number" || !Number.isFinite(n.firstIndent) || n.firstIndent < 0) delete n.firstIndent;
+        if (typeof n.paraSpace !== "number" || !Number.isFinite(n.paraSpace) || n.paraSpace < 0) delete n.paraSpace;
       }
     }
     if (n.kind === "path" && n.stroke) {

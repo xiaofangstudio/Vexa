@@ -163,6 +163,12 @@ export interface TextNode {
   /** 区域文字框宽高，仅 textMode=area 时有效 */
   boxW?: number;
   boxH?: number;
+  /** 区域文字在框内的垂直对齐，默认 top。 */
+  areaVAlign?: "top" | "middle" | "bottom";
+  /** 段落首行缩进，单位 px；仅区域文字。 */
+  firstIndent?: number;
+  /** 段间距，单位 px；仅区域文字。 */
+  paraSpace?: number;
   fill: Paint;
   opacity: number;
   visible: boolean;

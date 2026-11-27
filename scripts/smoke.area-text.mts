@@ -42,6 +42,25 @@ for (const line of centered.lines) {
   assert.ok(line.x + line.width <= 100 + 180 - AREA_INSET + 0.01, "居中行不越过右内框");
 }
 
+const paragraphs: TextNode = {
+  ...node,
+  text: "第一段\n第二段",
+  boxH: 140,
+  firstIndent: 30,
+  paraSpace: 20,
+  areaVAlign: "middle",
+};
+const pl = textLayout(paragraphs);
+assert.equal(pl.lines.length, 2, "两个段落各一行");
+assert.equal(pl.lines[0].x, 100 + AREA_INSET + 30, "首行缩进只作用于段落第一行");
+assert.equal(
+  Math.round((pl.lines[1].baseline - pl.lines[0].baseline) * 100) / 100,
+  20 * 1.25 + 20,
+  "段间距叠加在行距上",
+);
+const top = textLayout({ ...paragraphs, areaVAlign: "top" });
+assert.ok(pl.lines[0].baseline > top.lines[0].baseline, "垂直居中把文本块下移");
+
 const tight: TextNode = { ...node, boxH: 28 };
 assert.equal(textLayout(tight).overflow, true, "压缩框高应检出溢出");
 
@@ -53,9 +72,13 @@ const back = { ...point };
 convertTextMode(back, "point");
 assert.equal(back.textMode ?? "point", "point");
 assert.ok(!back.boxW && !back.boxH);
+assert.equal(back.areaVAlign, undefined);
+assert.equal(back.firstIndent, undefined);
+assert.equal(back.paraSpace, undefined);
 
 const doc: VexaDoc = createDoc("区域文字", 400, 300);
-doc.nodes.t1 = node;
+const saved: TextNode = { ...node, areaVAlign: "middle", firstIndent: 24, paraSpace: 12 };
+doc.nodes.t1 = saved;
 doc.root.push("t1");
 const svg = docToSVG(doc);
 assert.match(svg, /clipPath id="tc\d+"/);
@@ -66,6 +89,9 @@ const rt = roundtrip.nodes.t1 as TextNode;
 assert.equal(rt.textMode, "area");
 assert.equal(rt.boxW, 180);
 assert.equal(rt.boxH, 80);
+assert.equal(rt.areaVAlign, "middle");
+assert.equal(rt.firstIndent, 24);
+assert.equal(rt.paraSpace, 12);
 
 const pdf = await exportPDF(doc, {
   fontLoader: () => new Uint8Array(fs.readFileSync("C:/Windows/Fonts/simhei.ttf")),

@@ -312,6 +312,8 @@ export function scaleNodes(doc: VexaDoc, ids: string[], box: Box, sx: number, sy
       if ((n.textMode ?? "point") === "area") {
         n.boxW = Math.max(1, (n.boxW ?? 120) * sxAbs);
         n.boxH = Math.max(1, (n.boxH ?? 60) * syAbs);
+        if (n.firstIndent) n.firstIndent *= sxAbs;
+        if (n.paraSpace) n.paraSpace *= syAbs;
       }
     } else {
       for (const cid of n.children) {

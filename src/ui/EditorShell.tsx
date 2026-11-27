@@ -319,6 +319,8 @@ function fitNodes(nodes: Node[], board: Artboard, roots?: string[]): void {
       if ((n.textMode ?? "point") === "area") {
         n.boxW = Math.max(1, (n.boxW ?? 120) * Math.abs(s));
         n.boxH = Math.max(1, (n.boxH ?? 60) * Math.abs(s));
+        if (n.firstIndent) n.firstIndent *= Math.abs(s);
+        if (n.paraSpace) n.paraSpace *= Math.abs(s);
       }
       return;
     }
@@ -2634,9 +2636,39 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                           unit="px"
                           onCommit={(v) => setNode((n) => { if (n.kind === "text") n.boxH = Math.max(8, v); })}
                         />
+                        <NumField
+                          label="首行"
+                          value={Math.round(single.firstIndent ?? 0)}
+                          min={0}
+                          unit="px"
+                          onCommit={(v) => setNode((n) => { if (n.kind === "text") n.firstIndent = Math.max(0, v); })}
+                        />
+                        <NumField
+                          label="段距"
+                          value={Math.round(single.paraSpace ?? 0)}
+                          min={0}
+                          unit="px"
+                          onCommit={(v) => setNode((n) => { if (n.kind === "text") n.paraSpace = Math.max(0, v); })}
+                        />
                       </>
                     )}
                   </div>
+                  {single.textMode === "area" && (
+                    <div className="char-row">
+                      <span className="faint">垂直</span>
+                      {(["top", "middle", "bottom"] as const).map((v) => (
+                        <button
+                          key={v}
+                          className={"char-btn" + ((single.areaVAlign ?? "top") === v ? " is-on" : "")}
+                          onClick={() => setNode((n) => { if (n.kind === "text") n.areaVAlign = v; })}
+                          title={v === "top" ? "顶对齐" : v === "middle" ? "垂直居中" : "底对齐"}
+                        >
+                          {v === "top" ? "顶" : v === "middle" ? "中" : "底"}
+                        </button>
+                      ))}
+                      <span className="faint">框内对齐</span>
+                    </div>
+                  )}
                   <div className="char-row">
                     <span className="faint">样式</span>
                     <button

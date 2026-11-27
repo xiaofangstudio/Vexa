@@ -81,7 +81,7 @@ async function main() {
     const doc = shell?.memoizedState?.memoizedState?.current;
     if (!doc || !doc.nodes) return null;
     const n = Object.values(doc.nodes).find((x) => x.kind === 'text');
-    return n ? { id: n.id, text: n.text, textMode: n.textMode ?? 'point', boxW: n.boxW, boxH: n.boxH, x: n.x, y: n.y, size: n.size } : null;
+    return n ? { id: n.id, text: n.text, textMode: n.textMode ?? 'point', boxW: n.boxW, boxH: n.boxH, areaVAlign: n.areaVAlign ?? 'top', firstIndent: n.firstIndent ?? 0, paraSpace: n.paraSpace ?? 0, x: n.x, y: n.y, size: n.size } : null;
   })()`);
 
   await send('Runtime.enable');
@@ -109,12 +109,42 @@ async function main() {
   assert(node.boxW > 200 && node.boxH > 150, `区域框已按拖动落尺寸（实际 ${Math.round(node.boxW)}×${Math.round(node.boxH)}）`);
 
   await evaluate(`(() => { const t = document.querySelector('.dock-textarea'); if (t) { t.focus(); t.select(); return true; } return false; })()`);
-  const sample = '区域文字会按文本框宽度自动换行。拖动框角改尺寸，框内文字会实时重排。';
+  const sample = '区域文字会按框宽自动换行。\n拖动框角改尺寸，文字实时重排。';
   await send('Input.insertText', { text: sample });
   await sleep(900);
   node = await textNode();
   console.log('node-after', JSON.stringify(node));
   assert(node && node.text === sample, '文本输入已完整写入区域文字节点');
+
+  const setNumField = async (label, value) => {
+    const ok = await evaluate(`(() => {
+      const lab = [...document.querySelectorAll('.field-label')].find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+      const input = lab?.closest('.field')?.querySelector('input');
+      if (!input) return false;
+      input.focus();
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(input, ${JSON.stringify(String(value))});
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.blur();
+      return true;
+    })()`);
+    assert(ok, `找到并设置「${label}」数值`);
+    await sleep(450);
+  };
+  await setNumField('首行', 24);
+  await setNumField('段距', 12);
+  await setNumField('框高', 230);
+  const vertical = await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.char-row')].find((r) => r.innerText.includes('垂直'));
+    const b = [...(row?.querySelectorAll('button') ?? [])].find((x) => x.textContent.trim() === '中');
+    if (!b) return false;
+    b.click();
+    return true;
+  })()`);
+  assert(vertical, '属性坞设置区域文字垂直居中');
+  await sleep(700);
+  node = await textNode();
+  assert(node && node.areaVAlign === 'middle' && node.firstIndent === 24 && node.paraSpace === 12, '段落与垂直对齐写入节点');
   await evaluate(`document.activeElement?.blur()`);
   await sleep(300);
   await key('V', 86, 'KeyV');
@@ -154,6 +184,8 @@ async function main() {
   await sleep(600);
   conv = await textNode();
   assert(conv && conv.textMode === 'area' && Math.abs(conv.boxW - 360) < 2, '撤销恢复区域文字');
+  await evaluate(`document.querySelector('.dock-textarea')?.closest('.dock-sec')?.scrollIntoView({ block: 'start' })`);
+  await sleep(500);
 
   await shot('area-text.png');
   clearTimeout(watchdog);
