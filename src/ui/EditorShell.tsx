@@ -57,6 +57,7 @@ import { serializeVex } from "../core/vex";
 import { applyDocSettings, validateDocSettings, type DocSettings } from "../core/documentSettings";
 import { addPreset, useCustomPresets } from "../stores/boardPresets";
 import CanvasView from "./CanvasView";
+import AiPanel from "./AiPanel";
 import BrandMark from "./BrandMark";
 import Icon, { type IconName } from "./Icon";
 import MenuBar, { type MenuGroup } from "./MenuBar";
@@ -351,7 +352,7 @@ export default function EditorShell(props: Props) {
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View | null>(null);
   const [space, setSpace] = useState(false);
-  const [tab, setTab] = useState<"props" | "layers">("props");
+  const [tab, setTab] = useState<"props" | "layers" | "ai">("props");
   const [dockOpen, setDockOpen] = useState(true);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [ctxShift, setCtxShift] = useState(0);
@@ -1492,6 +1493,7 @@ export default function EditorShell(props: Props) {
         { label: "右侧属性 / 图层面板", checked: dockOpen, run: () => setDockOpen((v) => !v) },
         { label: "打开属性面板", run: () => { setTab("props"); setDockOpen(true); } },
         { label: "打开图层面板", run: () => { setTab("layers"); setDockOpen(true); } },
+        { label: "打开 AI 助手", run: () => { setTab("ai"); setDockOpen(true); } },
         { label: "文档色板…", run: () => setSwatchesOpen(true) },
         { label: "", sep: true },
         { label: "恢复默认工作区", run: () => { setTab("props"); setDockOpen(true); fit(); } },
@@ -1877,6 +1879,8 @@ export default function EditorShell(props: Props) {
           onToast={say}
           boardIndex={boardIndex}
           onBoardIndex={setBoardIndex}
+          fill={newFill}
+          stroke={newStroke}
           onAlign={alignSel}
           onDistribute={distributeSel}
           onBool={boolSel}
@@ -2021,13 +2025,15 @@ export default function EditorShell(props: Props) {
 interface DockProps {
   doc: VexaDoc;
   ids: string[];
-  tab: "props" | "layers";
-  onTab: (t: "props" | "layers") => void;
+  tab: "props" | "layers" | "ai";
+  onTab: (t: "props" | "layers" | "ai") => void;
   store: ReturnType<typeof useDocStore>;
   onSelect: (ids: string[]) => void;
   onToast: (msg: string) => void;
   boardIndex: number;
   onBoardIndex: (i: number) => void;
+  fill: Paint;
+  stroke: Stroke;
   onAlign: (mode: AlignMode) => void;
   onDistribute: (axis: "h" | "v") => void;
   onBool: (op: BoolOp) => void;
@@ -2039,7 +2045,7 @@ interface DockProps {
   onSwatches: () => void;
 }
 
-function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBoardIndex, onAlign, onDistribute, onBool, onPathfinder, onArrange, onInscribedCircle, collapsed, onCollapse, onSwatches }: DockProps) {
+function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBoardIndex, fill, stroke, onAlign, onDistribute, onBool, onPathfinder, onArrange, onInscribedCircle, collapsed, onCollapse, onSwatches }: DockProps) {
   const single = ids.length === 1 ? doc.nodes[ids[0]] : undefined;
   const fillStops = single && (single.kind === "path" || single.kind === "text") && (single.fill.kind === "linear" || single.fill.kind === "radial")
     ? paintStops(single.fill)
@@ -2473,6 +2479,9 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
         </button>
         <button className={"dock-tab" + (tab === "layers" ? " is-on" : "")} onClick={() => onTab("layers")}>
           <Icon name="layers" size={14} /> {zh.dock.layers}
+        </button>
+        <button className={"dock-tab" + (tab === "ai" ? " is-on" : "")} onClick={() => onTab("ai")} title="AI 助手">
+          <Icon name="spark" size={14} /> AI
         </button>
         <button type="button" className="dock-collapse" title="收起右侧面板" onClick={onCollapse}>
           <Icon name="chevron" size={14} />
@@ -3073,7 +3082,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
             <div className="info-row"><span>格式</span><span className="info-val">.vex · Vexa 0.1.0</span></div>
           </section>
         </div>
-      ) : (
+      ) : tab === "layers" ? (
         <div className="dock-body layers-body" key="layers">
           <div className="layers-head">
             <span>{zh.dock.objects}</span>
@@ -3187,6 +3196,18 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
               提示
             </button>
           </div>
+        </div>
+      ) : (
+        <div className="dock-body ai-dock-body" key="ai">
+          <AiPanel
+            ids={ids}
+            boardIndex={boardIndex}
+            fill={fill}
+            stroke={stroke}
+            store={store}
+            onSelect={onSelect}
+            onToast={onToast}
+          />
         </div>
       )}
     </div>

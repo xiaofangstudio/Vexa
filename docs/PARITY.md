@@ -614,14 +614,14 @@
 
 **P6 · 效果与扩展**
 - 效果目录（变形、绕排、纹理）、3D/透视（`effects` 2.9 MB、`three-d`）
-- 脚本与插件（`js`、`plugins`）——Vexa 定位"零联网零 AI"，此组默认不做；本机 MCP 已自带
+- 脚本与插件（`js`、`plugins`）——Vexa 定位"零联网 + 本地 AI"，云端模型与脚本插件默认不做；本地 AI 面板已自带，本机 MCP 已自带
 
 ## 4. 不打算照搬的部分
 
 | 项 | 原因 |
 |---|---|
 | egui 前端与 626 个 UI 文件 | Vexa 是 Tauri + React + TS，界面语言按 Strata 设计令牌重做 |
-| `cad`、`three-d`、`js`、`plugins` | 与本产品定位（纯矢量、零联网、无 AI）冲突或成本过高；MCP 改用本机 stdio 实现 |
+| `cad`、`three-d`、`js`、`plugins` | 与本产品定位（纯矢量、零联网、本地 AI 不出网）冲突或成本过高；MCP 改用本机 stdio 实现 |
 | 各语言 i18n tsv | Vexa 只做全中文，`src/i18n/zh.tsx` |
 | `testkit`、`apischema` | 属于参考工程的内部基建，Vexa 用自己的 `src-tauri/tests` |
 

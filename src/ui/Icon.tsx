@@ -43,6 +43,7 @@ export type IconName =
   | "image"
   | "trace"
   | "chevron"
+  | "spark"
   | "check";
 
 const paths: Record<IconName, React.ReactNode> = {
@@ -233,6 +234,12 @@ const paths: Record<IconName, React.ReactNode> = {
     </>
   ),
   chevron: <path d="M5.4 6.2 8.4 9.2 11.4 6.2" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />,
+  spark: (
+    <>
+      <path d="M8 1.8 9.4 6.6 14.2 8 9.4 9.4 8 14.2 6.6 9.4 1.8 8 6.6 6.6z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M12.7 2.2 13.2 3.6 14.6 4.1 13.2 4.6 12.7 6 12.2 4.6 10.8 4.1 12.2 3.6z" fill="currentColor" />
+    </>
+  ),
   check: <path d="M3.4 8.4 6.4 11.2 12.6 4.6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />,
 };
 
