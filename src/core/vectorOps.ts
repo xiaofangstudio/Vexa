@@ -309,6 +309,10 @@ export function scaleNodes(doc: VexaDoc, ids: string[], box: Box, sx: number, sy
       const sxAbs = Math.abs(sx) || 0.001;
       n.size *= syAbs;
       n.hScale = (n.hScale ?? 100) * (sxAbs / syAbs);
+      if ((n.textMode ?? "point") === "area") {
+        n.boxW = Math.max(1, (n.boxW ?? 120) * sxAbs);
+        n.boxH = Math.max(1, (n.boxH ?? 60) * syAbs);
+      }
     } else {
       for (const cid of n.children) {
         const c = doc.nodes[cid];

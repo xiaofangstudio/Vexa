@@ -60,6 +60,7 @@ type Drag =
   | { kind: "move"; before: string; last: Pt; ids: string[] }  | { kind: "marquee"; start: Pt; anchorIds?: string[]; anchorBase?: AnchorRef[] }
   | { kind: "pan"; startScreen: Pt; startView: View }
   | { kind: "anchor"; before: string; last: Pt; refs: AnchorRef[]; part: "anchor" | "hIn" | "hOut" }
+  | { kind: "text"; start: Pt; last: Pt }
   | { kind: "create"; shape: "rect" | "ellipse" | "circle" | "roundrect" | "polygon" | "star"; start: Pt; id: string; before: string; fromCenter?: boolean; second?: Pt; last?: Pt; invalid?: boolean }
   | { kind: "resize"; before: string; ids: string[]; startBox: Box; anchor: Pt; handle: HandleId }
   | { kind: "skew"; before: string; ids: string[]; startBox: Box; handle: HandleId; center: Pt; start: Pt; axis: "x" | "y"; sign: 1 | -1; appliedTan: number }
@@ -712,27 +713,7 @@ export default function CanvasView(props: Props) {
     }
 
     if (prev.tool === "text") {
-      const fill = { ...prev.newFill };
-      const id = `t${doc.seq}`;
-      store.commit((d2) => {
-        d2.seq += 1;
-        d2.nodes[id] = {
-          kind: "text",
-          id,
-          name: "文本",
-          x: p.x,
-          y: p.y,
-          text: "输入文字",
-          size: 28,
-          font: "Microsoft YaHei",
-          fill,
-          opacity: 1,
-          visible: true,
-          locked: false,
-        };
-        d2.root.push(id);
-      });
-      prev.onSelect([id]);
+      dragRef.current = { kind: "text", start: p, last: p };
       return;
     }
 
@@ -1093,6 +1074,18 @@ export default function CanvasView(props: Props) {
       const x = Math.min(drag.start.x, p.x);
       const y = Math.min(drag.start.y, p.y);
       marqueeRef.current = { x, y, w: Math.abs(p.x - drag.start.x), h: Math.abs(p.y - drag.start.y) };
+      draw();
+      return;
+    }
+
+    if (drag.kind === "text") {
+      drag.last = p;
+      marqueeRef.current = {
+        x: Math.min(drag.start.x, p.x),
+        y: Math.min(drag.start.y, p.y),
+        w: Math.abs(p.x - drag.start.x),
+        h: Math.abs(p.y - drag.start.y),
+      };
       draw();
       return;
     }
@@ -1470,6 +1463,55 @@ export default function CanvasView(props: Props) {
 
     if (drag.kind === "pan") {
       commitViewNow();
+      draw();
+      return;
+    }
+
+    if (drag.kind === "text") {
+      const box = marqueeRef.current;
+      marqueeRef.current = null;
+      const p = drag.last;
+      const areaBox = box && box.w > 8 && box.h > 8 ? box : null;
+      const prev = propsRef.current;
+      const fill = { ...prev.newFill };
+      const id = `t${prev.doc.seq}`;
+      store.commit((d) => {
+        d.seq += 1;
+        d.nodes[id] = areaBox
+          ? {
+              kind: "text",
+              id,
+              name: "区域文本",
+              x: areaBox.x,
+              y: areaBox.y,
+              text: "输入文字",
+              size: 28,
+              font: "Microsoft YaHei",
+              textMode: "area",
+              boxW: areaBox.w,
+              boxH: areaBox.h,
+              fill,
+              opacity: 1,
+              visible: true,
+              locked: false,
+            }
+          : {
+              kind: "text",
+              id,
+              name: "文本",
+              x: p.x,
+              y: p.y,
+              text: "输入文字",
+              size: 28,
+              font: "Microsoft YaHei",
+              fill,
+              opacity: 1,
+              visible: true,
+              locked: false,
+            };
+        d.root.push(id);
+      });
+      prev.onSelect([id]);
       draw();
       return;
     }

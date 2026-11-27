@@ -70,6 +70,14 @@ export function parseVex(text: string): VexaDoc {
       if (typeof n.hScale !== "number" || !(n.hScale > 0)) delete n.hScale;
       if (typeof n.vScale !== "number" || !(n.vScale > 0)) delete n.vScale;
       if (typeof n.baseline !== "number" || !Number.isFinite(n.baseline)) delete n.baseline;
+      if (n.textMode !== "area") {
+        delete n.textMode;
+        delete n.boxW;
+        delete n.boxH;
+      } else {
+        if (typeof n.boxW !== "number" || !(n.boxW > 0)) n.boxW = 120;
+        if (typeof n.boxH !== "number" || !(n.boxH > 0)) n.boxH = 60;
+      }
     }
     if (n.kind === "path" && n.stroke) {
       if (!Array.isArray(n.stroke.dash)) n.stroke.dash = [];

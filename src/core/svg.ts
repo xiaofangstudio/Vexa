@@ -1,5 +1,5 @@
 /** SVG 导出与 SVG → Vexa 节点解析（描摹结果走这里）。 */
-import { pathD, parseD, textBox } from "./geom";
+import { pathD, parseD, textBox, textLayout } from "./geom";
 import { gradLine, normalizeGradStops, radialGeom, renderGradStops, stopAlpha } from "./paint";
 import { widthOutline } from "./width";
 import {
@@ -144,20 +144,28 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
     return `${indent}<path d="${pathD(node)}"${fill}${stroke}${op}${blend}/>\n`;
   }
   if (node.kind === "text") {
-    const lines = node.text.split("\n");
-    const lh = node.size * (node.lineHeight ?? 1.25);
-    const body = lines
-      .map((l, i) => `${indent}  <tspan x="0" dy="${i === 0 ? 0 : round(lh)}">${esc(l)}</tspan>`)
-      .join("\n");
-    const id = `g${seq.n++}`;
-    const fill = fillAttrs(node.fill, nodeBBox(node), defs, id);
-    const hs = (node.hScale ?? 100) / 100;
-    const vs = (node.vScale ?? 100) / 100;
-    const scale = hs !== 1 || vs !== 1 ? ` scale(${round(hs)} ${round(vs)})` : "";
-    const anchor = node.align === "center" ? "middle" : node.align === "right" ? "end" : "start";
+    const lay = textLayout(node);
+    const fill = fillAttrs(node.fill, nodeBBox(node), defs, `g${seq.n++}`);
+    const hs = (node.hScale ?? 100) / 100 || 1;
+    const vs = (node.vScale ?? 100) / 100 || 1;
     const tracking = node.tracking ? ` letter-spacing="${round(node.tracking)}"` : "";
     const weight = node.bold ? ` font-weight="700"` : "";
     const style = node.italic ? ` font-style="italic"` : "";
+    if (lay.mode === "area") {
+      const clipId = `tc${seq.n++}`;
+      defs.push(
+        `<clipPath id="${clipId}"><rect x="${round(lay.box.x)}" y="${round(lay.box.y)}" width="${round(lay.box.w)}" height="${round(lay.box.h)}"/></clipPath>`,
+      );
+      const body = lay.lines
+        .map((l) => `${indent}  <tspan x="${round(l.x / hs)}" y="${round(l.baseline / vs)}">${esc(l.text)}</tspan>`)
+        .join("\n");
+      return `${indent}<g clip-path="url(#${clipId})">\n${indent}<text transform="scale(${round(hs)} ${round(vs)})" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="start"${fill}${op}${blend}>\n${body}\n${indent}</text>\n${indent}</g>\n`;
+    }
+    const body = lay.lines
+      .map((l, i) => `${indent}  <tspan x="0" dy="${i === 0 ? 0 : round(node.size * (node.lineHeight ?? 1.25))}">${esc(l.text)}</tspan>`)
+      .join("\n");
+    const scale = hs !== 1 || vs !== 1 ? ` scale(${round(hs)} ${round(vs)})` : "";
+    const anchor = node.align === "center" ? "middle" : node.align === "right" ? "end" : "start";
     return `${indent}<text transform="translate(${round(node.x)} ${round(node.y - (node.baseline ?? 0))})${scale}" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="${anchor}"${fill}${op}${blend}>\n${body}\n${indent}</text>\n`;
   }
   if (node.kind === "image") {

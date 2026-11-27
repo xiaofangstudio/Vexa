@@ -109,8 +109,36 @@ function textEmWidth(line: string): number {
   return Math.max(0.3, w);
 }
 
-/** 单点文字的近似包围盒：按字符宽度估，字距、缩放、对齐一起算。 */
+/** 区域文字的内边距，保持文字不贴框。 */
+export const AREA_INSET = 4;
+
+export interface TextLineLayout {
+  text: string;
+  /** 该行基线起点（已含对齐偏移）。 */
+  x: number;
+  /** 该行基线。 */
+  baseline: number;
+  /** 未乘 hScale 的排版宽度。 */
+  width: number;
+}
+
+export interface TextLayout {
+  mode: "point" | "area";
+  lines: TextLineLayout[];
+  box: Box;
+  overflow: boolean;
+}
+
+/** 单行文字的近似包围盒：按字符宽度估，字距、缩放、对齐一起算。 */
 export function textBox(node: TextNode): Box {
+  if ((node.textMode ?? "point") === "area") {
+    return {
+      x: node.x,
+      y: node.y,
+      w: Math.max(1, node.boxW ?? 100),
+      h: Math.max(1, node.boxH ?? 60),
+    };
+  }
   const lines = node.text.split("\n");
   const lh = node.size * (node.lineHeight ?? 1.25);
   const tracking = node.tracking ?? 0;
@@ -125,6 +153,105 @@ export function textBox(node: TextNode): Box {
   const align = node.align ?? "left";
   const x = node.x + (align === "center" ? -w / 2 : align === "right" ? -w : 0);
   return { x, y: node.y - (node.baseline ?? 0) - node.size * 1.2, w, h };
+}
+
+/** 按字符贪心换行；CJK 可逐字断，拉丁长词也会在框内断开。 */
+function wrapAreaText(node: TextNode, innerW: number): string[][] {
+  const tracking = node.tracking ?? 0;
+  const hs = Math.abs((node.hScale ?? 100) / 100) || 1;
+  const paragraphs = node.text.split("\n");
+  return paragraphs.map((para) => {
+    const chars = Array.from(para);
+    if (!chars.length) return [""];
+    const lines: string[] = [];
+    let cur = "";
+    let curW = 0;
+    for (const ch of chars) {
+      const cw = textEmWidth(ch) * node.size;
+      const nextW = cur ? curW + tracking + cw : cw;
+      if (cur && (nextW * hs > innerW || nextW * hs < 0)) {
+        lines.push(cur);
+        cur = ch;
+        curW = cw;
+      } else {
+        cur += ch;
+        curW = nextW;
+      }
+    }
+    if (cur || !lines.length) lines.push(cur);
+    return lines;
+  });
+}
+
+/** 统一的文本行布局：单点文字与区域文字共用渲染、导出的换行/对齐结果。 */
+export function textLayout(node: TextNode): TextLayout {
+  const mode = node.textMode ?? "point";
+  const lh = node.size * (node.lineHeight ?? 1.25);
+  const align = node.align ?? "left";
+  const hs = Math.abs((node.hScale ?? 100) / 100) || 1;
+  const baselineOffset = node.baseline ?? 0;
+  if (mode === "area") {
+    const box = textBox(node);
+    const innerW = Math.max(1, box.w - AREA_INSET * 2);
+    const plan = wrapAreaText(node, innerW);
+    const firstBaseline = box.y + AREA_INSET + node.size * 1.2 - baselineOffset;
+    const lines: TextLineLayout[] = [];
+    for (const para of plan) {
+      for (const text of para) {
+        const width =
+          textEmWidth(text) * node.size +
+          Math.max(0, Array.from(text).length - 1) * (node.tracking ?? 0);
+        const scaled = width * hs;
+        const x =
+          box.x + AREA_INSET +
+          (align === "center" ? Math.max(0, innerW - scaled) / 2 : align === "right" ? Math.max(0, innerW - scaled) : 0);
+        lines.push({ text, x, baseline: firstBaseline + lines.length * lh, width });
+      }
+    }
+    const maxBaseline = box.y + box.h - AREA_INSET - node.size * 0.25;
+    const overflow = lines.length > 0 && lines[lines.length - 1].baseline > maxBaseline;
+    return { mode, lines, box, overflow };
+  }
+  const box = textBox(node);
+  const lines = node.text.split("\n").map((text, i) => {
+    const width =
+      textEmWidth(text) * node.size +
+      Math.max(0, Array.from(text).length - 1) * (node.tracking ?? 0);
+    const scaled = width * hs;
+    return {
+      text,
+      width,
+      x: node.x + (align === "center" ? -scaled / 2 : align === "right" ? -scaled : 0),
+      baseline: node.y + i * lh - baselineOffset,
+    };
+  });
+  return { mode, lines, box, overflow: false };
+}
+
+/** 单点 ↔ 区域文字转换，保留可见文字与大致位置。 */
+export function convertTextMode(node: TextNode, mode: "point" | "area"): void {
+  const cur = node.textMode ?? "point";
+  if (cur === mode) return;
+  if (mode === "area") {
+    const b = textBox(node);
+    node.textMode = "area";
+    node.x = b.x;
+    node.y = b.y;
+    node.boxW = Math.max(50, b.w + AREA_INSET * 2);
+    node.boxH = Math.max(node.size * 1.25 + AREA_INSET * 2, b.h + AREA_INSET * 2);
+    node.baseline = 0;
+    return;
+  }
+  const lay = textLayout(node);
+  const innerW = Math.max(1, lay.box.w - AREA_INSET * 2);
+  const align = node.align ?? "left";
+  node.text = lay.lines.map((l) => l.text).join("\n");
+  node.x = lay.box.x + AREA_INSET + (align === "center" ? innerW / 2 : align === "right" ? innerW : 0);
+  node.y = lay.lines[0]?.baseline ?? lay.box.y + AREA_INSET + node.size * 1.2;
+  node.textMode = "point";
+  node.baseline = 0;
+  delete node.boxW;
+  delete node.boxH;
 }
 
 export function nodeBox(node: Node): Box {

@@ -158,6 +158,11 @@ export interface TextNode {
   vScale?: number;
   /** 基线偏移，单位 px，正数向上 */
   baseline?: number;
+  /** point = 单点文字（x/y 为基线锚点）；area = 区域文字（x/y 为文本框左上角） */
+  textMode?: "point" | "area";
+  /** 区域文字框宽高，仅 textMode=area 时有效 */
+  boxW?: number;
+  boxH?: number;
   fill: Paint;
   opacity: number;
   visible: boolean;

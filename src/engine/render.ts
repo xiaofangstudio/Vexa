@@ -1,5 +1,5 @@
 /** 画面渲染：粘贴板点阵、画板、矢量对象、选择框与锚点手柄。 */
-import { flatten, nodeBox, textBox, unionBox, type Box } from "../core/geom";
+import { flatten, nodeBox, textLayout, unionBox, type Box } from "../core/geom";
 import { canvasPaint, gradAxis, gradHandlePoints, paintStops, stopAlpha, stopCssColor } from "../core/paint";
 import { widthHandles, widthOutline, widthPreview } from "../core/width";
 import { pointInArtboards } from "../core/artboards";
@@ -373,26 +373,27 @@ function drawNode(
     }
   } else if (node.kind === "text") {
     if (node.fill.kind !== "none") {
-      const lines = node.text.split("\n");
-      const tbox = textBox(node);
-      const lh = node.size * (node.lineHeight ?? 1.25);
-      const tracking = node.tracking ?? 0;
-      const align = node.align ?? "left";
+      const lay = textLayout(node);
       const hs = (node.hScale ?? 100) / 100;
       const vs = (node.vScale ?? 100) / 100;
-      ctx.fillStyle = canvasPaint(ctx, node.fill, tbox);
+      const tracking = node.tracking ?? 0;
+      ctx.fillStyle = canvasPaint(ctx, node.fill, lay.box);
       ctx.font = `${node.italic ? "italic " : ""}${node.bold ? "700 " : ""}${node.size}px ${node.font}`;
       ctx.textBaseline = "alphabetic";
-      lines.forEach((line, i) => {
-        const chars = Array.from(line);
+      ctx.save();
+      if (lay.mode === "area") {
+        ctx.beginPath();
+        ctx.rect(lay.box.x, lay.box.y, lay.box.w, lay.box.h);
+        ctx.clip();
+      }
+      lay.lines.forEach((line) => {
+        const chars = Array.from(line.text);
         const widths = chars.map((ch) => ctx.measureText(ch).width);
-        const total = widths.reduce((a, b) => a + b, 0) + Math.max(0, chars.length - 1) * tracking;
-        const dx = align === "center" ? -total * hs / 2 : align === "right" ? -total * hs : 0;
         ctx.save();
-        ctx.translate(node.x + dx, node.y + i * lh - (node.baseline ?? 0));
+        ctx.translate(line.x, line.baseline);
         ctx.scale(hs, vs);
         if (tracking === 0) {
-          ctx.fillText(line, 0, 0);
+          ctx.fillText(line.text, 0, 0);
         } else {
           let x = 0;
           chars.forEach((ch, k) => {
@@ -402,6 +403,14 @@ function drawNode(
         }
         ctx.restore();
       });
+      ctx.restore();
+      if (lay.mode === "area" && lay.overflow) {
+        const ox = lay.box.x + lay.box.w - 11;
+        const oy = lay.box.y + lay.box.h - 11;
+        ctx.fillStyle = "#e5484d";
+        ctx.fillRect(ox - 3, oy - 0.6, 6, 1.2);
+        ctx.fillRect(ox - 0.6, oy - 3, 1.2, 6);
+      }
     }
   } else if (node.kind === "image") {
     const img = getImage(node.src, onImage);

@@ -1,7 +1,7 @@
 /** PDF 导出：纯本地、矢量优先。路径/渐变/文字轮廓/位图都写成 PDF 内容流，不联网。 */
 import { create as createFont, type Font, type FontCollection, type Glyph } from "fontkit";
 import { zlibSync } from "fflate";
-import { nodeBox, textBox, type Box } from "./geom";
+import { AREA_INSET, nodeBox, textBox, textLayout, type Box } from "./geom";
 import { gradLine, radialGeom, renderGradStops, stopAlpha } from "./paint";
 import type { Artboard, GradStop, Node, Paint, PathNode, TextNode, VexaDoc } from "./types";
 import { widthOutline } from "./width";
@@ -566,7 +566,12 @@ class PdfBuilder {
     const glyphs = layoutText(node, font.font, font.bold, font.italic);
     if (!glyphs.ops.length) return;
     const box = textBox(node);
+    const area = (node.textMode ?? "point") === "area";
     const fillAlpha = alpha * (node.fill.opacity ?? 1);
+    if (area) {
+      c.q();
+      c.clipRect(box.x, box.y, box.w, box.h);
+    }
     if (node.fill.kind === "linear" || node.fill.kind === "radial") {
       this.gradientFillOps(c, glyphs.ops, node.fill, box, fillAlpha, blend);
     } else {
@@ -578,6 +583,7 @@ class PdfBuilder {
       c.op("f");
       c.Q();
     }
+    if (area) c.Q();
   }
 
   private fontFor(node: TextNode): { font: Font; bold: boolean; italic: boolean } | null {
@@ -673,6 +679,9 @@ class Content {
     this.fillColor(r, g, b);
     this.lines.push("f");
   }
+  clipRect(x: number, y: number, w: number, h: number): void {
+    this.lines.push(`${n(x)} ${n(y)} m ${n(x + w)} ${n(y)} l ${n(x + w)} ${n(y + h)} l ${n(x)} ${n(y + h)} l h W n`);
+  }
   polygon(pts: Array<[number, number]>, close = true): void {
     if (!pts.length) return;
     const first = pts[0];
@@ -727,16 +736,17 @@ function ringOps(rings: Array<Array<[number, number]>>): string[] {
 function layoutText(node: TextNode, font: Font, gotBold: boolean, gotItalic: boolean): { ops: string[] } {
   const size = node.size;
   const scale = size / font.unitsPerEm;
-  const lh = size * (node.lineHeight ?? 1.25);
+  const layout = textLayout(node);
   const tracking = node.tracking ?? 0;
   const align = node.align ?? "left";
   const hs = (node.hScale ?? 100) / 100;
   const vs = (node.vScale ?? 100) / 100;
-  const baseline0 = node.y - (node.baseline ?? 0);
+  const area = layout.mode === "area";
+  const innerW = Math.max(1, layout.box.w - AREA_INSET * 2);
   const synthBold = !!node.bold && !gotBold ? Math.max(0.25, size * 0.018) : 0;
   const synthItalic = !!node.italic && !gotItalic ? 0.22 : 0;
   const ops: string[] = [];
-  const lines = node.text.split("\n");
+  const lines = layout.lines.map((l) => l.text);
   for (let li = 0; li < lines.length; li++) {
     const chars = Array.from(lines[li]);
     const glyphs: Glyph[] = chars.map((ch) => {
@@ -744,9 +754,12 @@ function layoutText(node: TextNode, font: Font, gotBold: boolean, gotItalic: boo
     });
     const widths = glyphs.map((g) => (g.advanceWidth || 0) * scale);
     const total = widths.reduce((a, b) => a + b, 0) + Math.max(0, chars.length - 1) * tracking;
-    const startX = node.x + (align === "center" ? -total * hs / 2 : align === "right" ? -total * hs : 0);
+    const startX = area
+      ? layout.box.x + AREA_INSET +
+        (align === "center" ? Math.max(0, innerW - total * hs) / 2 : align === "right" ? Math.max(0, innerW - total * hs) : 0)
+      : node.x + (align === "center" ? -total * hs / 2 : align === "right" ? -total * hs : 0);
     let pen = 0;
-    const baseY = baseline0 + li * lh;
+    const baseY = layout.lines[li]?.baseline ?? layout.box.y + AREA_INSET + size * 1.2;
     for (let gi = 0; gi < glyphs.length; gi++) {
       const g = glyphs[gi];
       const startOps = ops.length;

@@ -43,7 +43,7 @@ import { docToSVG, svgToNodes, svgToPathNodes } from "../core/svg";
 import { loadSystemFont } from "../engine/fonts";
 import { offsetPathNode, outlineStrokeNode, smoothPathNode } from "../core/pathfx";
 import { inscribedCircleOf } from "../core/inscribed";
-import { nodeBox, unionBox } from "../core/geom";
+import { convertTextMode, nodeBox, unionBox } from "../core/geom";
 import { groupBox } from "../engine/pick";
 import { noPaint, noStroke, solid, BLEND_MODES, LAYER_TAGS, type AnchorRef, type Artboard, type BlendMode, type GradStop, type GroupNode, type LayerTag, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc, type Swatch, type SwatchKind } from "../core/types";
 import { insertGradStop, paintPreview, paintStops, stopAlpha, stopCssColor } from "../core/paint";
@@ -316,6 +316,10 @@ function fitNodes(nodes: Node[], board: Artboard, roots?: string[]): void {
       n.y = n.y * s + offY;
       n.size = Math.round(n.size * s * 100) / 100;
       if (n.tracking) n.tracking = Math.round(n.tracking * s * 100) / 100;
+      if ((n.textMode ?? "point") === "area") {
+        n.boxW = Math.max(1, (n.boxW ?? 120) * Math.abs(s));
+        n.boxH = Math.max(1, (n.boxH ?? 60) * Math.abs(s));
+      }
       return;
     }
     if (n.kind === "image") {
@@ -456,6 +460,10 @@ export default function EditorShell(props: Props) {
   );
   const setTextAlign = useCallback(
     (align: "left" | "center" | "right") => patchText((n) => { n.align = align; }),
+    [patchText],
+  );
+  const setTextMode = useCallback(
+    (mode: "point" | "area") => patchText((n) => convertTextMode(n, mode)),
     [patchText],
   );
   const stepTextSize = useCallback(
@@ -1465,6 +1473,9 @@ export default function EditorShell(props: Props) {
         { label: "左对齐", run: () => setTextAlign("left"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => (n.align ?? "left") === "left") },
         { label: "居中对齐", run: () => setTextAlign("center"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => n.align === "center") },
         { label: "右对齐", run: () => setTextAlign("right"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => n.align === "right") },
+        { label: "", sep: true },
+        { label: "转区域文字", run: () => setTextMode("area"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => n.textMode === "area") },
+        { label: "转单点文字", run: () => setTextMode("point"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => (n.textMode ?? "point") === "point") },
         { label: "", sep: true },
         { label: "字号 +2", run: () => stepTextSize(2), disabled: !textNodes.length },
         { label: "字号 -2", run: () => stepTextSize(-2), disabled: !textNodes.length },
@@ -2539,6 +2550,20 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                     }}
                   />
                   <div className="char-row">
+                    <span className="faint">类型</span>
+                    <button
+                      className={"char-btn" + ((single.textMode ?? "point") === "point" ? " is-on" : "")}
+                      onClick={() => setNode((n) => { if (n.kind === "text") convertTextMode(n, "point"); })}
+                      title="单点文字"
+                    >单点</button>
+                    <button
+                      className={"char-btn" + (single.textMode === "area" ? " is-on" : "")}
+                      onClick={() => setNode((n) => { if (n.kind === "text") convertTextMode(n, "area"); })}
+                      title="区域文字：在框内自动换行"
+                    >区域</button>
+                    {single.textMode === "area" && <span className="faint">自动换行</span>}
+                  </div>
+                  <div className="char-row">
                     <span className="faint">字体</span>
                     <select
                       className="field-input char-font"
@@ -2593,6 +2618,24 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       unit="px"
                       onCommit={(v) => setNode((n) => { if (n.kind === "text") n.baseline = v; })}
                     />
+                    {single.textMode === "area" && (
+                      <>
+                        <NumField
+                          label="框宽"
+                          value={Math.round(single.boxW ?? 120)}
+                          min={8}
+                          unit="px"
+                          onCommit={(v) => setNode((n) => { if (n.kind === "text") n.boxW = Math.max(8, v); })}
+                        />
+                        <NumField
+                          label="框高"
+                          value={Math.round(single.boxH ?? 60)}
+                          min={8}
+                          unit="px"
+                          onCommit={(v) => setNode((n) => { if (n.kind === "text") n.boxH = Math.max(8, v); })}
+                        />
+                      </>
+                    )}
                   </div>
                   <div className="char-row">
                     <span className="faint">样式</span>
