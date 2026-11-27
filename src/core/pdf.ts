@@ -1,7 +1,7 @@
 /** PDF 导出：纯本地、矢量优先。路径/渐变/文字轮廓/位图都写成 PDF 内容流，不联网。 */
 import { create as createFont, type Font, type FontCollection, type Glyph } from "fontkit";
 import { zlibSync } from "fflate";
-import { AREA_INSET, nodeBox, textBox, textLayout, type Box } from "./geom";
+import { AREA_INSET, nodeBox, pathTextLayout, textBox, textLayout, type Box } from "./geom";
 import { gradLine, radialGeom, renderGradStops, stopAlpha } from "./paint";
 import type { Artboard, GradStop, Node, Paint, PathNode, TextNode, VexaDoc } from "./types";
 import { widthOutline } from "./width";
@@ -563,7 +563,9 @@ class PdfBuilder {
       this.warnings.push(`字体 ${node.font} 不可用，文字「${node.text.slice(0, 8)}」未写入 PDF`);
       return;
     }
-    const glyphs = layoutText(node, font.font, font.bold, font.italic);
+    const glyphs = node.textMode === "path"
+      ? layoutPathText(node, font.font, font.bold, font.italic)
+      : layoutText(node, font.font, font.bold, font.italic);
     if (!glyphs.ops.length) return;
     const box = textBox(node);
     const area = (node.textMode ?? "point") === "area";
@@ -731,6 +733,78 @@ function ringOps(rings: Array<Array<[number, number]>>): string[] {
     out.push("h");
   }
   return out;
+}
+
+function layoutPathText(node: TextNode, font: Font, gotBold: boolean, gotItalic: boolean): { ops: string[] } {
+  const size = node.size;
+  const scale = size / font.unitsPerEm;
+  const layout = pathTextLayout(node);
+  const hs = (node.hScale ?? 100) / 100;
+  const vs = (node.vScale ?? 100) / 100;
+  const synthBold = !!node.bold && !gotBold ? Math.max(0.25, size * 0.018) : 0;
+  const synthItalic = !!node.italic && !gotItalic ? 0.22 : 0;
+  const ops: string[] = [];
+  for (const c of layout.chars) {
+    if (!c.ch.trim()) continue;
+    let g: Glyph;
+    try {
+      g = font.glyphForCodePoint(c.ch.codePointAt(0) ?? 0);
+    } catch {
+      g = font.glyphForCodePoint(0);
+    }
+    const cos = Math.cos(c.angle);
+    const sin = Math.sin(c.angle);
+    const emit = (shift: number) => {
+      let px = 0;
+      let py = 0;
+      let started = false;
+      const tx = (x: number, y: number, off = 0): [number, number] => {
+        const lx = (x * scale + y * scale * synthItalic + off) * hs + shift;
+        const gy = y * scale * vs;
+        return [
+          c.x + lx * cos + gy * sin,
+          c.y + lx * sin - gy * cos,
+        ];
+      };
+      for (const cmd of g.path.commands) {
+        const args = cmd.args;
+        if (cmd.command === "moveTo") {
+          const [x, y] = tx(args[0], args[1]);
+          ops.push(`${n(x)} ${n(y)} m`);
+          px = args[0]; py = args[1]; started = true;
+        } else if (cmd.command === "lineTo") {
+          if (!started) { const [x, y] = tx(px, py); ops.push(`${n(x)} ${n(y)} m`); started = true; }
+          const [x, y] = tx(args[0], args[1]);
+          ops.push(`${n(x)} ${n(y)} l`);
+          px = args[0]; py = args[1];
+        } else if (cmd.command === "quadraticCurveTo") {
+          if (!started) { const [x, y] = tx(px, py); ops.push(`${n(x)} ${n(y)} m`); started = true; }
+          const cx = args[0], cy = args[1], ex = args[2], ey = args[3];
+          const c1x = px + (2 / 3) * (cx - px);
+          const c1y = py + (2 / 3) * (cy - py);
+          const c2x = ex + (2 / 3) * (cx - ex);
+          const c2y = ey + (2 / 3) * (cy - ey);
+          const [ax, ay] = tx(c1x, c1y);
+          const [bx, by] = tx(c2x, c2y);
+          const [dx, dy] = tx(ex, ey);
+          ops.push(`${n(ax)} ${n(ay)} ${n(bx)} ${n(by)} ${n(dx)} ${n(dy)} c`);
+          px = ex; py = ey;
+        } else if (cmd.command === "bezierCurveTo") {
+          if (!started) { const [x, y] = tx(px, py); ops.push(`${n(x)} ${n(y)} m`); started = true; }
+          const [a1x, a1y] = tx(args[0], args[1]);
+          const [a2x, a2y] = tx(args[2], args[3]);
+          const [a3x, a3y] = tx(args[4], args[5]);
+          ops.push(`${n(a1x)} ${n(a1y)} ${n(a2x)} ${n(a2y)} ${n(a3x)} ${n(a3y)} c`);
+          px = args[4]; py = args[5];
+        } else if (cmd.command === "closePath") {
+          ops.push("h");
+        }
+      }
+    };
+    emit(0);
+    if (synthBold > 0) emit(synthBold);
+  }
+  return { ops };
 }
 
 function layoutText(node: TextNode, font: Font, gotBold: boolean, gotItalic: boolean): { ops: string[] } {

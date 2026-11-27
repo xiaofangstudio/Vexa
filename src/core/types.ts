@@ -158,11 +158,17 @@ export interface TextNode {
   vScale?: number;
   /** 基线偏移，单位 px，正数向上 */
   baseline?: number;
-  /** point = 单点文字（x/y 为基线锚点）；area = 区域文字（x/y 为文本框左上角） */
-  textMode?: "point" | "area";
+  /** point = 单点文字（x/y 为基线锚点）；area = 区域文字（x/y 为文本框左上角）；path = 路径文字 */
+  textMode?: "point" | "area" | "path";
   /** 区域文字框宽高，仅 textMode=area 时有效 */
   boxW?: number;
   boxH?: number;
+  /** 路径文字的承载路径，绝对坐标；仅 textMode=path 时有效。 */
+  pathSubpaths?: SubPath[];
+  /** 路径文字从路径起点开始的偏移，单位 px。 */
+  pathStart?: number;
+  /** 路径文字排在路径左侧（上方）还是右侧（下方）。 */
+  pathSide?: "left" | "right";
   /** 区域文字在框内的垂直对齐，默认 top。 */
   areaVAlign?: "top" | "middle" | "bottom";
   /** 段落首行缩进，单位 px；仅区域文字。 */

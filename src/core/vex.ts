@@ -70,16 +70,33 @@ export function parseVex(text: string): VexaDoc {
       if (typeof n.hScale !== "number" || !(n.hScale > 0)) delete n.hScale;
       if (typeof n.vScale !== "number" || !(n.vScale > 0)) delete n.vScale;
       if (typeof n.baseline !== "number" || !Number.isFinite(n.baseline)) delete n.baseline;
-      if (n.textMode !== "area") {
-        delete n.textMode;
+      if (n.textMode === "path" && Array.isArray(n.pathSubpaths) && n.pathSubpaths.length) {
+        if (typeof n.pathStart !== "number" || !Number.isFinite(n.pathStart) || n.pathStart < 0) delete n.pathStart;
+        if (n.pathSide !== "left" && n.pathSide !== "right") delete n.pathSide;
         delete n.boxW;
         delete n.boxH;
-      } else {
+        delete n.areaVAlign;
+        delete n.firstIndent;
+        delete n.paraSpace;
+      } else if (n.textMode === "area") {
+        delete n.pathSubpaths;
+        delete n.pathStart;
+        delete n.pathSide;
         if (typeof n.boxW !== "number" || !(n.boxW > 0)) n.boxW = 120;
         if (typeof n.boxH !== "number" || !(n.boxH > 0)) n.boxH = 60;
         if (n.areaVAlign !== "top" && n.areaVAlign !== "middle" && n.areaVAlign !== "bottom") delete n.areaVAlign;
         if (typeof n.firstIndent !== "number" || !Number.isFinite(n.firstIndent) || n.firstIndent < 0) delete n.firstIndent;
         if (typeof n.paraSpace !== "number" || !Number.isFinite(n.paraSpace) || n.paraSpace < 0) delete n.paraSpace;
+      } else {
+        delete n.textMode;
+        delete n.boxW;
+        delete n.boxH;
+        delete n.areaVAlign;
+        delete n.firstIndent;
+        delete n.paraSpace;
+        delete n.pathSubpaths;
+        delete n.pathStart;
+        delete n.pathSide;
       }
     }
     if (n.kind === "path" && n.stroke) {

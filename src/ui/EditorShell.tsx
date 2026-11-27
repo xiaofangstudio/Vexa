@@ -46,7 +46,7 @@ import { offsetPathNode, outlineStrokeNode, smoothPathNode } from "../core/pathf
 import { inscribedCircleOf } from "../core/inscribed";
 import { convertTextMode, nodeBox, unionBox } from "../core/geom";
 import { groupBox } from "../engine/pick";
-import { noPaint, noStroke, solid, BLEND_MODES, LAYER_TAGS, type AnchorRef, type Artboard, type BlendMode, type GradStop, type GroupNode, type LayerTag, type Node, type Paint, type PathNode, type Pt, type Stroke, type TextNode, type VexaDoc, type Swatch, type SwatchKind } from "../core/types";
+import { noPaint, noStroke, solid, BLEND_MODES, LAYER_TAGS, type AnchorRef, type Artboard, type BlendMode, type GradStop, type GroupNode, type LayerTag, type Node, type Paint, type PathNode, type Pt, type Stroke, type SubPath, type TextNode, type VexaDoc, type Swatch, type SwatchKind } from "../core/types";
 import { insertGradStop, paintPreview, paintStops, stopAlpha, stopCssColor } from "../core/paint";
 import { addSwatch, deleteSwatch, linkFill, linkStroke, mergeSwatches, swatchById, swatchesOf, updateSwatch, type MergeSwatchesResult, type SwatchResult } from "../core/swatches";
 import { fitBoard, zoomAt, type View } from "../engine/view";
@@ -323,6 +323,18 @@ function fitNodes(nodes: Node[], board: Artboard, roots?: string[]): void {
         if (n.firstIndent) n.firstIndent *= Math.abs(s);
         if (n.paraSpace) n.paraSpace *= Math.abs(s);
       }
+      if (n.textMode === "path") {
+        for (const sub of n.pathSubpaths ?? []) {
+          for (const a of sub.anchors) {
+            a.x = a.x * s + offX;
+            a.y = a.y * s + offY;
+            if (a.hIn) { a.hIn.x = a.hIn.x * s + offX; a.hIn.y = a.hIn.y * s + offY; }
+            if (a.hOut) { a.hOut.x = a.hOut.x * s + offX; a.hOut.y = a.hOut.y * s + offY; }
+          }
+        }
+        n.pathStart = (n.pathStart ?? 0) * Math.abs(s);
+        if (n.baseline) n.baseline *= Math.abs(s);
+      }
       return;
     }
     if (n.kind === "image") {
@@ -501,6 +513,65 @@ export default function EditorShell(props: Props) {
     setSelected(made);
     say(converted ? `已把 ${converted} 个文字转为可编辑路径` : "没有转换成功");
   }, [say, store, textNodes]);
+  const pathTextSel = useCallback(() => {
+    const pathIds = safeSelected.filter((id) => doc.nodes[id]?.kind === "path");
+    if (!pathIds.length) {
+      say("路径文字需要先选中一条路径");
+      return;
+    }
+    const pathId = pathIds[0];
+    const textId = safeSelected.find((id) => doc.nodes[id]?.kind === "text") ?? "";
+    let madeId = "";
+    store.commit((d) => {
+      const p = d.nodes[pathId];
+      if (!p || p.kind !== "path") return;
+      const first = p.subpaths[0]?.anchors[0];
+      let text: TextNode;
+      if (textId && d.nodes[textId]?.kind === "text") {
+        text = d.nodes[textId] as TextNode;
+      } else {
+        madeId = newId(d, "t");
+        text = {
+          kind: "text",
+          id: madeId,
+          name: "路径文字",
+          x: first?.x ?? 0,
+          y: first?.y ?? 0,
+          text: "路径文字",
+          size: 32,
+          font: "Microsoft YaHei",
+          fill: p.fill.kind === "none" ? solid("#17171c") : { ...p.fill },
+          opacity: p.opacity,
+          visible: p.visible,
+          locked: p.locked,
+          textMode: "path",
+        };
+        d.nodes[madeId] = text;
+        const host = containerOf(d, pathId);
+        if (host) host.list.splice(host.list.indexOf(pathId), 1, madeId);
+      }
+      madeId = text.id;
+      text.textMode = "path";
+      text.pathSubpaths = structuredClone(p.subpaths) as SubPath[];
+      text.pathStart = 0;
+      text.pathSide = "left";
+      text.baseline = 0;
+      text.x = first?.x ?? text.x;
+      text.y = first?.y ?? text.y;
+      delete text.boxW;
+      delete text.boxH;
+      delete text.areaVAlign;
+      delete text.firstIndent;
+      delete text.paraSpace;
+      removeNode(d, pathId);
+    });
+    if (!madeId) {
+      say("这条路径不能转为文字");
+      return;
+    }
+    setSelected([madeId]);
+    say("已转为路径文字，可在属性坞改起点或左右侧");
+  }, [doc, safeSelected, say, store]);
   const stepTextSize = useCallback(
     (delta: number) => patchText((n) => { n.size = Math.max(1, Math.min(400, n.size + delta)); }),
     [patchText],
@@ -1513,6 +1584,7 @@ export default function EditorShell(props: Props) {
         { label: "", sep: true },
         { label: "转区域文字", run: () => setTextMode("area"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => n.textMode === "area") },
         { label: "转单点文字", run: () => setTextMode("point"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => (n.textMode ?? "point") === "point") },
+        { label: "转为路径文字", run: pathTextSel, disabled: !safeSelected.some((id) => doc.nodes[id]?.kind === "path") },
         { label: "文字转路径", key: "Ctrl+Shift+O", run: () => void outlineTextSel(), disabled: !textNodes.length },
         { label: "", sep: true },
         { label: "字号 +2", run: () => stepTextSize(2), disabled: !textNodes.length },
@@ -2601,6 +2673,9 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       onClick={() => setNode((n) => { if (n.kind === "text") convertTextMode(n, "area"); })}
                       title="区域文字：在框内自动换行"
                     >区域</button>
+                    {single.textMode === "path" && (
+                      <button className="char-btn is-on" title="路径文字" disabled>路径</button>
+                    )}
                     {single.textMode === "area" && <span className="faint">自动换行</span>}
                     <span className="char-divider" />
                     <button
@@ -2696,6 +2771,15 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                         />
                       </>
                     )}
+                    {single.textMode === "path" && (
+                      <NumField
+                        label="起点"
+                        value={Math.round(single.pathStart ?? 0)}
+                        min={0}
+                        unit="px"
+                        onCommit={(v) => setNode((n) => { if (n.kind === "text") n.pathStart = Math.max(0, v); })}
+                      />
+                    )}
                   </div>
                   {single.textMode === "area" && (
                     <div className="char-row">
@@ -2711,6 +2795,22 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                         </button>
                       ))}
                       <span className="faint">框内对齐</span>
+                    </div>
+                  )}
+                  {single.textMode === "path" && (
+                    <div className="char-row">
+                      <span className="faint">路径侧</span>
+                      {(["left", "right"] as const).map((v) => (
+                        <button
+                          key={v}
+                          className={"char-btn" + ((single.pathSide ?? "left") === v ? " is-on" : "")}
+                          onClick={() => setNode((n) => { if (n.kind === "text") n.pathSide = v; })}
+                          title={v === "left" ? "排在路径上方" : "排在路径下方"}
+                        >
+                          {v === "left" ? "上" : "下"}
+                        </button>
+                      ))}
+                      <span className="faint">基线可继续调</span>
                     </div>
                   )}
                   <div className="char-row">

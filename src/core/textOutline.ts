@@ -133,6 +133,30 @@ export function outlineText(node: TextNode, face: OutlineFace): SubPath[][] {
   const synthBold = !!node.bold && !face.bold ? Math.max(0.25, node.size * 0.018) : 0;
   const out: SubPath[][] = [];
 
+  if (layout.mode === "path") {
+    for (const c of layout.path?.chars ?? []) {
+      if (!c.ch.trim()) continue;
+      let glyph;
+      try {
+        glyph = font.glyphForCodePoint(c.ch.codePointAt(0) ?? 0);
+      } catch {
+        glyph = font.glyphForCodePoint(0);
+      }
+      const cos = Math.cos(c.angle);
+      const sin = Math.sin(c.angle);
+      const tx = (x: number, y: number): GlyphPoint => {
+        const gx = (x * scale + y * scale * synthItalic) * hs;
+        const gy = y * scale * vs;
+        return { x: c.x + gx * cos + gy * sin, y: c.y + gx * sin - gy * cos };
+      };
+      const commands = (glyph.path?.commands ?? []) as Array<{ command: string; args: number[] }>;
+      const subs = glyphSubpaths(commands, tx);
+      if (synthBold > 0) subs.push(...glyphSubpaths(commands, tx, Math.abs(synthBold)));
+      if (subs.length) out.push(subs);
+    }
+    return out;
+  }
+
   for (const line of layout.lines) {
     let pen = 0;
     for (const ch of Array.from(line.text)) {

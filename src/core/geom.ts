@@ -122,15 +122,156 @@ export interface TextLineLayout {
   width: number;
 }
 
+/** 路径文字中一个字符的落点与切线角度。 */
+export interface PathTextChar {
+  ch: string;
+  x: number;
+  y: number;
+  /** 切线角度（弧度，画布坐标：y 向下）。 */
+  angle: number;
+  advance: number;
+}
+
+export interface PathTextLayout {
+  chars: PathTextChar[];
+  length: number;
+  start: number;
+  end: number;
+  overflow: boolean;
+}
+
 export interface TextLayout {
-  mode: "point" | "area";
+  mode: "point" | "area" | "path";
   lines: TextLineLayout[];
   box: Box;
   overflow: boolean;
+  path?: PathTextLayout;
+}
+
+interface PathSample {
+  x: number;
+  y: number;
+  dist: number;
+  angle: number;
+}
+
+/** 路径文字采样：每个子路径按高密度折线取样，记录累计弧长与切线。 */
+function pathSamples(subpaths: SubPath[]): PathSample[] {
+  const pts: Pt[] = [];
+  for (const sub of subpaths) {
+    const flat = flatten(sub, 40);
+    for (const p of flat) {
+      const last = pts[pts.length - 1];
+      if (!last || Math.hypot(last.x - p.x, last.y - p.y) > 0.01) pts.push(p);
+    }
+  }
+  if (pts.length < 2) return [];
+  const out: PathSample[] = [];
+  let dist = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const prev = pts[Math.max(0, i - 1)];
+    const cur = pts[i];
+    const next = pts[Math.min(pts.length - 1, i + 1)];
+    if (i > 0) dist += Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    const angle = Math.atan2(next.y - prev.y, next.x - prev.x);
+    out.push({ x: cur.x, y: cur.y, dist, angle });
+  }
+  return out;
+}
+
+/** 按弧长找到落点；超出路径末尾时返回最后一点并标记。 */
+function sampleAt(samples: PathSample[], target: number): { x: number; y: number; angle: number; over: boolean } {
+  const last = samples[samples.length - 1];
+  if (target <= 0) return { ...samples[0], over: false };
+  if (target >= last.dist) return { ...last, over: target > last.dist + 0.01 };
+  let lo = 0;
+  let hi = samples.length - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (samples[mid].dist <= target) lo = mid;
+    else hi = mid;
+  }
+  const a = samples[lo];
+  const b = samples[hi];
+  const span = b.dist - a.dist || 1;
+  const t = (target - a.dist) / span;
+  return {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    angle: a.angle + Math.atan2(Math.sin(b.angle - a.angle), Math.cos(b.angle - a.angle)) * t,
+    over: false,
+  };
+}
+
+/** 路径文字排版：按字符前进，贴路径切线旋转；支持起点、左右侧与对齐。 */
+export function pathTextLayout(node: TextNode): PathTextLayout {
+  const samples = pathSamples(node.pathSubpaths ?? []);
+  const length = samples.length ? samples[samples.length - 1].dist : 0;
+  if (!length) return { chars: [], length: 0, start: 0, end: 0, overflow: false };
+  const hs = Math.abs((node.hScale ?? 100) / 100) || 1;
+  const tracking = node.tracking ?? 0;
+  const text = node.text.replace(/\n/g, " ");
+  const chars = Array.from(text);
+  const advances = chars.map((ch) => (textEmWidth(ch) * node.size + tracking) * hs);
+  const total = advances.reduce((a, b) => a + b, 0);
+  let start = Math.max(0, Math.min(node.pathStart ?? 0, length));
+  if (node.align === "center") start = Math.max(0, start + length / 2 - total / 2);
+  else if (node.align === "right") start = Math.max(0, start + length - total);
+  const side = node.pathSide === "right" ? -1 : 1;
+  const offset = (node.baseline ?? 0) * side;
+  const placed: PathTextChar[] = [];
+  let pen = start;
+  let overflow = false;
+  for (let i = 0; i < chars.length; i++) {
+    if (pen > length) {
+      overflow = true;
+      break;
+    }
+    const p = sampleAt(samples, pen);
+    if (p.over) overflow = true;
+    const nx = Math.sin(p.angle);
+    const ny = -Math.cos(p.angle);
+    placed.push({
+      ch: chars[i],
+      x: p.x + nx * offset,
+      y: p.y + ny * offset,
+      angle: p.angle,
+      advance: advances[i],
+    });
+    pen += advances[i];
+  }
+  if (pen > length + 0.01) overflow = true;
+  return { chars: placed, length, start, end: Math.min(pen, length), overflow };
+}
+
+/** 路径文字的包围盒：路径本身 + 每个字符的前进矩形，选择框不会漏字。 */
+function pathTextBox(node: TextNode, path: PathTextLayout): Box {
+  const pts: Pt[] = [];
+  for (const sub of node.pathSubpaths ?? []) for (const p of flatten(sub, 18)) pts.push(p);
+  const bottom = node.size * 0.25;
+  const top = node.size * 0.9;
+  for (const c of path.chars) {
+    const cos = Math.cos(c.angle);
+    const sin = Math.sin(c.angle);
+    const corners = [
+      { x: 0, y: -top },
+      { x: c.advance, y: -top },
+      { x: c.advance, y: bottom },
+      { x: 0, y: bottom },
+    ];
+    for (const q of corners) {
+      pts.push({ x: c.x + q.x * cos - q.y * sin, y: c.y + q.x * sin + q.y * cos });
+    }
+  }
+  const b = boxOfPoints(pts);
+  return { x: b.x - 2, y: b.y - 2, w: Math.max(4, b.w + 4), h: Math.max(4, b.h + 4) };
 }
 
 /** 单行文字的近似包围盒：按字符宽度估，字距、缩放、对齐一起算。 */
 export function textBox(node: TextNode): Box {
+  if ((node.textMode ?? "point") === "path") {
+    return pathTextBox(node, pathTextLayout(node));
+  }
   if ((node.textMode ?? "point") === "area") {
     return {
       x: node.x,
@@ -189,6 +330,10 @@ function wrapAreaText(node: TextNode, innerW: number): string[][] {
 /** 统一的文本行布局：单点文字与区域文字共用渲染、导出的换行/对齐结果。 */
 export function textLayout(node: TextNode): TextLayout {
   const mode = node.textMode ?? "point";
+  if (mode === "path") {
+    const path = pathTextLayout(node);
+    return { mode, lines: [], box: textBox(node), overflow: path.overflow, path };
+  }
   const lh = node.size * (node.lineHeight ?? 1.25);
   const align = node.align ?? "left";
   const hs = Math.abs((node.hScale ?? 100) / 100) || 1;
@@ -244,10 +389,32 @@ export function textLayout(node: TextNode): TextLayout {
   return { mode, lines, box, overflow: false };
 }
 
-/** 单点 ↔ 区域文字转换，保留可见文字与大致位置。 */
+/** 单点 ↔ 区域 ↔ 路径文字转换，保留可见文字与大致位置。 */
 export function convertTextMode(node: TextNode, mode: "point" | "area"): void {
   const cur = node.textMode ?? "point";
   if (cur === mode) return;
+  if (cur === "path") {
+    const p = pathTextLayout(node);
+    const first = p.chars[0];
+    const b = textBox(node);
+    delete node.pathSubpaths;
+    delete node.pathStart;
+    delete node.pathSide;
+    node.baseline = 0;
+    if (mode === "area") {
+      node.textMode = "area";
+      node.x = b.x;
+      node.y = b.y;
+      node.boxW = Math.max(50, b.w + AREA_INSET * 2);
+      node.boxH = Math.max(node.size * 1.25 + AREA_INSET * 2, b.h + AREA_INSET * 2);
+      return;
+    }
+    node.textMode = "point";
+    node.align = "left";
+    node.x = first?.x ?? node.x;
+    node.y = first?.y ?? node.y;
+    return;
+  }
   if (mode === "area") {
     const b = textBox(node);
     node.textMode = "area";

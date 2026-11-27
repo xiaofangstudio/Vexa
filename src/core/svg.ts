@@ -151,6 +151,16 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
     const tracking = node.tracking ? ` letter-spacing="${round(node.tracking)}"` : "";
     const weight = node.bold ? ` font-weight="700"` : "";
     const style = node.italic ? ` font-style="italic"` : "";
+    if (lay.mode === "path") {
+      const chars = (lay.path?.chars ?? []).filter((c) => c.ch.trim());
+      const body = chars
+        .map((c) => {
+          const deg = round((c.angle * 180) / Math.PI);
+          return `${indent}  <text transform="translate(${round(c.x)} ${round(c.y)}) rotate(${deg}) scale(${round(hs)} ${round(vs)})" xml:space="preserve">${esc(c.ch)}</text>`;
+        })
+        .join("\n");
+      return `${indent}<g${fill}${op}${blend} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style} text-anchor="start">\n${body}\n${indent}</g>\n`;
+    }
     if (lay.mode === "area") {
       const clipId = `tc${seq.n++}`;
       defs.push(

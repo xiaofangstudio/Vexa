@@ -380,6 +380,17 @@ function drawNode(
       ctx.fillStyle = canvasPaint(ctx, node.fill, lay.box);
       ctx.font = `${node.italic ? "italic " : ""}${node.bold ? "700 " : ""}${node.size}px ${node.font}`;
       ctx.textBaseline = "alphabetic";
+      if (lay.mode === "path") {
+        for (const c of lay.path?.chars ?? []) {
+          if (!c.ch.trim()) continue;
+          ctx.save();
+          ctx.translate(c.x, c.y);
+          ctx.rotate(c.angle);
+          ctx.scale(hs, vs);
+          ctx.fillText(c.ch, 0, 0);
+          ctx.restore();
+        }
+      } else {
       ctx.save();
       if (lay.mode === "area") {
         ctx.beginPath();
@@ -410,6 +421,7 @@ function drawNode(
         ctx.fillStyle = "#e5484d";
         ctx.fillRect(ox - 3, oy - 0.6, 6, 1.2);
         ctx.fillRect(ox - 0.6, oy - 3, 1.2, 6);
+      }
       }
     }
   } else if (node.kind === "image") {

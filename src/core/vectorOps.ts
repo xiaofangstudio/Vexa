@@ -251,6 +251,17 @@ function mapNodePoints(doc: VexaDoc, n: Node, fn: (p: Pt) => Pt): void {
       }
     }
   } else if (n.kind === "text" || n.kind === "image") {
+    if (n.kind === "text" && n.textMode === "path") {
+      for (const sub of n.pathSubpaths ?? []) {
+        for (const a of sub.anchors) {
+          const p = fn(a);
+          a.x = p.x;
+          a.y = p.y;
+          if (a.hIn) a.hIn = fn(a.hIn);
+          if (a.hOut) a.hOut = fn(a.hOut);
+        }
+      }
+    }
     const p = fn({ x: n.x, y: n.y });
     n.x = p.x;
     n.y = p.y;
@@ -309,6 +320,24 @@ export function scaleNodes(doc: VexaDoc, ids: string[], box: Box, sx: number, sy
       const sxAbs = Math.abs(sx) || 0.001;
       n.size *= syAbs;
       n.hScale = (n.hScale ?? 100) * (sxAbs / syAbs);
+      if (n.textMode === "path") {
+        for (const sub of n.pathSubpaths ?? []) {
+          for (const a of sub.anchors) {
+            a.x = ox + (a.x - ox) * sx;
+            a.y = oy + (a.y - oy) * sy;
+            if (a.hIn) {
+              a.hIn.x = ox + (a.hIn.x - ox) * sx;
+              a.hIn.y = oy + (a.hIn.y - oy) * sy;
+            }
+            if (a.hOut) {
+              a.hOut.x = ox + (a.hOut.x - ox) * sx;
+              a.hOut.y = oy + (a.hOut.y - oy) * sy;
+            }
+          }
+        }
+        n.pathStart = (n.pathStart ?? 0) * Math.sqrt(sxAbs * syAbs);
+        if (n.baseline) n.baseline *= syAbs;
+      }
       if ((n.textMode ?? "point") === "area") {
         n.boxW = Math.max(1, (n.boxW ?? 120) * sxAbs);
         n.boxH = Math.max(1, (n.boxH ?? 60) * syAbs);
