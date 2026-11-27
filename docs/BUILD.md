@@ -118,7 +118,6 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - 文字已支持单点文字 + 字符面板（字重/字形/行距/字距/对齐/横纵缩放/基线），但还没有段落文字、区域文字、沿路径排版、避头尾、文字转路径
 - 旋转/翻转对文本与位图只做位置级变换（没有旋转属性，见 `docs/PARITY.md`）；第三十六批斜切同样只变换路径锚点与手柄，纯文字/位图不参与，组内混排文字跳过，角度限 ±80°，不生成 SVG 斜切矩阵，导出为变形后的路径坐标
 - 拖拽撤销粒度较粗（一次拖拽一步）
-- AI 面板当前是本地中文意图引擎，只认结构化设计口令（形状/颜色/位移/排布/卡片海报模板），不接大模型、不生成任意画面；“照这张图做海报”这类复杂语义需后续接 OpenAI 兼容 tool-calling 或本地模型；面板对话历史只在内存里，不随工程保存
 - 图层树已支持组内排序、把子层拖出组、把顶层拖入组、Ctrl/Shift 多选与批量显隐/锁定，第二十八批补了名称/类型搜索、6 色标记和按标记筛选；折叠组内的子层需先展开才能拖动。颜色标记不参与导出，搜索不搜节点内文字。
 - 画板面板已在第二十九批补六个尺寸预设、适配内容、复制画板（连内容）与上下换序；第三十二批补了自定义预设保存/导入/删除（本地 `vexa.board-presets.v1`，最多 20 个，导入只补新尺寸），适配内容改为一并计入路径描边半宽、忽略隐藏根层与组内隐藏子层；复制仍只克隆与源板相交的根层，换序只改列表与导出顺序。
 - 文档设置已在第三十一批补文档名、当前画板名/尺寸/背景、只读单位与颜色模式和单次撤销；只编辑当前画板，不改全部板；单位固定 px、颜色模式固定 RGB，不提供 CMYK/DPI；改尺寸不移动/缩放内容；文档名与已保存文件名分离。
@@ -131,16 +130,15 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 ## 发布构建
 
-- 版本：`0.1.0`（第四十四批：本地 AI 设计助手）
+- 版本：`0.1.0`（第四十三批：画板裁剪 / 画板外命中 / 渲染提速）
 - 文件：`release\Vexa.exe`
-- 大小：`7,815,168 B`
-- SHA256：`2BD751B1E5FDC09DEB135374242BBEC64F7935ED1ACFCE54E0DEC4718637112E`
-- 构建时间：`2026-11-27 13:11:47`
+- 大小：`7,810,560 B`
+- SHA256：`AB792B3BB065FF8C141236FC54DA8F9AD76A161B3923B46F4CBE1F9AEA73D8B1`
+- 构建时间：`2026-11-27 13:40:23`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,375,355 B`，SHA256 `88841FC2AFDC7F950700FE408DA2495FB5E5DE1B60ED0921AEDCF9F798C7D1F`
-- 前端产物：`dist/assets/pdf-BM25BCqA.js` 397.62 kB / gzip 165.85；`dist/assets/index-BqKmfj8V.js` 542.52 kB / gzip 174.01；`dist/assets/index-D3ANbdjL.css` 63.78 kB / gzip 12.09；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
-- 本地 AI 验收（第四十四批）：`npx tsc --noEmit` 通过；`npm run build` 161 modules 通过；`npx tsx scripts/smoke.ai.mts` 31 项 PASS，全部 22 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口右侧 Dock 第三页签进入 AI：说“画一个 300x200 的红色圆角矩形”落 1 个 `300×200`、填充 `#e5484d` 的路径并自动选中；`Ctrl+Enter` 发“改成蓝色”变 `#0f76d6`；“右移 100”X `390→490`，“撤销”回 `390`；“生成卡片”落“AI 卡片”组 5 子层、`720×418`；“取消选择”后改色只提示“先选中”，对象不变；`窗口 → 打开 AI 助手` 菜单入口可用，点击后菜单关闭；面板 243/243 无横向溢出。截图 `docs/shots/ai-panel.png`、`ai-rect.png`、`ai-card.png`、`ai-final.png`、`ai-window.png`。
-- 画板裁剪验收（第四十三批，历史）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.render.mts` 16 项 PASS，全部 21 个冒烟脚本复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1600×1000 窗口在画板左边界跨画 `457.19×365.75` 矩形（X `-234.116`）：板外像素 `236,236,240`、板内 `15,118,214`；板外整段不显示，选择框/缩放柄/旋转柄只留在板内，中心在板外的手柄整颗跳过；板外点击“已选 0”、板内“已选 1”；画板外完全不可见矩形框选后仍“已选 0”。1500 个视口外节点 × 20 帧 `407.4ms → 23.3ms`（`17.49x`），600 个视口内板外节点 × 20 帧 `199.9ms → 10.5ms`。该批截图已按清理惯例删除。
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,369,026 B`，SHA256 `BFBB953AD9F57356332DD6C717514B056E2E1C50B74E050BB9CA692355CA650E`
+- 前端产物：`dist/assets/pdf-DtFYXtE-.js` 407.16 kB / gzip 169.22；`dist/assets/index-s5pQMMiT.js` 536.43 kB / gzip 170.03；`dist/assets/index-DApU8VOk.css` 61.88 kB / gzip 11.56；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 画板裁剪验收（第四十三批）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.render.mts` 16 项 PASS，全部 21 个冒烟脚本复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1600×1000 窗口在画板左边界跨画 `457.19×365.75` 矩形（X `-234.116`）：板外像素 `236,236,240`、板内 `15,118,214`；板外整段不显示，选择框/缩放柄/旋转柄只留在板内，中心在板外的手柄整颗跳过；板外点击“已选 0”、板内“已选 1”；画板外完全不可见矩形框选后仍“已选 0”。1500 个视口外节点 × 20 帧 `407.4ms → 23.3ms`（`17.49x`），600 个视口内板外节点 × 20 帧 `199.9ms → 10.5ms`。该批截图已按清理惯例删除。
 - 内切圆验收（第四十二批，历史）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.inscribed.mts` 17 项 PASS，全部 20 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口画 `426.71×365.75` 矩形：菜单与属性坞两个入口都落 1 个 `365.645×365.645` 内切圆，半径 `182.822`、圆心与矩形中心重合；撤销一次移除。该批截图已按清理惯例删除。
 - 三点圆 / Alt 验收（第四十一批，历史）：`npx tsc --noEmit` 通过；`npm run build` 157 modules 通过；`npx tsx scripts/smoke.circle.mts` 33 项 PASS，全部 19 个冒烟脚本复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1600×1000 窗口在 33% 视图：标定 32 CSS px 圆 `97.5×97.5`；点 `(450,320)` 后按下 `(550,320)` 拖到 `(520,400)` 落三点圆 `346.0×346.0`，圆心 `(500,346.875)`，与直径圆 `324.0` 区分；Alt 水平拖 57 CSS px，直径 `173.7→150.0`，属性坞 `150×150`；三点共线释放不落对象；默认直径、从中心、Shift、两次点击、撤销与图层列表回归通过。该批截图已按清理惯例删除。
 - 圆形工具验收（第四十批，历史）：`npx tsc --noEmit` 通过；`npm run build` 157 modules 通过；`npx tsx scripts/smoke.circle.mts` 19 项 PASS，其余 18 个冒烟脚本全复跑通过。`npm run tauri:build` 通过；真实 Tauri/WebView2 1600×1000 窗口按 `⇧L`：选项栏出现“从中心”且默认关闭；默认水平拖圆 `97.5×97.5`、4 锚点闭合；开“从中心”同距离圆 `195.1×195.1`，直径比值 2.00；Shift 斜拖 `175.8×175.8`；两次点击第一次不落对象、第二次落圆，撤销移除；图层面板 3 行“圆形”。1200×900 实际窗口选项栏无溢出。该批截图已按清理惯例删除。
