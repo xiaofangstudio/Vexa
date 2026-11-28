@@ -157,6 +157,8 @@ export interface VerticalTextChar {
   advance: number;
   /** 拉丁等窄字符随列旋转 90°，汉字保持正立。 */
   rotate: boolean;
+  /** 所在列序号（从右往左 0 起），用于逐列垂直对齐。 */
+  col: number;
 }
 
 export interface VerticalTextLayout {
@@ -301,7 +303,7 @@ export function verticalTextLayout(node: TextNode): VerticalTextLayout {
       let penY = node.y;
       for (const ch of Array.from(para)) {
         const adv = verticalAdvance(node, ch);
-        chars.push({ ch, x: colX, y: penY, advance: adv, rotate: !isVerticalUpright(ch) });
+        chars.push({ ch, x: colX, y: penY, advance: adv, rotate: !isVerticalUpright(ch), col: li });
         penY += adv;
       }
       maxH = Math.max(maxH, penY - node.y);
@@ -351,21 +353,20 @@ export function verticalTextLayout(node: TextNode): VerticalTextLayout {
         }
       }
       const x = rightX - col * colStep;
-      chars.push({ ch, x, y: penY, advance: adv, rotate: !isVerticalUpright(ch) });
+      chars.push({ ch, x, y: penY, advance: adv, rotate: !isVerticalUpright(ch), col });
       penY += adv;
       used[col] = Math.max(used[col], penY);
     }
     if (overflow) break;
   }
 
-  let shift = 0;
-  if (chars.length) {
-    const last = Math.max(...used);
-    const free = maxBottom - last;
-    const v = node.areaVAlign ?? "top";
-    if (free > 0) shift = v === "middle" ? free / 2 : v === "bottom" ? free : 0;
+  const v = node.areaVAlign ?? "top";
+  if (v !== "top") {
+    for (const c of chars) {
+      const free = Math.max(0, maxBottom - used[c.col]);
+      if (free > 0) c.y += v === "middle" ? free / 2 : free;
+    }
   }
-  if (shift) for (const c of chars) c.y += shift;
   return {
     chars,
     box,

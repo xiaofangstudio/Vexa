@@ -71,6 +71,20 @@ assert.equal(textLayout({ ...area, text: "区域直排文字溢出测试" }).ove
 const bottom: TextNode = { ...area, text: "直排", areaVAlign: "bottom" };
 assert.ok(textLayout(bottom).vertical!.chars[0].y > 84, "底对齐把短列下移");
 
+const uneven: TextNode = { ...area, text: "直\n区域", areaVAlign: "bottom" };
+const ul = textLayout(uneven).vertical!;
+assert.equal(ul.columns, 2, "段落分成两列");
+const col0 = ul.chars.filter((c) => c.col === 0);
+const col1 = ul.chars.filter((c) => c.col === 1);
+assert.equal(col0.length, 1);
+assert.equal(col1.length, 2);
+const bottomOf = (list: typeof col0) => list[list.length - 1].y + list[list.length - 1].advance;
+assert.ok(Math.abs(bottomOf(col0) - bottomOf(col1)) < 0.01, "底对齐让两列各自贴底");
+const unevenTop = textLayout({ ...uneven, areaVAlign: "top" }).vertical!;
+const topCol0 = unevenTop.chars.filter((c) => c.col === 0);
+assert.ok(bottomOf(col0) > bottomOf(topCol0) + 0.5, "短列被单独下移");
+assert.ok(bottomOf(unevenTop.chars.filter((c) => c.col === 0)) < bottomOf(unevenTop.chars.filter((c) => c.col === 1)), "顶对齐时两列底端不齐");
+
 const doc: VexaDoc = createDoc("直排文字", 400, 300);
 const saved: TextNode = { ...point, text: "直排 A1" };
 doc.nodes.t1 = saved;
