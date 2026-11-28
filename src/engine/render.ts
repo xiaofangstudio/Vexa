@@ -1,6 +1,6 @@
 /** 画面渲染：粘贴板点阵、画板、矢量对象、选择框与锚点手柄。 */
 import { flatten, nodeBox, textDecorationLines, textLayout, unionBox, type Box } from "../core/geom";
-import { brushById, brushPattern, brushStamps } from "../core/brushes";
+import { brushById, brushPattern, brushStamps, calligraphyStamps } from "../core/brushes";
 import { canvasPaint, gradAxis, gradHandlePoints, paintStops, stopAlpha, stopCssColor } from "../core/paint";
 import { widthHandles, widthOutline, widthPreview } from "../core/width";
 import { pointInArtboards } from "../core/artboards";
@@ -427,14 +427,30 @@ function drawNode(
       ctx.globalAlpha *= node.stroke.opacity;
       const brush = !noBrush && node.stroke.brushId ? brushById(doc, node.stroke.brushId) : undefined;
       const pattern = brushPattern(doc, brush);
-      if (brush && pattern) {
+      if (brush && brush.kind === "calligraphic") {
+        ctx.fillStyle = node.stroke.color;
+        for (const st of calligraphyStamps(node, brush)) {
+          ctx.save();
+          ctx.translate(st.x, st.y);
+          ctx.rotate(st.angle);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, st.rx, st.ry, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      } else if (brush && pattern) {
         const tileDoc: VexaDoc = { ...doc, nodes: pattern.nodes, root: pattern.root };
         for (const stamp of brushStamps(doc, node, brush)) {
           ctx.save();
           ctx.translate(stamp.x, stamp.y);
           ctx.rotate(stamp.angle);
-          ctx.scale(brush.scale, brush.scale);
+          ctx.scale(stamp.sx, stamp.sy);
           ctx.translate(-pattern.w / 2, -pattern.h / 2);
+          if (stamp.slice) {
+            ctx.beginPath();
+            ctx.rect(stamp.slice.x, 0, stamp.slice.w, pattern.h);
+            ctx.clip();
+          }
           for (const id of pattern.root) {
             const child = pattern.nodes[id];
             if (child) drawNode(ctx, tileDoc, child, onImage, undefined, undefined, false, true);

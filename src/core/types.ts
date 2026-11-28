@@ -43,15 +43,27 @@ export interface Swatch {
 }
 
 /** 文档级图案画笔：把图案砖沿路径切线重复盖章。 */
+export type BrushKind = "pattern" | "art" | "scatter" | "calligraphic";
+
+/** 文档级画笔：图案/艺术/散点引用图案砖，书法画笔只用角度与圆度生成笔锋。 */
 export interface BrushDef {
   id: string;
   name: string;
-  kind: "pattern";
-  patternId: string;
-  /** 砖缩放倍数，0.1–10。 */
+  kind: BrushKind;
+  /** 图案/艺术/散点画笔引用的图案砖；书法画笔为空。 */
+  patternId?: string;
+  /** 砖缩放或书法笔宽倍数，0.1–10。 */
   scale: number;
-  /** 砖间距，占砖宽的百分比，20–400。 */
+  /** 图案/散点画笔的砖间距，占砖宽百分比，20–400。 */
   spacing: number;
+  /** 书法笔锋角度，0–180°。 */
+  angle?: number;
+  /** 书法笔锋圆度，0–100%。 */
+  roundness?: number;
+  /** 散点随机幅度，0–100%。 */
+  jitter?: number;
+  /** 散点偏离路径幅度，0–200%。 */
+  spread?: number;
   rev?: number;
 }
 

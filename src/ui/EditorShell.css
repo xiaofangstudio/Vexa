@@ -2494,6 +2494,35 @@
   display: block;
 }
 
+.brh-chip {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-style: normal;
+  font-weight: 500;
+  font-size: 9px;
+  line-height: 14px;
+  vertical-align: 1px;
+  color: #475569;
+  background: #e8edf5;
+}
+
+.brh-chip-art {
+  color: #7c3aed;
+  background: #f0e9ff;
+}
+
+.brh-chip-scatter {
+  color: #b45309;
+  background: #fff1db;
+}
+
+.brh-chip-calligraphic {
+  color: #0f766e;
+  background: #dcf5f0;
+}
+
 .brh-apply {
   height: 24px;
   padding: 0 7px;
@@ -2813,3 +2842,4 @@
 .layer-row.is-dragging { opacity: .45; }
 .layer-tip { font-size: 10.5px; line-height: 1.45; margin-right: auto; }
 .arrow-row { flex-wrap: wrap; }
+

@@ -5,7 +5,7 @@ import { AREA_INSET, nodeBox, pathTextLayout, textBox, textDecorationLines, text
 import { gradLine, radialGeom, renderGradStops, stopAlpha } from "./paint";
 import type { Artboard, GradStop, Node, Paint, PathNode, TextNode, VexaDoc } from "./types";
 import { widthOutline } from "./width";
-import { brushById, brushPattern, brushStamps } from "./brushes";
+import { brushById, brushPattern, brushStamps, calligraphyStamps } from "./brushes";
 
 export interface PdfExportOptions {
   /** 只导出这一块画板；缺省时每块画板一页。 */
@@ -19,6 +19,18 @@ export interface PdfExportOptions {
 export interface PdfExportResult {
   bytes: Uint8Array;
   warnings: string[];
+}
+
+function ellipseOps(rx: number, ry: number): string[] {
+  const kx = rx * 0.5522847498;
+  const ky = ry * 0.5522847498;
+  return [
+    `${n(rx)} 0 m`,
+    `${n(rx)} ${n(ky)} ${n(kx)} ${n(ry)} 0 ${n(ry)} c`,
+    `${n(-kx)} ${n(ry)} ${n(-rx)} ${n(ky)} ${n(-rx)} 0 c`,
+    `${n(-rx)} ${n(-ky)} ${n(-kx)} ${n(-ry)} 0 ${n(-ry)} c`,
+    `${n(kx)} ${n(-ry)} ${n(rx)} ${n(-ky)} ${n(rx)} 0 c`,
+  ];
 }
 
 const enc = new TextEncoder();
@@ -627,6 +639,22 @@ class PdfBuilder {
     const stroke = node.stroke;
     const brush = !noBrush && stroke.brushId ? brushById(this.doc, stroke.brushId) : undefined;
     const brushTile = brushPattern(this.doc, brush);
+    if (brush && brush.kind === "calligraphic") {
+      const strokeAlpha = alpha * (stroke.opacity ?? 1);
+      const col = parseColor(stroke.color);
+      for (const st of calligraphyStamps(node, brush)) {
+        const cs = Math.cos(-st.angle);
+        const sn = Math.sin(-st.angle);
+        c.q();
+        c.gs(strokeAlpha, blend);
+        c.cm(cs, sn, -sn, cs, st.x, st.y);
+        c.path(ellipseOps(st.rx, st.ry));
+        c.fillColor(col.r, col.g, col.b);
+        c.op("f");
+        c.Q();
+      }
+      return;
+    }
     if (brush && brushTile) {
       const strokeAlpha = alpha * (stroke.opacity ?? 1);
       const saved = this.doc;
@@ -636,7 +664,8 @@ class PdfBuilder {
         const sn = Math.sin(-st.angle);
         c.q();
         c.cm(cs, sn, -sn, cs, st.x, st.y);
-        c.cm(brush.scale, 0, 0, brush.scale, -brushTile.w / 2, -brushTile.h / 2);
+        c.cm(st.sx, 0, 0, st.sy, -brushTile.w / 2, -brushTile.h / 2);
+        if (st.slice) c.clipRect(st.slice.x, 0, st.slice.w, brushTile.h);
         for (const id of brushTile.root) {
           const child = brushTile.nodes[id];
           if (child) this.drawNode(c, child, strokeAlpha, blend, true);

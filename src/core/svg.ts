@@ -2,7 +2,7 @@
 import { pathD, parseD, textBox, textDecorationLines, textLayout } from "./geom";
 import { gradLine, normalizeGradStops, radialGeom, renderGradStops, stopAlpha } from "./paint";
 import { widthOutline } from "./width";
-import { brushById, brushPattern, brushStamps } from "./brushes";
+import { brushById, brushPattern, brushStamps, calligraphyStamps } from "./brushes";
 import {
   noPaint,
   noStroke,
@@ -186,6 +186,15 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
     const fill = fillAttrs(node.fill, nodeBBox(node), defs, id, doc, seq);
     const brush = !noBrush && node.stroke.brushId ? brushById(doc, node.stroke.brushId) : undefined;
     const brushTile = brushPattern(doc, brush);
+    if (brush && brush.kind === "calligraphic") {
+      const body = calligraphyStamps(node, brush)
+        .map(
+          (st) =>
+            `${indent}    <ellipse cx="${round(st.x)}" cy="${round(st.y)}" rx="${round(st.rx)}" ry="${round(st.ry)}" transform="rotate(${round((st.angle * 180) / Math.PI)} ${round(st.x)} ${round(st.y)})"/>`,
+        )
+        .join("\n");
+      return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <g fill="${node.stroke.color}" fill-opacity="${round(node.stroke.opacity)}">\n${body}\n${indent}  </g>\n${indent}</g>\n`;
+    }
     if (brush && brushTile) {
       const tileDoc: VexaDoc = { ...doc, nodes: brushTile.nodes, root: brushTile.root };
       const body = brushStamps(doc, node, brush)
@@ -196,7 +205,12 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
             .filter((n): n is Node => !!n)
             .map((n) => nodeSVG(tileDoc, n, `${indent}    `, defs, seq, true))
             .join("");
-          return `${indent}  <g transform="translate(${round(st.x)} ${round(st.y)}) rotate(${deg}) scale(${round(brush.scale)}) translate(${round(-brushTile.w / 2)} ${round(-brushTile.h / 2)})">\n${kids}${indent}  </g>`;
+          const clipId = st.slice ? `bc${seq.n++}` : "";
+          const clipDef = st.slice
+            ? `${indent}    <clipPath id="${clipId}"><rect x="${round(st.slice.x)}" y="0" width="${round(st.slice.w)}" height="${round(brushTile.h)}"/></clipPath>\n`
+            : "";
+          const inner = st.slice ? `${indent}      <g clip-path="url(#${clipId})">\n${kids}${indent}      </g>\n` : kids;
+          return `${indent}  <g transform="translate(${round(st.x)} ${round(st.y)}) rotate(${deg}) scale(${round(st.sx)} ${round(st.sy)}) translate(${round(-brushTile.w / 2)} ${round(-brushTile.h / 2)})">\n${clipDef}${inner}${indent}  </g>`;
         })
         .join("\n");
       return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <g opacity="${round(node.stroke.opacity)}">\n${body}\n${indent}  </g>\n${indent}</g>\n`;
