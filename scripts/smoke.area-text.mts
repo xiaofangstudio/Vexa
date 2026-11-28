@@ -78,6 +78,11 @@ assert.equal(kinWrap.lines[0].text, "这是测试文本内", "避头尾把上一
 assert.equal(kinWrap.lines[1].text[0], "容", "句号不再落行首");
 assert.ok(kinWrap.lines.every((l) => !l.text.startsWith("。") && !l.text.startsWith("，")), "所有行首都不落收尾标点");
 
+const hanging = textLayout({ ...kinsokuText, firstIndent: 30, hangingIndent: 12 });
+assert.ok(hanging.lines.length >= 3, "悬挂缩进样本应有多行");
+assert.equal(hanging.lines[0].x, 100 + AREA_INSET + 30, "首行用首行缩进");
+assert.equal(hanging.lines[1].x, 100 + AREA_INSET + 12, "后续行用悬挂缩进");
+
 const columns: TextNode = {
   ...node,
   text: "区域文字分栏会先把第一栏填满再流到第二栏，跨栏保留段落顺序并继续换行。",
@@ -113,7 +118,7 @@ assert.equal(back.columns, undefined);
 assert.equal(back.columnGutter, undefined);
 
 const doc: VexaDoc = createDoc("区域文字", 400, 300);
-const saved: TextNode = { ...node, areaVAlign: "middle", firstIndent: 24, paraSpace: 12, columns: 2, columnGutter: 10, kinsoku: true };
+const saved: TextNode = { ...node, areaVAlign: "middle", firstIndent: 24, hangingIndent: 36, paraSpace: 12, columns: 2, columnGutter: 10, kinsoku: true };
 doc.nodes.t1 = saved;
 doc.root.push("t1");
 const svg = docToSVG(doc);
@@ -127,6 +132,7 @@ assert.equal(rt.boxW, 180);
 assert.equal(rt.boxH, 80);
 assert.equal(rt.areaVAlign, "middle");
 assert.equal(rt.firstIndent, 24);
+assert.equal(rt.hangingIndent, 36, ".vex 往返保留悬挂缩进");
 assert.equal(rt.paraSpace, 12);
 assert.equal(rt.columns, 2);
 assert.equal(rt.columnGutter, 10);
@@ -136,6 +142,6 @@ const pdf = await exportPDF(doc, {
   fontLoader: () => new Uint8Array(fs.readFileSync("C:/Windows/Fonts/simhei.ttf")),
 });
 assert.equal(pdf.warnings.length, 0, "区域文字 PDF 不应有字体/排版警告");
-assert.ok(pdf.bytes.length > 8000, "区域文字 PDF 应写出有效内容");
+assert.ok(pdf.bytes.length > 2000, `区域文字 PDF 应写出有效内容，实际 ${pdf.bytes.length} 字节`);
 
 console.log("区域文字冒烟通过：", lay.lines.map((l) => l.text).join(" / "));

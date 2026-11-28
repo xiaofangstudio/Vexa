@@ -57,6 +57,11 @@ assert.equal(ptl.chars[2].dx ?? 0, 0, "引号保持居中");
 assert.equal(ptl.chars[2].rotate, false, "引号不旋转");
 assert.equal(ptl.chars[4].rotate, true, "左括号旋转 90°");
 assert.equal(ptl.chars[5].rotate, true, "右括号旋转 90°");
+const compressed = verticalTextLayout({ ...punct, punctCompress: true });
+assert.ok(Math.abs(compressed.chars[0].advance - 11) < 0.01, "挤压后逗号字格为 0.55em");
+assert.ok(Math.abs(compressed.chars[2].advance - 11) < 0.01, "挤压后引号字格缩小");
+assert.ok(compressed.chars[3].advance < ptl.chars[3].advance, "挤压后后续字位整体上移");
+assert.ok(compressed.box.h < ptl.box.h, "挤压后整列高度变短");
 
 const area: TextNode = {
   ...point,
@@ -116,7 +121,7 @@ assert.equal(onCol1[1].ch, "。", "句号跟在上一字之后，不落列首");
 assert.ok(onCol1.every((c) => c.ch !== "。" || c.y > onCol1[0].y), "句号不在列顶");
 
 const doc: VexaDoc = createDoc("直排文字", 400, 300);
-const saved: TextNode = { ...point, text: "直排 A1" };
+const saved: TextNode = { ...point, text: "直排 A1", punctCompress: true };
 doc.nodes.t1 = saved;
 doc.root.push("t1");
 const svg = docToSVG(doc);
@@ -127,6 +132,7 @@ assert.match(svg, /text-anchor="middle"/);
 const roundtrip = parseVex(serializeVex(doc));
 const rt = roundtrip.nodes.t1 as TextNode;
 assert.equal(rt.textDirection, "vertical");
+assert.equal(rt.punctCompress, true, ".vex 往返保留标点挤压");
 
 const punctDoc: VexaDoc = createDoc("竖排标点", 400, 300);
 punctDoc.nodes.t1 = { ...punct, y: 100 };

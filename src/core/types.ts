@@ -173,6 +173,8 @@ export interface TextNode {
   areaVAlign?: "top" | "middle" | "bottom";
   /** 段落首行缩进，单位 px；仅区域文字。 */
   firstIndent?: number;
+  /** 首行之后的悬挂缩进，单位 px；仅区域文字。 */
+  hangingIndent?: number;
   /** 段间距，单位 px；仅区域文字。 */
   paraSpace?: number;
   /** 区域文字分栏数，默认 1；仅区域文字。 */
@@ -187,6 +189,8 @@ export interface TextNode {
   strike?: boolean;
   /** 区域文字避头尾：行首不落收尾标点、行末不落起首标点；缺省关闭。 */
   kinsoku?: boolean;
+  /** 直排标点挤压：收尾/起首标点的字格缩到 0.55em；缺省关闭。 */
+  punctCompress?: boolean;
   fill: Paint;
   opacity: number;
   visible: boolean;

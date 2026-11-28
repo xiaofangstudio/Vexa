@@ -74,6 +74,7 @@ export function parseVex(text: string): VexaDoc {
       if (n.underline !== true) delete n.underline;
       if (n.strike !== true) delete n.strike;
       if (n.kinsoku !== true) delete n.kinsoku;
+      if (n.punctCompress !== true) delete n.punctCompress;
       if (n.textMode === "path" && Array.isArray(n.pathSubpaths) && n.pathSubpaths.length) {
         delete n.textDirection;
         if (typeof n.pathStart !== "number" || !Number.isFinite(n.pathStart) || n.pathStart < 0) delete n.pathStart;
@@ -82,10 +83,12 @@ export function parseVex(text: string): VexaDoc {
         delete n.boxH;
         delete n.areaVAlign;
         delete n.firstIndent;
+        delete n.hangingIndent;
         delete n.paraSpace;
         delete n.columns;
         delete n.columnGutter;
         delete n.kinsoku;
+        delete n.punctCompress;
       } else if (n.textMode === "area") {
         delete n.pathSubpaths;
         delete n.pathStart;
@@ -94,6 +97,7 @@ export function parseVex(text: string): VexaDoc {
         if (typeof n.boxH !== "number" || !(n.boxH > 0)) n.boxH = 60;
         if (n.areaVAlign !== "top" && n.areaVAlign !== "middle" && n.areaVAlign !== "bottom") delete n.areaVAlign;
         if (typeof n.firstIndent !== "number" || !Number.isFinite(n.firstIndent) || n.firstIndent < 0) delete n.firstIndent;
+        if (typeof n.hangingIndent !== "number" || !Number.isFinite(n.hangingIndent) || n.hangingIndent < 0) delete n.hangingIndent;
         if (typeof n.paraSpace !== "number" || !Number.isFinite(n.paraSpace) || n.paraSpace < 0) delete n.paraSpace;
         if (typeof n.columns !== "number" || !Number.isFinite(n.columns) || n.columns < 2 || n.columns > 6) delete n.columns;
         else n.columns = Math.round(n.columns);
@@ -104,6 +108,7 @@ export function parseVex(text: string): VexaDoc {
         delete n.boxH;
         delete n.areaVAlign;
         delete n.firstIndent;
+        delete n.hangingIndent;
         delete n.paraSpace;
         delete n.columns;
         delete n.columnGutter;

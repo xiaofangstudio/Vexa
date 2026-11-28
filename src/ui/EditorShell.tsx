@@ -2820,6 +2820,15 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                           unit="px"
                           onCommit={(v) => setNode((n) => { if (n.kind === "text") n.firstIndent = Math.max(0, v); })}
                         />
+                        {single.textDirection !== "vertical" && (
+                          <NumField
+                            label="悬挂"
+                            value={Math.round(single.hangingIndent ?? 0)}
+                            min={0}
+                            unit="px"
+                            onCommit={(v) => setNode((n) => { if (n.kind === "text") n.hangingIndent = Math.max(0, v); })}
+                          />
+                        )}
                         <NumField
                           label="段距"
                           value={Math.round(single.paraSpace ?? 0)}
@@ -2886,7 +2895,14 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                         onClick={() => setNode((n) => { if (n.kind === "text") n.kinsoku = n.kinsoku ? undefined : true; })}
                         title="避头尾：行首不落收尾标点，行末不落起首标点"
                       >避</button>
-                      <span className="faint">标点自动回移</span>
+                      {single.textDirection === "vertical" && (
+                        <button
+                          className={"char-btn" + (single.punctCompress ? " is-on" : "")}
+                          onClick={() => setNode((n) => { if (n.kind === "text") n.punctCompress = n.punctCompress ? undefined : true; })}
+                          title="直排标点挤压：收尾/起首标点字格缩到 0.55em"
+                        >挤</button>
+                      )}
+                      <span className="faint">标点处理</span>
                     </div>
                   )}
                   {single.textMode === "path" && (

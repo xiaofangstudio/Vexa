@@ -310,7 +310,8 @@ function verticalGlyphOffset(ch: string, size: number): { dx?: number; dy?: numb
 /** 直排字格高度：正立字占一个字身，旋转拉丁按原字宽前进。 */
 function verticalAdvance(node: TextNode, ch: string): number {
   const hs = Math.abs((node.hScale ?? 100) / 100) || 1;
-  const base = isVerticalUpright(ch) ? node.size : textEmWidth(ch) * node.size;
+  let base = isVerticalUpright(ch) ? node.size : textEmWidth(ch) * node.size;
+  if (node.punctCompress === true && (KINSOKU_NO_START.has(ch) || KINSOKU_NO_END.has(ch))) base *= 0.55;
   return Math.max(1, base * hs) + (node.tracking ?? 0);
 }
 
@@ -486,6 +487,7 @@ function wrapAreaText(node: TextNode, innerW: number): string[][] {
   const tracking = node.tracking ?? 0;
   const hs = Math.abs((node.hScale ?? 100) / 100) || 1;
   const indent = Math.max(0, Math.min(node.firstIndent ?? 0, innerW - 1));
+  const hanging = Math.max(0, Math.min(node.hangingIndent ?? 0, innerW - 1));
   const kinsoku = node.kinsoku === true;
   const paragraphs = node.text.split("\n");
   return paragraphs.map((para) => {
@@ -494,7 +496,7 @@ function wrapAreaText(node: TextNode, innerW: number): string[][] {
     const lines: string[] = [];
     let start = 0;
     while (start < chars.length) {
-      const limit = Math.max(1, innerW - (lines.length === 0 ? indent : 0));
+      const limit = Math.max(1, innerW - (lines.length === 0 ? indent : hanging));
       let end = start;
       let width = 0;
       while (end < chars.length) {
@@ -531,6 +533,7 @@ function layoutAreaColumns(
   const topBaseline = box.y + AREA_INSET + node.size * 1.2 - baselineOffset;
   const align = node.align ?? "left";
   const tracking = node.tracking ?? 0;
+  const hanging = Math.max(0, Math.min(node.hangingIndent ?? 0, colW - 1));
   let pi = 0;
   let ci = 0;
   let overflow = false;
@@ -551,7 +554,7 @@ function layoutAreaColumns(
         if (pi < paras.length) baseline += paraSpace;
         continue;
       }
-      const lineIndent = firstLine ? indent : 0;
+      const lineIndent = firstLine ? indent : hanging;
       const limit = Math.max(1, colW - lineIndent);
       let width = 0;
       let end = ci;
@@ -613,6 +616,7 @@ export function textLayout(node: TextNode): TextLayout {
     const innerW = Math.max(1, box.w - AREA_INSET * 2);
     const innerH = Math.max(1, box.h - AREA_INSET * 2);
     const indent = Math.max(0, Math.min(node.firstIndent ?? 0, innerW - 1));
+    const hanging = Math.max(0, Math.min(node.hangingIndent ?? 0, innerW - 1));
     const paraSpace = Math.max(0, node.paraSpace ?? 0);
     const columns = Math.max(1, Math.min(6, Math.round(node.columns ?? 1)));
     const gutter = Math.max(0, node.columnGutter ?? 0);
@@ -632,7 +636,7 @@ export function textLayout(node: TextNode): TextLayout {
     const lines: TextLineLayout[] = [];
     plan.forEach((para, pi) => {
       para.forEach((text, li) => {
-        const lineIndent = li === 0 ? indent : 0;
+        const lineIndent = li === 0 ? indent : hanging;
         const avail = Math.max(1, innerW - lineIndent);
         const width =
           textEmWidth(text) * node.size +
