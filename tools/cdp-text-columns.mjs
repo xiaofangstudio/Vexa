@@ -100,7 +100,7 @@ async function main() {
   await drag(cx - 230, cy - 125, cx + 230, cy + 125);
   await waitFor(`document.querySelector('.dock-textarea') !== null`, 5000);
   await evaluate(`(() => { const t = document.querySelector('.dock-textarea'); if (t) { t.focus(); t.select(); return true; } return false; })()`);
-  const sample = '区域文字分栏：先把第一栏从上到下填满，再流到第二栏。跨栏时保留段落顺序、首行缩进与行距，长文也能在窄框里排得干净。\n\n分栏不是简单裁剪，每栏宽度独立换行；第一栏到底后余下的字自动进入下一栏，第二栏顶部重新起行。\n第三段继续沿栏流动，最后一行不会把栏挤破；栏距把两栏分开，框内垂直对齐仍然生效。';
+  const sample = '区域文字分栏：先把第一栏从上到下填满，再流到第二栏。跨栏时保留段落顺序、首行缩进与行距，长文也能在窄框里排得干净。\n\n分栏不是简单裁剪，每栏宽度独立换行；第一栏到底后余下的字自动进入下一栏，第二栏重新起行。\n第三段继续沿栏流动，最后一行不会把栏挤破；栏距把两栏分开，框内垂直对齐仍然生效。';
   await send('Input.insertText', { text: sample });
   await sleep(900);
   let node = await textNode();
@@ -124,14 +124,14 @@ async function main() {
   };
   await setNumField('字号', 22);
   await setNumField('框宽', 520);
-  await setNumField('框高', 370);
+  await setNumField('框高', 340);
   await setNumField('分栏', 2);
   await setNumField('栏距', 24);
   await setNumField('首行', 24);
   await setNumField('段距', 12);
   node = await textNode();
   assert(node && node.columns === 2 && node.columnGutter === 24, '分栏数与栏距写入节点');
-  assert(node.boxW >= 500 && node.boxH >= 350, '区域框尺寸同步');
+  assert(node.boxW >= 500 && node.boxH >= 320, '区域框尺寸同步');
   assert(node.areaVAlign === 'top', '分栏默认从框顶起排');
 
   const panel = await evaluate(`(() => {
