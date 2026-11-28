@@ -2821,14 +2821,37 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                           onCommit={(v) => setNode((n) => { if (n.kind === "text") n.firstIndent = Math.max(0, v); })}
                         />
                         {single.textDirection !== "vertical" && (
-                          <NumField
-                            label="悬挂"
-                            value={Math.round(single.hangingIndent ?? 0)}
-                            min={0}
-                            unit="px"
-                            onCommit={(v) => setNode((n) => { if (n.kind === "text") n.hangingIndent = Math.max(0, v); })}
-                          />
+                          <>
+                            <NumField
+                              label="悬挂"
+                              value={Math.round(single.hangingIndent ?? 0)}
+                              min={0}
+                              unit="px"
+                              onCommit={(v) => setNode((n) => { if (n.kind === "text") n.hangingIndent = Math.max(0, v); })}
+                            />
+                            <NumField
+                              label="左缩进"
+                              value={Math.round(single.leftIndent ?? 0)}
+                              min={0}
+                              unit="px"
+                              onCommit={(v) => setNode((n) => { if (n.kind === "text") n.leftIndent = Math.max(0, v); })}
+                            />
+                            <NumField
+                              label="右缩进"
+                              value={Math.round(single.rightIndent ?? 0)}
+                              min={0}
+                              unit="px"
+                              onCommit={(v) => setNode((n) => { if (n.kind === "text") n.rightIndent = Math.max(0, v); })}
+                            />
+                          </>
                         )}
+                        <NumField
+                          label="内距"
+                          value={Math.round(single.textInset ?? 4)}
+                          min={0}
+                          unit="px"
+                          onCommit={(v) => setNode((n) => { if (n.kind === "text") n.textInset = Math.max(0, Math.min(200, v)); })}
+                        />
                         <NumField
                           label="段距"
                           value={Math.round(single.paraSpace ?? 0)}

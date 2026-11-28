@@ -112,6 +112,13 @@ function textEmWidth(line: string): number {
 /** 区域文字的内边距，保持文字不贴框。 */
 export const AREA_INSET = 4;
 
+/** 区域文字实际四边内边距：用户可调，缺省 4px，限 0–200px。 */
+export function areaInset(node: TextNode): number {
+  const v = node.textInset;
+  if (typeof v !== "number" || !Number.isFinite(v)) return AREA_INSET;
+  return Math.max(0, Math.min(v, 200));
+}
+
 /** 避头尾：这些字符不能出现在行首（收尾标点、闭合括号、后引号）。 */
 const KINSOKU_NO_START = new Set(Array.from("、。，．,.!?！？：；:;）)]｝}］〕】》〉」』”’…‥・ー〜～"));
 /** 避头尾：这些字符不能出现在行末（起首标点、开放括号、前引号）。 */
@@ -349,7 +356,7 @@ export function verticalTextLayout(node: TextNode): VerticalTextLayout {
     return { chars, box: { x: b.x, y: b.y, w: Math.max(1, b.w), h: Math.max(1, b.h) }, overflow: false, columns: ncols };
   }
 
-  const inset = AREA_INSET;
+  const inset = areaInset(node);
   const colStep = Math.max(1, lh);
   const cols = Math.max(1, Math.floor((box.w - inset * 2) / colStep));
   const rightX = box.x + box.w - inset - colStep / 2;
@@ -526,11 +533,13 @@ function layoutAreaColumns(
   indent: number,
   paraSpace: number,
   baselineOffset: number,
+  baseIndent: number,
 ): { lines: TextLineLayout[]; overflow: boolean } {
   const lines: TextLineLayout[] = [];
+  const inset = areaInset(node);
   const paras = node.text.split("\n");
-  const maxBaseline = box.y + box.h - AREA_INSET - node.size * 0.25;
-  const topBaseline = box.y + AREA_INSET + node.size * 1.2 - baselineOffset;
+  const maxBaseline = box.y + box.h - inset - node.size * 0.25;
+  const topBaseline = box.y + inset + node.size * 1.2 - baselineOffset;
   const align = node.align ?? "left";
   const tracking = node.tracking ?? 0;
   const hanging = Math.max(0, Math.min(node.hangingIndent ?? 0, colW - 1));
@@ -539,7 +548,7 @@ function layoutAreaColumns(
   let overflow = false;
 
   for (let col = 0; col < columns && pi < paras.length; col++) {
-    const colX = box.x + AREA_INSET + col * (colW + gutter);
+    const colX = box.x + inset + baseIndent + col * (colW + gutter);
     let baseline = topBaseline;
     let firstLine = true;
     while (pi < paras.length) {
@@ -613,8 +622,12 @@ export function textLayout(node: TextNode): TextLayout {
   const baselineOffset = node.baseline ?? 0;
   if (mode === "area") {
     const box = textBox(node);
-    const innerW = Math.max(1, box.w - AREA_INSET * 2);
-    const innerH = Math.max(1, box.h - AREA_INSET * 2);
+    const inset = areaInset(node);
+    const side = Math.max(0, box.w - inset * 2 - 1);
+    const leftIndent = Math.max(0, Math.min(node.leftIndent ?? 0, side));
+    const rightIndent = Math.max(0, Math.min(node.rightIndent ?? 0, side - leftIndent));
+    const innerW = Math.max(1, box.w - inset * 2 - leftIndent - rightIndent);
+    const innerH = Math.max(1, box.h - inset * 2);
     const indent = Math.max(0, Math.min(node.firstIndent ?? 0, innerW - 1));
     const hanging = Math.max(0, Math.min(node.hangingIndent ?? 0, innerW - 1));
     const paraSpace = Math.max(0, node.paraSpace ?? 0);
@@ -622,7 +635,7 @@ export function textLayout(node: TextNode): TextLayout {
     const gutter = Math.max(0, node.columnGutter ?? 0);
     if (columns > 1) {
       const colW = Math.max(1, (innerW - gutter * (columns - 1)) / columns);
-      const colLayout = layoutAreaColumns(node, box, columns, colW, gutter, lh, hs, indent, paraSpace, baselineOffset);
+      const colLayout = layoutAreaColumns(node, box, columns, colW, gutter, lh, hs, indent, paraSpace, baselineOffset, leftIndent);
       return { mode, lines: colLayout.lines, box, overflow: colLayout.overflow };
     }
     const plan = wrapAreaText(node, innerW);
@@ -632,7 +645,7 @@ export function textLayout(node: TextNode): TextLayout {
     const free = innerH - blockH;
     const vAlign = node.areaVAlign ?? "top";
     const topOffset = free > 0 ? (vAlign === "middle" ? free / 2 : vAlign === "bottom" ? free : 0) : 0;
-    let baseline = box.y + AREA_INSET + node.size * 1.2 - baselineOffset + topOffset;
+    let baseline = box.y + inset + node.size * 1.2 - baselineOffset + topOffset;
     const lines: TextLineLayout[] = [];
     plan.forEach((para, pi) => {
       para.forEach((text, li) => {
@@ -643,14 +656,14 @@ export function textLayout(node: TextNode): TextLayout {
           Math.max(0, Array.from(text).length - 1) * (node.tracking ?? 0);
         const scaled = width * hs;
         const x =
-          box.x + AREA_INSET + lineIndent +
+          box.x + inset + leftIndent + lineIndent +
           (align === "center" ? Math.max(0, avail - scaled) / 2 : align === "right" ? Math.max(0, avail - scaled) : 0);
         lines.push({ text, x, baseline, width });
         baseline += lh;
       });
       if (pi < plan.length - 1) baseline += paraSpace;
     });
-    const maxBaseline = box.y + box.h - AREA_INSET - node.size * 0.25;
+    const maxBaseline = box.y + box.h - inset - node.size * 0.25;
     const overflow = lines.length > 0 && lines[lines.length - 1].baseline > maxBaseline;
     return { mode, lines, box, overflow };
   }
@@ -707,21 +720,27 @@ export function convertTextMode(node: TextNode, mode: "point" | "area"): void {
     node.baseline = 0;
     return;
   }
+  const inset = areaInset(node);
   const lay = textLayout(node);
-  const innerW = Math.max(1, lay.box.w - AREA_INSET * 2);
+  const innerW = Math.max(1, lay.box.w - inset * 2);
   const align = node.align ?? "left";
   node.text = lay.lines.map((l) => l.text).join("\n");
-  node.x = lay.box.x + AREA_INSET + (align === "center" ? innerW / 2 : align === "right" ? innerW : 0);
-  node.y = lay.lines[0]?.baseline ?? lay.box.y + AREA_INSET + node.size * 1.2;
+  node.x = lay.box.x + inset + (align === "center" ? innerW / 2 : align === "right" ? innerW : 0);
+  node.y = lay.lines[0]?.baseline ?? lay.box.y + inset + node.size * 1.2;
   node.textMode = "point";
   node.baseline = 0;
   delete node.boxW;
   delete node.boxH;
   delete node.areaVAlign;
   delete node.firstIndent;
+  delete node.hangingIndent;
+  delete node.leftIndent;
+  delete node.rightIndent;
+  delete node.textInset;
   delete node.paraSpace;
   delete node.columns;
   delete node.columnGutter;
+  delete node.kinsoku;
 }
 
 export function nodeBox(node: Node): Box {

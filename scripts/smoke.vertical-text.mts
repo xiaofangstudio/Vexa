@@ -83,6 +83,9 @@ assert.ok(Math.abs(av.chars[3].x - 118.5) < 0.01, "第二列向左");
 assert.ok(av.chars[3].y < av.chars[2].y, "换列后回到顶端");
 assert.equal(al.overflow, false, "两列放得下不误报溢出");
 assert.equal(textLayout({ ...area, text: "区域直排文字溢出测试" }).overflow, true, "两列放不下应溢出");
+const insetV = verticalTextLayout({ ...area, textInset: 20, boxH: 120 });
+assert.equal(insetV.chars[0].y, 80 + 20, "直排首字从内边距起排");
+assert.ok(insetV.chars[0].x <= 100 + 60 - 20 - 12.49, "直排首列贴右内边距");
 
 const bottom: TextNode = { ...area, text: "直排", areaVAlign: "bottom" };
 assert.ok(textLayout(bottom).vertical!.chars[0].y > 84, "底对齐把短列下移");

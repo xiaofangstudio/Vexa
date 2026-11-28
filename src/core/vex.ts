@@ -84,6 +84,9 @@ export function parseVex(text: string): VexaDoc {
         delete n.areaVAlign;
         delete n.firstIndent;
         delete n.hangingIndent;
+        delete n.leftIndent;
+        delete n.rightIndent;
+        delete n.textInset;
         delete n.paraSpace;
         delete n.columns;
         delete n.columnGutter;
@@ -98,6 +101,10 @@ export function parseVex(text: string): VexaDoc {
         if (n.areaVAlign !== "top" && n.areaVAlign !== "middle" && n.areaVAlign !== "bottom") delete n.areaVAlign;
         if (typeof n.firstIndent !== "number" || !Number.isFinite(n.firstIndent) || n.firstIndent < 0) delete n.firstIndent;
         if (typeof n.hangingIndent !== "number" || !Number.isFinite(n.hangingIndent) || n.hangingIndent < 0) delete n.hangingIndent;
+        if (typeof n.leftIndent !== "number" || !Number.isFinite(n.leftIndent) || n.leftIndent < 0) delete n.leftIndent;
+        if (typeof n.rightIndent !== "number" || !Number.isFinite(n.rightIndent) || n.rightIndent < 0) delete n.rightIndent;
+        if (typeof n.textInset !== "number" || !Number.isFinite(n.textInset) || n.textInset < 0) delete n.textInset;
+        else n.textInset = Math.min(n.textInset, 200);
         if (typeof n.paraSpace !== "number" || !Number.isFinite(n.paraSpace) || n.paraSpace < 0) delete n.paraSpace;
         if (typeof n.columns !== "number" || !Number.isFinite(n.columns) || n.columns < 2 || n.columns > 6) delete n.columns;
         else n.columns = Math.round(n.columns);
@@ -109,6 +116,9 @@ export function parseVex(text: string): VexaDoc {
         delete n.areaVAlign;
         delete n.firstIndent;
         delete n.hangingIndent;
+        delete n.leftIndent;
+        delete n.rightIndent;
+        delete n.textInset;
         delete n.paraSpace;
         delete n.columns;
         delete n.columnGutter;

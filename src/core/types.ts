@@ -175,6 +175,12 @@ export interface TextNode {
   firstIndent?: number;
   /** 首行之后的悬挂缩进，单位 px；仅区域文字。 */
   hangingIndent?: number;
+  /** 段落左侧缩进，单位 px；仅横排区域文字，分栏时作用于每栏。 */
+  leftIndent?: number;
+  /** 段落右侧缩进，单位 px；仅横排区域文字，分栏时作用于每栏。 */
+  rightIndent?: number;
+  /** 区域文字四边内边距，单位 px；默认 4，横排/直排共用。 */
+  textInset?: number;
   /** 段间距，单位 px；仅区域文字。 */
   paraSpace?: number;
   /** 区域文字分栏数，默认 1；仅区域文字。 */

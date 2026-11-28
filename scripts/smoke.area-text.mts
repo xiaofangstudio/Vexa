@@ -83,6 +83,20 @@ assert.ok(hanging.lines.length >= 3, "悬挂缩进样本应有多行");
 assert.equal(hanging.lines[0].x, 100 + AREA_INSET + 30, "首行用首行缩进");
 assert.equal(hanging.lines[1].x, 100 + AREA_INSET + 12, "后续行用悬挂缩进");
 
+const inset = textLayout({ ...node, leftIndent: 20, rightIndent: 30 });
+const innerIndented = node.boxW! - AREA_INSET * 2 - 20 - 30;
+for (const line of inset.lines) {
+  assert.equal(line.x, 100 + AREA_INSET + 20, "左右缩进让整段从更靠右的内框起排");
+  assert.ok(line.width <= innerIndented + 0.01, `左右缩进行宽 ${line.width} 不越过 ${innerIndented}`);
+}
+
+const padded = textLayout({ ...node, textInset: 12 });
+const paddedW = node.boxW! - 24;
+for (const line of padded.lines) {
+  assert.equal(line.x, 100 + 12, "内边距让整段从框内 12px 起排");
+  assert.ok(line.width <= paddedW + 0.01, `内边距行宽 ${line.width} 不越过 ${paddedW}`);
+}
+
 const columns: TextNode = {
   ...node,
   text: "区域文字分栏会先把第一栏填满再流到第二栏，跨栏保留段落顺序并继续换行。",
@@ -103,6 +117,12 @@ assert.equal(cl.overflow, false, "文字在两栏内排完不应误报溢出");
 assert.equal(cl.lines.map((l) => l.text).join(""), columns.text.replace(/\n/g, ""), "跨栏不丢字且顺序保持");
 assert.equal(textLayout({ ...columns, text: columns.text.repeat(4), boxH: 80 }).overflow, true, "四栏都填满后应溢出");
 
+const colIndent = textLayout({ ...columns, leftIndent: 18, rightIndent: 22 });
+const colWIndent = (300 - AREA_INSET * 2 - 18 - 22 - 10) / 2;
+assert.equal(colIndent.lines[0].x, 100 + AREA_INSET + 18, "分栏整体左缩进");
+assert.ok(colIndent.lines.some((l) => Math.abs(l.x - (100 + AREA_INSET + 18 + colWIndent + 10)) < 0.01), "第二栏跟随左缩进");
+assert.ok(colIndent.lines.every((l) => l.width <= colWIndent + 0.01), "分栏行宽扣掉左右缩进");
+
 const point: TextNode = { ...node };
 convertTextMode(point, "area");
 assert.equal(point.textMode, "area");
@@ -113,12 +133,16 @@ assert.equal(back.textMode ?? "point", "point");
 assert.ok(!back.boxW && !back.boxH);
 assert.equal(back.areaVAlign, undefined);
 assert.equal(back.firstIndent, undefined);
+assert.equal(back.hangingIndent, undefined);
+assert.equal(back.leftIndent, undefined);
+assert.equal(back.rightIndent, undefined);
+assert.equal(back.textInset, undefined);
 assert.equal(back.paraSpace, undefined);
 assert.equal(back.columns, undefined);
 assert.equal(back.columnGutter, undefined);
 
 const doc: VexaDoc = createDoc("区域文字", 400, 300);
-const saved: TextNode = { ...node, areaVAlign: "middle", firstIndent: 24, hangingIndent: 36, paraSpace: 12, columns: 2, columnGutter: 10, kinsoku: true };
+const saved: TextNode = { ...node, areaVAlign: "middle", firstIndent: 24, hangingIndent: 36, leftIndent: 18, rightIndent: 22, textInset: 10, paraSpace: 12, columns: 2, columnGutter: 10, kinsoku: true };
 doc.nodes.t1 = saved;
 doc.root.push("t1");
 const svg = docToSVG(doc);
@@ -133,6 +157,9 @@ assert.equal(rt.boxH, 80);
 assert.equal(rt.areaVAlign, "middle");
 assert.equal(rt.firstIndent, 24);
 assert.equal(rt.hangingIndent, 36, ".vex 往返保留悬挂缩进");
+assert.equal(rt.leftIndent, 18, ".vex 往返保留左缩进");
+assert.equal(rt.rightIndent, 22, ".vex 往返保留右缩进");
+assert.equal(rt.textInset, 10, ".vex 往返保留内边距");
 assert.equal(rt.paraSpace, 12);
 assert.equal(rt.columns, 2);
 assert.equal(rt.columnGutter, 10);
