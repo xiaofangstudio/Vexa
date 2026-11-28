@@ -1,6 +1,6 @@
 /** 渐变：画布与 SVG 共用同一套端点、色标展开与透明度计算，保证导出与屏幕一致。 */
 import type { Box } from "./geom";
-import type { GradStop, Paint } from "./types";
+import type { GradStop, Paint, Stroke } from "./types";
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
@@ -40,6 +40,25 @@ export function normalizeGradStops(stops: readonly GradStop[] | undefined, fallb
 /** 编辑用色标：保留作者输入，不展开中点。画布、面板、SVG 再按需展开。 */
 export function paintStops(p: Paint): GradStop[] {
   return normalizeGradStops(p.grad?.stops, p.color || "#000000");
+}
+
+/** 把描边转成填充绘制器可消费的 Paint；渐变描边与填充共用同一套采样。 */
+export function strokePaint(stroke: Stroke): Paint {
+  return {
+    kind: stroke.kind,
+    color: stroke.color,
+    opacity: stroke.opacity,
+    ...(stroke.grad ? { grad: { angle: stroke.grad.angle, stops: stroke.grad.stops.map((s) => ({ ...s })) } } : {}),
+  };
+}
+
+export function strokeStops(stroke: Stroke): GradStop[] {
+  return normalizeGradStops(stroke.grad?.stops, stroke.color || "#000000");
+}
+
+/** 渐变描边的箭头等单色装饰使用第一个色标。 */
+export function strokeSolidColor(stroke: Stroke): string {
+  return stroke.grad?.stops?.length ? stroke.grad.stops[0].color : stroke.color;
 }
 
 export function stopAlpha(s: GradStop): number {

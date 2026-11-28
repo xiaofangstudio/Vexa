@@ -403,6 +403,20 @@
 - 已知边界：默认裁剪，暂未做“显示画板外内容”开关；框选尚未排除画板外不可见对象；画板名、空板提示、画板工具手柄和阴影仍画在裁剪外。
 - 截图：该批截图已按清理惯例删除（原 `clip-board.png`、`clip-select.png`、`clip-marquee.png`、`clip-window.png`）。
 
+## 验收记录（2026-11-28，第六十八批：渐变描边）
+
+- `npx tsc --noEmit` 通过；`npm run tauri:build` 通过：171 modules，`index-DT6w3Hmf.js` 646.90 kB / gzip 200.44，`index-CxG1iaRQ.js` 389.40 kB / gzip 161.95，`pdf-mHtUkLmf.js` 26.40 kB / gzip 9.60，`index-hpDzrDkR.css` 75.09 kB / gzip 13.56。
+- 入口：路径选中后属性坞“描边”顶部模式扩为“实色 / 线性 / 径向 / 无”；切到线性后出现渐变预览条、色标行与角度。
+- 底层：椭圆工具拖 320×240，填充设为“无”，描边设为线性 20px，角度 30。
+- 色标：三段 `#FF4D6D 0% → #FFC24B 50% → #12C2A0 100%`，每段 100% 不透明；面板显示三条色标、两个中点行与“3 个色标”计数。
+- 画布：椭圆环从左上红粉过渡到顶部金黄、再过渡到右下青绿，环宽均匀，填充为透明，选择框 320×240 完整。
+- 布局：模式按钮组、色标颜色/位置/透明度、中点、增删色标与角度均不截断；1600×1000 与 1200×900 下 `body/sec/色标行` 横向溢出均为 false。
+- 修复：把透明取色 input 约束到色块容器尺寸，并让中点输入保持 54px，消除面板 5px 横向溢出（同修了原填充渐变中点的潜在溢出）。
+- 测试：`scripts/smoke.gradstroke.mts` 23 项 PASS（描边转 Paint、SVG 定义/引用/回读、径向、PDF 着色、图形样式捕获/套用、`.vex` 往返与脏值清洗）；全部 36 个冒烟脚本复跑通过。
+- 已知边界：虚线或宽度超过 160px 的路径渐变描边在 PDF 退回首色实色；文字渐变描边在 PDF 也退回首色；组/符号实例外观栈仍缺。
+- 截图：`docs/shots/gradient-stroke.png`。
+- 第六十七批截图已按清理惯例删除。
+
 ## 验收记录（2026-11-28，第六十七批：外观项混合模式）
 
 - `npx tsc --noEmit` 通过；`npm run build` 通过：171 modules，`index-D-8LwjaO.js` 641.28 kB / gzip 199.55，`index-CxG1iaRQ.js` 389.40 kB / gzip 161.95，`pdf-DGCroVHx.js` 26.09 kB / gzip 9.44，`index-D2Ky7i1M.css` 74.99 kB / gzip 13.55。

@@ -107,6 +107,8 @@ export interface Stroke {
   swatch?: string;
   /** 图案画笔 id；存在时描边改由画笔沿路径盖章，忽略宽度/虚线。 */
   brushId?: string;
+  /** 线性/径向描边使用；无时按 color 兜底。 */
+  grad?: LinearGrad;
 }
 
 /** 锚点。hIn / hOut 是绝对坐标；null 表示该侧没有手柄（直线段）。 */

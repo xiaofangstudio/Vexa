@@ -112,6 +112,7 @@ export function linkStroke(stroke: Stroke, swatch: Swatch): void {
   stroke.kind = "solid";
   stroke.color = swatch.color;
   stroke.swatch = swatch.id;
+  delete stroke.grad;
 }
 
 /** 把选中对象（组递归）的填充或描边套用色板；返回改到的 paint 数。 */
@@ -173,6 +174,7 @@ export function recolorSwatch(doc: VexaDoc, id: string, color: string): number {
     if (n.kind === "path" && n.stroke.swatch === id) {
       n.stroke.color = hex;
       if (n.stroke.kind !== "none") n.stroke.kind = "solid";
+      delete n.stroke.grad;
       count++;
     }
   }

@@ -1,6 +1,6 @@
 /** SVG 导出与 SVG → Vexa 节点解析（描摹结果走这里）。 */
-import { pathD, parseD, textBox, textDecorationLines, textLayout } from "./geom";
-import { gradLine, normalizeGradStops, radialGeom, renderGradStops, stopAlpha } from "./paint";
+import { pathD, parseD, textBox, textDecorationLines, textLayout, type Box } from "./geom";
+import { gradLine, normalizeGradStops, radialGeom, renderGradStops, stopAlpha, strokePaint, strokeSolidColor } from "./paint";
 import { widthOutline } from "./width";
 import { brushById, brushPattern, brushStamps, calligraphyStamps } from "./brushes";
 import {
@@ -40,7 +40,7 @@ interface BBox {
 
 /** 组包围盒：递归子节点，供多画板导出时筛内容。 */
 function groupBBox(node: Node, doc: VexaDoc): BBox {
-  if (node.kind !== "group") return nodeBBox(node);
+  if (node.kind !== "group") return nodeBox(node);
   let box: BBox | null = null;
   for (const id of node.children) {
     if (id === node.clip) continue;
@@ -64,7 +64,7 @@ function hitsBoard(b: BBox, board: Artboard): boolean {
   if (!b.w && !b.h) return true;
   return b.x < board.x + board.w && b.x + b.w > board.x && b.y < board.y + board.h && b.y + b.h > board.y;
 }
-function nodeBBox(node: Node): BBox {
+function nodeBox(node: Node): BBox {
   if (node.kind === "path") {
     const pts = node.subpaths.flatMap((s) => s.anchors);
     if (!pts.length) return { x: 0, y: 0, w: 0, h: 0 };
@@ -145,21 +145,29 @@ function fillAttrs(fill: Paint, box: BBox, defs: string[], id: string, doc: Vexa
 function arrowMarker(stroke: Stroke, defs: string[], id: string): string {
   const kind = stroke.arrow && stroke.arrow !== "none" ? stroke.arrow : "";
   if (!kind) return "";
+  const color = strokeSolidColor(stroke);
   const body =
     kind === "triangle"
-      ? `<path d="M1 1 L9 5 L1 9 Z" fill="${stroke.color}"/>`
+      ? `<path d="M1 1 L9 5 L1 9 Z" fill="${color}"/>`
       : kind === "diamond"
-        ? `<path d="M1 5 L5 1 L9 5 L5 9 Z" fill="${stroke.color}"/>`
-        : `<path d="M1.5 1.5 L8.5 5 L1.5 8.5" fill="none" stroke="${stroke.color}" stroke-width="1.6"/>`;
+        ? `<path d="M1 5 L5 1 L9 5 L5 9 Z" fill="${color}"/>`
+        : `<path d="M1.5 1.5 L8.5 5 L1.5 8.5" fill="none" stroke="${color}" stroke-width="1.6"/>`;
   defs.push(
     `    <marker id="${id}" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="2.2" markerHeight="2.2" orient="auto" markerUnits="strokeWidth">\n      ${body}\n    </marker>`,
   );
   return ` marker-end="url(#${id})"`;
 }
 
-function strokeAttrs(stroke: Stroke, defs: string[], id: string): string {
+function strokeAttrs(stroke: Stroke, defs: string[], id: string, box: Box, doc: VexaDoc, seq: { n: number }): string {
   if (stroke.kind === "none") return ` stroke="none"`;
-  let s = ` stroke="${stroke.color}" stroke-opacity="${round(stroke.opacity)}" stroke-width="${round(stroke.width)}"`;
+  let s: string;
+  if (stroke.kind === "linear" || stroke.kind === "radial") {
+    const grad = fillAttrs(strokePaint(stroke), box, defs, `sg${id}`, doc, seq);
+    s = grad.replace(/ fill=/g, " stroke=").replace(/ fill-opacity=/g, " stroke-opacity=");
+  } else {
+    s = ` stroke="${stroke.color}" stroke-opacity="${round(stroke.opacity)}"`;
+  }
+  s += ` stroke-width="${round(stroke.width)}"`;
   s += ` stroke-linecap="${stroke.cap ?? "butt"}" stroke-linejoin="${stroke.join ?? "miter"}"`;
   if (stroke.dash.length) s += ` stroke-dasharray="${stroke.dash.map(round).join(" ")}"`;
   s += arrowMarker(stroke, defs, id);
@@ -175,11 +183,11 @@ function appearanceSVG(doc: VexaDoc, node: PathNode, indent: string, defs: strin
     const blend = item.blend && item.blend !== "normal" ? ` style="mix-blend-mode:${item.blend}"` : "";
     if (item.kind === "fill" && item.fill && item.fill.kind !== "none") {
       const id = `g${seq.n++}`;
-      const fill = fillAttrs(item.fill, nodeBBox(node), defs, id, doc, seq);
+      const fill = fillAttrs(item.fill, nodeBox(node), defs, id, doc, seq);
       rows.push(`${indent}<path d="${pathD(node)}"${fill}${op}${blend}/>`);
     } else if (item.kind === "stroke" && item.stroke && item.stroke.kind !== "none" && item.stroke.width > 0) {
       const id = `s${seq.n++}`;
-      const stroke = strokeAttrs({ ...item.stroke, arrow: "none" }, defs, id);
+      const stroke = strokeAttrs({ ...item.stroke, arrow: "none" }, defs, id, nodeBox(node), doc, seq);
       rows.push(`${indent}<path d="${pathD(node)}" fill="none"${stroke}${op}${blend}/>`);
     }
   }
@@ -204,7 +212,7 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
   const blend = node.blend && node.blend !== "normal" ? ` style="mix-blend-mode:${node.blend}"` : "";
   if (node.kind === "path") {
     const id = `g${seq.n++}`;
-    const fill = fillAttrs(node.fill, nodeBBox(node), defs, id, doc, seq);
+    const fill = fillAttrs(node.fill, nodeBox(node), defs, id, doc, seq);
     const brush = !noBrush && node.stroke.brushId ? brushById(doc, node.stroke.brushId) : undefined;
     const brushTile = brushPattern(doc, brush);
     const extra = appearanceSVG(doc, node, indent, defs, seq);
@@ -239,10 +247,10 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
     }
     const outline = widthOutline(node);
     if (outline && outline.length) {
-      return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <path d="${loopsD(outline)}" fill="${node.stroke.color}" fill-opacity="${round(node.stroke.opacity)}"/>\n${indent}</g>\n${extra}`;
+      return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <path d="${loopsD(outline)}"${fillAttrs(strokePaint(node.stroke), nodeBox(node), defs, `sg${id}`, doc, seq)}/>\n${indent}</g>\n${extra}`;
     }
     const hasOpen = node.subpaths.some((s) => !s.closed && s.anchors.length > 1);
-    const stroke = strokeAttrs(hasOpen ? node.stroke : { ...node.stroke, arrow: "none" }, defs, `a${id}`);
+    const stroke = strokeAttrs(hasOpen ? node.stroke : { ...node.stroke, arrow: "none" }, defs, `a${id}`, nodeBox(node), doc, seq);
     return `${indent}<path d="${pathD(node)}"${fill}${stroke}${op}${blend}/>\n${extra}`;
   }
   if (node.kind === "text") {
@@ -252,7 +260,7 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
     const tracking = node.tracking ? ` letter-spacing="${round(node.tracking)}"` : "";
     const weight = node.bold ? ` font-weight="700"` : "";
     const style = node.italic ? ` font-style="italic"` : "";
-    const box = nodeBBox(node);
+    const box = nodeBox(node);
     const clipId = lay.mode === "area" ? `tc${seq.n++}` : "";
     if (clipId) {
       defs.push(
@@ -288,7 +296,7 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
 
     const renderPass = (paint: Paint | null, stroke: Stroke | null, alpha: number, withDecor: boolean, blend?: BlendMode): string => {
       const fill = paint ? fillAttrs(paint, box, defs, `g${seq.n++}`, doc, seq) : ` fill="none"`;
-      const strokeAttr = stroke ? strokeAttrs({ ...stroke, arrow: "none" }, defs, `a${seq.n++}`) : "";
+      const strokeAttr = stroke ? strokeAttrs({ ...stroke, arrow: "none" }, defs, `a${seq.n++}`, lay.box, doc, seq) : "";
       const op2 = alpha < 1 ? ` opacity="${round(alpha)}"` : "";
       const bm = blend && blend !== "normal" ? ` style="mix-blend-mode:${blend}"` : "";
       if (lay.mode === "path") {
@@ -406,6 +414,7 @@ interface RawPath {
   opacity: number;
   matrix: Matrix;
   gradientFill?: Paint | null;
+  gradientStroke?: Paint | null;
 }
 
 interface RawText {
@@ -1089,6 +1098,7 @@ function collectItems(root: Element): RawItem[] {
       opacity,
       matrix: m,
       gradientFill,
+      gradientStroke: strokeGradient,
     });
   };
 
@@ -1213,7 +1223,16 @@ export function svgToNodes(
         ? solid(svgColor(r.fill).color, svgColor(r.fill).alpha * r.fillOpacity)
         : noPaint();
     const stroke: Stroke =
-      r.stroke && r.stroke !== "none" && !r.stroke.startsWith("url(")
+      r.gradientStroke
+        ? {
+            kind: r.gradientStroke.kind === "radial" ? "radial" : "linear",
+            color: r.gradientStroke.color,
+            opacity: r.gradientStroke.opacity * r.strokeOpacity,
+            width: r.strokeWidth,
+            dash: [],
+            grad: r.gradientStroke.grad ? { angle: r.gradientStroke.grad.angle, stops: r.gradientStroke.grad.stops.map((s) => ({ ...s })) } : { angle: 0, stops: [] },
+          }
+        : r.stroke && r.stroke !== "none" && !r.stroke.startsWith("url(")
         ? {
             kind: "solid",
             color: svgColor(r.stroke).color,

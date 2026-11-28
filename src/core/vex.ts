@@ -158,6 +158,17 @@ export function parseVex(text: string): VexaDoc {
       if (!Array.isArray(n.stroke.dash)) n.stroke.dash = [];
       if (typeof n.stroke.width !== "number") n.stroke.width = 1;
       if (!n.stroke.arrow) n.stroke.arrow = "none";
+      if (n.stroke.kind === "linear" || n.stroke.kind === "radial") {
+        n.stroke.grad = {
+          angle: Number.isFinite(n.stroke.grad?.angle) ? (n.stroke.grad?.angle as number) : 0,
+          stops: normalizeGradStops(n.stroke.grad?.stops, n.stroke.color || "#000000"),
+        };
+      } else if (n.stroke.grad) {
+        n.stroke.grad = {
+          angle: Number.isFinite(n.stroke.grad.angle) ? n.stroke.grad.angle : 0,
+          stops: normalizeGradStops(n.stroke.grad.stops, n.stroke.color || "#000000"),
+        };
+      }
       if (n.stroke.cap !== "round" && n.stroke.cap !== "square") n.stroke.cap = "butt";
       if (n.stroke.join !== "round" && n.stroke.join !== "bevel") n.stroke.join = "miter";
       if (n.stroke.swatch && !swatchIds.has(n.stroke.swatch)) delete n.stroke.swatch;

@@ -29,6 +29,7 @@ function clonePaint(paint: Paint): Paint {
 function cloneStroke(stroke: Stroke): Stroke {
   const clone: Stroke = { ...stroke, dash: [...(stroke.dash ?? [])] };
   delete clone.brushId;
+  if (stroke.grad) clone.grad = { angle: stroke.grad.angle, stops: stroke.grad.stops.map((s) => ({ ...s })) };
   if (stroke.widthPoints) clone.widthPoints = stroke.widthPoints.map((p) => ({ ...p }));
   return clone;
 }

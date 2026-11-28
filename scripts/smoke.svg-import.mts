@@ -49,9 +49,16 @@ assert.deepEqual(
   ],
 );
 assert.equal(nodes[0].opacity, 0.9);
-assert.equal(nodes[0].stroke.kind, "solid");
+assert.equal(nodes[0].stroke.kind, "radial");
 assert.equal(nodes[0].stroke.color, "#ffffff");
 assert.equal(nodes[0].stroke.opacity, 0.7);
+assert.deepEqual(
+  nodes[0].stroke.grad?.stops.map((s) => [s.offset, s.color, s.alpha ?? 1]),
+  [
+    [0, "#ffffff", 1],
+    [1, "#000000", 0.5],
+  ],
+);
 
 const radial = nodes[1].fill;
 assert.equal(radial.kind, "radial");

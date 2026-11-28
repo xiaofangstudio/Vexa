@@ -1,7 +1,7 @@
 /** 画面渲染：粘贴板点阵、画板、矢量对象、选择框与锚点手柄。 */
 import { flatten, nodeBox, textDecorationLines, textLayout, unionBox, type Box } from "../core/geom";
 import { brushById, brushPattern, brushStamps, calligraphyStamps } from "../core/brushes";
-import { canvasPaint, gradAxis, gradHandlePoints, paintStops, stopAlpha, stopCssColor } from "../core/paint";
+import { canvasPaint, gradAxis, gradHandlePoints, paintStops, stopAlpha, stopCssColor, strokePaint, strokeSolidColor } from "../core/paint";
 import { widthHandles, widthOutline, widthPreview } from "../core/width";
 import { pointInArtboards } from "../core/artboards";
 import { groupBox } from "./pick";
@@ -413,8 +413,9 @@ function drawPathStroke(
   const brush = !noBrush && stroke.brushId ? brushById(doc, stroke.brushId) : undefined;
   const pattern = brushPattern(doc, brush);
   const painted = { ...node, stroke };
+  const strokeStyle = fillPaint(ctx, doc, strokePaint(stroke), nodeBox(node));
   if (brush && brush.kind === "calligraphic") {
-    ctx.fillStyle = stroke.color;
+    ctx.fillStyle = strokeStyle;
     for (const st of calligraphyStamps(node, brush)) {
       ctx.save();
       ctx.translate(st.x, st.y);
@@ -446,12 +447,12 @@ function drawPathStroke(
   } else {
     const outline = widthOutline(painted);
     if (outline) {
-      ctx.fillStyle = stroke.color;
+      ctx.fillStyle = strokeStyle;
       ctx.beginPath();
       loopsToPath(ctx, outline);
       ctx.fill("nonzero");
     } else {
-      ctx.strokeStyle = stroke.color;
+      ctx.strokeStyle = strokeStyle;
       ctx.lineWidth = stroke.width;
       ctx.lineJoin = stroke.join ?? "miter";
       ctx.lineCap = stroke.cap ?? "butt";
@@ -459,7 +460,10 @@ function drawPathStroke(
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    drawArrow(ctx, painted);
+    const arrowNode = stroke.kind === "linear" || stroke.kind === "radial"
+      ? { ...painted, stroke: { ...stroke, color: strokeSolidColor(stroke) } }
+      : painted;
+    drawArrow(ctx, arrowNode);
   }
   ctx.restore();
 }
@@ -531,7 +535,7 @@ function drawNode(
       ctx.font = `${node.italic ? "italic " : ""}${node.bold ? "700 " : ""}${node.size}px ${node.font}`;
       if (stroking) {
         ctx.globalAlpha *= stroke.opacity ?? 1;
-        ctx.strokeStyle = stroke.color;
+        ctx.strokeStyle = fillPaint(ctx, doc, strokePaint(stroke), lay.box);
         ctx.lineWidth = stroke.width;
         ctx.lineCap = stroke.cap ?? "butt";
         ctx.lineJoin = stroke.join ?? "miter";

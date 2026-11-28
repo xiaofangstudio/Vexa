@@ -2,7 +2,7 @@
 import { create as createFont, type Font, type FontCollection, type Glyph } from "fontkit";
 import { zlibSync } from "fflate";
 import { AREA_INSET, nodeBox, pathTextLayout, textBox, textDecorationLines, textLayout, verticalTextLayout, type Box } from "./geom";
-import { gradLine, radialGeom, renderGradStops, stopAlpha } from "./paint";
+import { gradLine, radialGeom, renderGradStops, stopAlpha, strokePaint, strokeSolidColor } from "./paint";
 import type { Artboard, GradStop, Node, Paint, PathNode, Stroke, TextNode, VexaDoc } from "./types";
 import { widthOutline } from "./width";
 import { brushById, brushPattern, brushStamps, calligraphyStamps } from "./brushes";
@@ -708,17 +708,29 @@ class PdfBuilder {
     }
     if (stroke && stroke.kind !== "none" && stroke.width > 0) {
       const strokeAlpha = alpha * (stroke.opacity ?? 1);
-      const outline = widthOutline(node);
+      const gradient = stroke.kind === "linear" || stroke.kind === "radial";
+      const outlineNode = gradient && !node.stroke.widthPoints && !stroke.dash.length && stroke.width <= 160
+        ? { ...node, stroke: { ...stroke, widthPoints: [
+          { t: 0, left: stroke.width / 2, right: stroke.width / 2 },
+          { t: 1, left: stroke.width / 2, right: stroke.width / 2 },
+        ] } }
+        : node;
+      const outline = widthOutline(outlineNode);
       if (outline) {
         const rings = outline.map((loop) => loop.map((p) => [p.x, p.y] as [number, number]));
         const ops = ringOps(rings);
         if (ops.length) {
-          c.q();
-          c.gs(strokeAlpha, blend);
-          c.path(ops);
-          c.fillColor(parseColor(stroke.color).r, parseColor(stroke.color).g, parseColor(stroke.color).b);
-          c.op("f");
-          c.Q();
+          if (gradient) {
+            this.gradientFillOps(c, ops, strokePaint(stroke), nodeBox(node), strokeAlpha, blend);
+          } else {
+            c.q();
+            c.gs(strokeAlpha, blend);
+            c.path(ops);
+            const col = parseColor(stroke.color);
+            c.fillColor(col.r, col.g, col.b);
+            c.op("f");
+            c.Q();
+          }
         }
       } else {
         const ops = pathOps(node);
@@ -727,12 +739,16 @@ class PdfBuilder {
           c.gs(strokeAlpha, blend);
           c.strokeSettings(stroke.width, stroke.cap ?? "butt", stroke.join ?? "miter", stroke.dash);
           c.path(ops);
-          c.strokeColor(parseColor(stroke.color).r, parseColor(stroke.color).g, parseColor(stroke.color).b);
+          const col = parseColor(gradient ? strokeSolidColor(stroke) : stroke.color);
+          c.strokeColor(col.r, col.g, col.b);
           c.op("S");
           c.Q();
         }
       }
-      if (stroke.arrow && stroke.arrow !== "none") this.drawArrow(c, node, strokeAlpha, blend);
+      if (stroke.arrow && stroke.arrow !== "none") {
+        const arrowStroke = gradient ? { ...stroke, color: strokeSolidColor(stroke) } : stroke;
+        this.drawArrow(c, gradient ? { ...node, stroke: arrowStroke } : node, strokeAlpha, blend);
+      }
     }
     this.drawAppearance(c, node, alpha, blend);
   }
@@ -821,7 +837,7 @@ class PdfBuilder {
 
   private textStrokePass(c: Content, ops: string[], stroke: Stroke, alpha: number, blend: string): void {
     if (stroke.kind === "none" || stroke.width <= 0 || alpha <= 0) return;
-    const col = parseColor(stroke.color);
+    const col = parseColor(strokeSolidColor(stroke));
     c.q();
     c.gs(alpha * (stroke.opacity ?? 1), blend);
     c.path(ops);

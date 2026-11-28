@@ -47,7 +47,7 @@ import { inscribedCircleOf } from "../core/inscribed";
 import { convertTextMode, nodeBox, unionBox } from "../core/geom";
 import { groupBox } from "../engine/pick";
 import { noPaint, noStroke, solid, BLEND_MODES, LAYER_TAGS, type AnchorRef, type Artboard, type BlendMode, type GradStop, type GroupNode, type LayerTag, type Node, type Paint, type PathNode, type Pt, type Stroke, type SubPath, type TextNode, type VexaDoc, type Swatch, type SwatchKind } from "../core/types";
-import { insertGradStop, paintPreview, paintStops, stopAlpha, stopCssColor } from "../core/paint";
+import { insertGradStop, paintPreview, paintStops, stopAlpha, stopCssColor, strokePaint, strokeStops as strokeGradStops } from "../core/paint";
 import { addSwatch, deleteSwatch, linkFill, linkStroke, mergeSwatches, swatchById, swatchesOf, updateSwatch, type MergeSwatchesResult, type SwatchResult } from "../core/swatches";
 import { fitBoard, zoomAt, type View } from "../engine/view";
 import type { ToolId } from "../engine/render";
@@ -2215,6 +2215,9 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
   const fillStops = single && (single.kind === "path" || single.kind === "text") && (single.fill.kind === "linear" || single.fill.kind === "radial")
     ? paintStops(single.fill)
     : [];
+  const pathStrokeStops = single && single.kind === "path" && (single.stroke.kind === "linear" || single.stroke.kind === "radial")
+    ? strokeGradStops(single.stroke)
+    : [];
   const box = bboxOf(doc, ids);
   const pathCount = ids.filter((id) => doc.nodes[id]?.kind === "path").length;
   const hasSel = ids.length > 0;
@@ -2303,6 +2306,14 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
     const stops = fn(paintStops(n.fill));
     if (stops.length < 2) return;
     n.fill = { ...n.fill, color: stops[0]?.color ?? n.fill.color, grad: { angle, stops } };
+  });
+
+  const updateStrokeStops = (fn: (stops: GradStop[]) => GradStop[]) => setNode((n) => {
+    if (n.kind !== "path" || (n.stroke.kind !== "linear" && n.stroke.kind !== "radial")) return;
+    const angle = n.stroke.grad?.angle ?? 90;
+    const stops = fn(strokeGradStops(n.stroke));
+    if (stops.length < 2) return;
+    n.stroke = { ...n.stroke, color: stops[0]?.color ?? n.stroke.color, grad: { angle, stops } };
   });
 
 
@@ -3375,25 +3386,187 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
               {single.kind === "path" && (
                 <section className="dock-sec">
                   <div className="dock-sec-head"><span>{zh.dock.stroke}</span></div>
+                  <div className="paint-modes">
+                    {(
+                      [
+                        ["solid", "实色"],
+                        ["linear", "线性"],
+                        ["radial", "径向"],
+                        ["none", "无"],
+                      ] as const
+                    ).map(([k, label]) => (
+                      <button
+                        key={k}
+                        className={"paint-mode" + (single.stroke.kind === k ? " is-on" : "")}
+                        onClick={() =>
+                          setNode((n) => {
+                            if (n.kind !== "path") return;
+                            const hadGrad = n.stroke.kind === "linear" || n.stroke.kind === "radial";
+                            const stops = hadGrad ? strokeGradStops(n.stroke) : [{ offset: 0, color: n.stroke.color }, { offset: 1, color: "#ffffff" }];
+                            const first = stops[0]?.color ?? n.stroke.color;
+                            if (k === "none") n.stroke = noStroke(n.stroke.color);
+                            else if (k === "solid") n.stroke = { ...n.stroke, kind: "solid", color: first, grad: undefined };
+                            else n.stroke = {
+                              ...n.stroke,
+                              kind: k,
+                              color: first,
+                              grad: { angle: hadGrad ? (n.stroke.grad?.angle ?? 90) : 90, stops: stops.map((s) => ({ ...s })) },
+                            };
+                          })
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                   <div className="paint-row">
-                    <label className="paint-swatch" style={{ background: single.stroke.kind === "none" ? "transparent" : single.stroke.color }}>
+                    <label className="paint-swatch" style={{ background: single.stroke.kind === "none" ? "transparent" : paintPreview(strokePaint(single.stroke)), borderStyle: single.stroke.kind === "none" ? "dashed" : "solid" }}>
                       <input
                         type="color"
-                        value={single.stroke.color}
-                        onChange={(e) => { rememberColor(e.target.value); setNode((n) => { if (n.kind === "path") { n.stroke = { ...n.stroke, kind: "solid", color: e.target.value }; } }); }}
+                        value={single.stroke.kind === "linear" || single.stroke.kind === "radial" ? (pathStrokeStops[0]?.color ?? single.stroke.color) : single.stroke.color}
+                        onChange={(e) => {
+                          rememberColor(e.target.value);
+                          setNode((n) => {
+                            if (n.kind !== "path") return;
+                            if (n.stroke.kind === "linear" || n.stroke.kind === "radial") {
+                              const stops = strokeGradStops(n.stroke).map((s, i) => (i === 0 ? { ...s, color: e.target.value } : s));
+                              n.stroke = { ...n.stroke, color: e.target.value, grad: { angle: n.stroke.grad?.angle ?? 90, stops } };
+                            } else n.stroke = { ...n.stroke, kind: "solid", color: e.target.value };
+                          });
+                        }}
                       />
                     </label>
                     <NumField
                       label={zh.dock.width}
                       value={single.stroke.width}
                       min={0}
-                      onCommit={(v) => setNode((n) => { if (n.kind === "path") n.stroke = { ...n.stroke, width: v, kind: v > 0 ? "solid" : "none" }; })}
+                      onCommit={(v) => setNode((n) => {
+                        if (n.kind !== "path") return;
+                        n.stroke = { ...n.stroke, width: v, kind: v > 0 ? (n.stroke.kind === "none" ? "solid" : n.stroke.kind) : "none" };
+                      })}
                       inline
                     />
                     <button className="btn btn-ghost btn-mini" onClick={() => setNode((n) => { if (n.kind === "path") n.stroke = noStroke(n.stroke.color); })}>
                       {zh.dock.none}
                     </button>
                   </div>
+                  {(single.stroke.kind === "linear" || single.stroke.kind === "radial") && (
+                    <div className="paint-grad">
+                      <div className="grad-bar" style={{ background: paintPreview(strokePaint(single.stroke)) }} />
+                      <div className="grad-stop-list">
+                        {pathStrokeStops.map((stop, i) => (
+                          <div className="grad-stop" key={i}>
+                            <label className="paint-swatch" style={{ background: stopCssColor(stop) }} title={`色标 ${i + 1}`}>
+                              <input
+                                type="color"
+                                value={stop.color}
+                                onChange={(e) => { rememberColor(e.target.value); updateStrokeStops((stops) => stops.map((s, j) => (j === i ? { ...s, color: e.target.value } : s))); }}
+                              />
+                            </label>
+                            <div className="grad-position">
+                              <input
+                                className="field-input num"
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={Math.round(stop.offset * 100)}
+                                onChange={(e) => {
+                                  const v = Number(e.target.value);
+                                  if (!Number.isFinite(v)) return;
+                                  updateStrokeStops((stops) => stops.map((s, j) => (j === i ? { ...s, offset: Math.min(1, Math.max(0, v / 100)) } : s)));
+                                }}
+                              />
+                              <span className="faint">%</span>
+                            </div>
+                            <div className="grad-alpha">
+                              <input
+                                className="field-input num"
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={1}
+                                title="色标透明度"
+                                value={Math.round(stopAlpha(stop) * 100)}
+                                onChange={(e) => {
+                                  const v = Number(e.target.value);
+                                  if (!Number.isFinite(v)) return;
+                                  updateStrokeStops((stops) => stops.map((s, j) => {
+                                    if (j !== i) return s;
+                                    const next = { ...s };
+                                    if (v >= 100) delete next.alpha;
+                                    else next.alpha = Math.min(1, Math.max(0, v / 100));
+                                    return next;
+                                  }));
+                                }}
+                              />
+                              <span className="faint">透明</span>
+                            </div>
+                            <button
+                              className="grad-stop-del"
+                              disabled={pathStrokeStops.length <= 2}
+                              title="删除这个色标"
+                              onClick={() => updateStrokeStops((stops) => stops.filter((_, j) => j !== i))}
+                            >
+                              ×
+                            </button>
+                            {i > 0 && (
+                              <div className="grad-mid">
+                                <span className="faint">中点</span>
+                                <input
+                                  className="field-input num"
+                                  type="number"
+                                  min={1}
+                                  max={99}
+                                  step={1}
+                                  value={Math.round((stop.midpoint ?? 0.5) * 100)}
+                                  onChange={(e) => {
+                                    const v = Number(e.target.value);
+                                    if (!Number.isFinite(v)) return;
+                                    updateStrokeStops((stops) => stops.map((s, j) => {
+                                      if (j !== i) return s;
+                                      const next = { ...s };
+                                      if (v === 50) delete next.midpoint;
+                                      else next.midpoint = Math.min(0.99, Math.max(0.01, v / 100));
+                                      return next;
+                                    }));
+                                  }}
+                                />
+                                <span className="faint">%</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        <div className="grad-stop-actions">
+                          <button
+                            className="btn btn-ghost btn-mini"
+                            onClick={() => updateStrokeStops((stops) => insertGradStop(strokePaint(single.stroke), stops).stops)}
+                          >
+                            ＋ 添加色标
+                          </button>
+                          <span className="faint">{pathStrokeStops.length} 个色标</span>
+                        </div>
+                      </div>
+                      {single.stroke.kind === "linear" && (
+                        <div className="grad-angle">
+                          <span className="faint">角度</span>
+                          <input
+                            className="field-input num"
+                            value={Math.round((single.stroke.grad?.angle ?? 90) * 10) / 10}
+                            onChange={(e) => {
+                              const v = Number(e.target.value);
+                              if (!Number.isFinite(v)) return;
+                              setNode((n) => {
+                                if (n.kind !== "path") return;
+                                const g = n.stroke.grad ?? { angle: 90, stops: strokeGradStops(n.stroke) };
+                                n.stroke = { ...n.stroke, grad: { angle: v, stops: g.stops } };
+                              });
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {single.stroke.brushId && (
                     <div className="paint-pattern">
                       <button className="paint-pattern-name" type="button" onClick={() => onTab("brushes")}>
@@ -3422,6 +3595,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       else {
                         n.stroke = { ...n.stroke, kind: "solid", color };
                         delete n.stroke.swatch;
+                        delete n.stroke.grad;
                       }
                     })}
                     onManage={() => onSwatches()}
@@ -3440,7 +3614,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                         className={"dash-chip" + (single.stroke.dash.join(",") === dash.join(",") ? " is-on" : "")}
                         onClick={() =>
                           setNode((n) => {
-                            if (n.kind === "path") n.stroke = { ...n.stroke, kind: "solid", dash: [...dash] };
+                            if (n.kind === "path") n.stroke = { ...n.stroke, dash: [...dash] };
                           })
                         }
                       >
