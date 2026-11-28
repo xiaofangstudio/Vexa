@@ -470,6 +470,7 @@ function drawAppearance(ctx: CanvasRenderingContext2D, doc: VexaDoc, node: PathN
     if (!item.visible || item.opacity <= 0) continue;
     ctx.save();
     ctx.globalAlpha *= item.opacity;
+    if (item.blend && item.blend !== "normal") ctx.globalCompositeOperation = item.blend;
     if (item.kind === "fill") {
       if (item.fill && item.fill.kind !== "none") {
         ctx.beginPath();
@@ -597,6 +598,7 @@ function drawNode(
       if (!item.visible) continue;
       ctx.save();
       ctx.globalAlpha *= item.opacity;
+      if (item.blend && item.blend !== "normal") ctx.globalCompositeOperation = item.blend;
       if (item.kind === "fill" && item.fill) paintGlyphs(item.fill, null);
       else if (item.kind === "stroke" && item.stroke) paintGlyphs(null, item.stroke);
       ctx.restore();

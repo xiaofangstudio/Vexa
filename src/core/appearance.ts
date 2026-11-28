@@ -1,4 +1,4 @@
-import type { AppearanceItem, AppearanceKind, Node, Paint, PathNode, Stroke, TextNode, VexaDoc } from "./types";
+import { BLEND_MODES, type AppearanceItem, type AppearanceKind, type BlendMode, type Node, type Paint, type PathNode, type Stroke, type TextNode, type VexaDoc } from "./types";
 
 /** 每条路径或文字最多叠加 8 层外观。 */
 export const MAX_APPEARANCE = 8;
@@ -12,6 +12,12 @@ function isHost(node: Node | undefined): node is AppearanceHost {
 function clamp01(n: number, fallback = 1): number {
   if (!Number.isFinite(n)) return fallback;
   return Math.max(0, Math.min(1, n));
+}
+
+function blendOf(value: unknown): BlendMode | undefined {
+  if (typeof value !== "string") return undefined;
+  if (!(BLEND_MODES as string[]).includes(value) || value === "normal") return undefined;
+  return value as BlendMode;
 }
 
 function clonePaint(paint: Paint): Paint {
@@ -32,9 +38,10 @@ function defaultStroke(): Stroke {
 }
 
 export function cloneAppearanceItem(item: AppearanceItem): AppearanceItem {
+  const blend = blendOf(item.blend);
   return item.kind === "fill"
-    ? { id: item.id, kind: "fill", fill: clonePaint(item.fill!), opacity: item.opacity, visible: item.visible }
-    : { id: item.id, kind: "stroke", stroke: cloneStroke(item.stroke!), opacity: item.opacity, visible: item.visible };
+    ? { id: item.id, kind: "fill", fill: clonePaint(item.fill!), opacity: item.opacity, visible: item.visible, ...(blend ? { blend } : {}) }
+    : { id: item.id, kind: "stroke", stroke: cloneStroke(item.stroke!), opacity: item.opacity, visible: item.visible, ...(blend ? { blend } : {}) };
 }
 
 export function appearanceOf(node: Node | undefined): AppearanceItem[] {
@@ -79,7 +86,7 @@ export function addAppearance(node: Node, kind: AppearanceKind): { ok: boolean; 
 export function updateAppearance(
   node: Node,
   id: string,
-  patch: { opacity?: number; visible?: boolean; fill?: Paint; stroke?: Stroke },
+  patch: { opacity?: number; visible?: boolean; fill?: Paint; stroke?: Stroke; blend?: BlendMode },
 ): boolean {
   const item = appearanceOf(node).find((it) => it.id === id);
   if (!item) return false;
@@ -87,6 +94,11 @@ export function updateAppearance(
   if (patch.visible !== undefined) item.visible = !!patch.visible;
   if (patch.fill !== undefined && item.kind === "fill") item.fill = clonePaint(patch.fill);
   if (patch.stroke !== undefined && item.kind === "stroke") item.stroke = cloneStroke(patch.stroke);
+  if (patch.blend !== undefined) {
+    const blend = blendOf(patch.blend);
+    if (blend) item.blend = blend;
+    else delete item.blend;
+  }
   return true;
 }
 
@@ -126,10 +138,12 @@ export function normalizeAppearanceList(input: unknown): AppearanceItem[] {
     seen.add(id);
     if (kind === "fill") {
       if (!item.fill || typeof item.fill !== "object") continue;
-      list.push({ id, kind, fill: clonePaint(item.fill as Paint), opacity: clamp01(Number(item.opacity), 1), visible: item.visible !== false });
+      const blend = blendOf(item.blend);
+      list.push({ id, kind, fill: clonePaint(item.fill as Paint), opacity: clamp01(Number(item.opacity), 1), visible: item.visible !== false, ...(blend ? { blend } : {}) });
     } else {
       if (!item.stroke || typeof item.stroke !== "object") continue;
-      list.push({ id, kind, stroke: cloneStroke(item.stroke as Stroke), opacity: clamp01(Number(item.opacity), 1), visible: item.visible !== false });
+      const blend = blendOf(item.blend);
+      list.push({ id, kind, stroke: cloneStroke(item.stroke as Stroke), opacity: clamp01(Number(item.opacity), 1), visible: item.visible !== false, ...(blend ? { blend } : {}) });
     }
     if (list.length >= MAX_APPEARANCE) break;
   }

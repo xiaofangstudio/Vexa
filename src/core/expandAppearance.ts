@@ -51,6 +51,7 @@ function appearanceLayer(node: PathNode | TextNode, index: number): PathNode | T
   copy.name = `${node.name} · 叠加 ${index + 1}`;
   copy.opacity = item.opacity;
   copy.visible = item.visible;
+  if (item.blend) copy.blend = item.blend;
   if (item.kind === "fill" && item.fill) {
     copy.fill = JSON.parse(JSON.stringify(item.fill));
     if (copy.kind === "path") copy.stroke = { kind: "none", color: "#111319", opacity: 1, width: 0, dash: [], arrow: "none" };

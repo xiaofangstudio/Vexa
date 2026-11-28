@@ -1,6 +1,7 @@
 /** 外观面板：在路径/文字底层填充/描边之上叠加多层填充与描边，可显隐、排序、调透明度。 */
 import { zh } from "../i18n/zh";
 import type { AppearanceItem, Node, PathNode, TextNode, VexaDoc } from "../core/types";
+import { BLEND_MODES } from "../core/types";
 import {
   MAX_APPEARANCE,
   addAppearance,
@@ -11,6 +12,7 @@ import {
 } from "../core/appearance";
 import type { DocStore } from "../stores/docStore";
 import { expandAppearance } from "../core/expandAppearance";
+import { BLEND_LABELS } from "./blendLabels";
 
 interface Props {
   doc: VexaDoc;
@@ -55,6 +57,7 @@ function AppearanceRow({
 
   return (
     <div className={"apr-item apr-item-" + item.kind + (item.visible ? "" : " is-off")} data-ap-id={item.id}>
+      <div className="apr-main">
       <button
         className="apr-eye"
         type="button"
@@ -151,6 +154,20 @@ function AppearanceRow({
       >
         ×
       </button>
+      </div>
+      <div className="apr-sub">
+        <span className="apr-sub-label">混合</span>
+        <select
+          className="apr-blend"
+          aria-label={zh.dock.aprBlend}
+          value={item.blend ?? "normal"}
+          onChange={(e) => commit({ blend: e.target.value as Parameters<typeof updateAppearance>[2]["blend"] })}
+        >
+          {BLEND_MODES.map((mode) => (
+            <option key={mode} value={mode}>{BLEND_LABELS[mode]}</option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }

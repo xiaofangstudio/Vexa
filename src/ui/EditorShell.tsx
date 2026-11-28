@@ -75,25 +75,7 @@ import { expandAppearance } from "../core/expandAppearance";
 import { patternById } from "../core/patterns";
 import { brushById } from "../core/brushes";
 import "./EditorShell.css";
-
-const BLEND_LABELS: Record<BlendMode, string> = {
-  normal: "正常",
-  multiply: "正片叠底",
-  screen: "滤色",
-  overlay: "叠加",
-  darken: "变暗",
-  lighten: "变亮",
-  "color-dodge": "颜色减淡",
-  "color-burn": "颜色加深",
-  "hard-light": "强光",
-  "soft-light": "柔光",
-  difference: "差值",
-  exclusion: "排除",
-  hue: "色相",
-  saturation: "饱和度",
-  color: "颜色",
-  luminosity: "明度",
-};
+import { BLEND_LABELS } from "./blendLabels";
 
 interface Props {
   initialDoc: VexaDoc;

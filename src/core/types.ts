@@ -178,6 +178,8 @@ export interface AppearanceItem {
   /** 该项自身不透明度，0–1。 */
   opacity: number;
   visible: boolean;
+  /** 该项叠加时的混合模式；缺省按正常。 */
+  blend?: BlendMode;
 }
 
 export interface PathNode {

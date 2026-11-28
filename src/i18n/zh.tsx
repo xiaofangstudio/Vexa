@@ -133,6 +133,7 @@ export const zh = {
     aprWidth: "叠加描边宽度",
     aprLimit: "最多叠加 {n} 层；底层外观始终最先绘制。",
     aprOver: "已达到 {n} 层上限",
+    aprBlend: "叠加项混合模式",
     aprExpand: "扩展为独立图层",
     aprExpandDone: "已扩展 {n} 个对象为 {m} 个独立图层",
     aprAdded: "已添加一层{n}外观",

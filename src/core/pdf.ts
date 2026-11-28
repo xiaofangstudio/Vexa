@@ -610,12 +610,13 @@ class PdfBuilder {
     for (const item of node.appearance ?? []) {
       if (!item.visible || item.opacity <= 0) continue;
       const itemAlpha = alpha * item.opacity;
+      const itemBlend = item.blend && item.blend !== "normal" ? item.blend : blend;
       if (item.kind === "fill" && item.fill && item.fill.kind !== "none") {
         this.drawPath(
           c,
           { ...node, fill: item.fill, stroke: { ...node.stroke, kind: "none", brushId: undefined }, appearance: undefined },
           itemAlpha,
-          blend,
+          itemBlend,
         );
       } else if (item.kind === "stroke" && item.stroke && item.stroke.kind !== "none" && item.stroke.width > 0) {
         this.drawPath(
@@ -627,7 +628,7 @@ class PdfBuilder {
             appearance: undefined,
           },
           itemAlpha,
-          blend,
+          itemBlend,
         );
       }
     }
@@ -777,8 +778,9 @@ class PdfBuilder {
     for (const item of node.appearance ?? []) {
       if (!item.visible || item.opacity <= 0) continue;
       const a = alpha * item.opacity;
-      if (item.kind === "fill" && item.fill) this.textFillPass(c, glyphs.ops, item.fill, box, a, blend);
-      else if (item.kind === "stroke" && item.stroke) this.textStrokePass(c, glyphs.ops, item.stroke, a, blend);
+      const itemBlend = item.blend && item.blend !== "normal" ? item.blend : blend;
+      if (item.kind === "fill" && item.fill) this.textFillPass(c, glyphs.ops, item.fill, box, a, itemBlend);
+      else if (item.kind === "stroke" && item.stroke) this.textStrokePass(c, glyphs.ops, item.stroke, a, itemBlend);
     }
     const decor = textDecorationLines(node);
     if (decor.length && node.fill.kind !== "none") {

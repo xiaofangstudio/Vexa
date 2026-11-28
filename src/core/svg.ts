@@ -8,6 +8,7 @@ import {
   noStroke,
   solid,
   type Artboard,
+  type BlendMode,
   type GroupNode,
   type Node,
   type Paint,
@@ -171,14 +172,15 @@ function appearanceSVG(doc: VexaDoc, node: PathNode, indent: string, defs: strin
   for (const item of node.appearance ?? []) {
     if (!item.visible || item.opacity <= 0) continue;
     const op = item.opacity < 1 ? ` opacity="${round(item.opacity)}"` : "";
+    const blend = item.blend && item.blend !== "normal" ? ` style="mix-blend-mode:${item.blend}"` : "";
     if (item.kind === "fill" && item.fill && item.fill.kind !== "none") {
       const id = `g${seq.n++}`;
       const fill = fillAttrs(item.fill, nodeBBox(node), defs, id, doc, seq);
-      rows.push(`${indent}<path d="${pathD(node)}"${fill}${op}/>`);
+      rows.push(`${indent}<path d="${pathD(node)}"${fill}${op}${blend}/>`);
     } else if (item.kind === "stroke" && item.stroke && item.stroke.kind !== "none" && item.stroke.width > 0) {
       const id = `s${seq.n++}`;
       const stroke = strokeAttrs({ ...item.stroke, arrow: "none" }, defs, id);
-      rows.push(`${indent}<path d="${pathD(node)}" fill="none"${stroke}${op}/>`);
+      rows.push(`${indent}<path d="${pathD(node)}" fill="none"${stroke}${op}${blend}/>`);
     }
   }
   return rows.length ? `\n${rows.join("\n")}` : "";
@@ -284,27 +286,28 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
     const anchor = node.align === "center" ? "middle" : node.align === "right" ? "end" : "start";
     const decor = lay.mode === "path" ? "" : textDecorationSVG(node, lay, `${indent}    `);
 
-    const renderPass = (paint: Paint | null, stroke: Stroke | null, alpha: number, withDecor: boolean): string => {
+    const renderPass = (paint: Paint | null, stroke: Stroke | null, alpha: number, withDecor: boolean, blend?: BlendMode): string => {
       const fill = paint ? fillAttrs(paint, box, defs, `g${seq.n++}`, doc, seq) : ` fill="none"`;
       const strokeAttr = stroke ? strokeAttrs({ ...stroke, arrow: "none" }, defs, `a${seq.n++}`) : "";
       const op2 = alpha < 1 ? ` opacity="${round(alpha)}"` : "";
+      const bm = blend && blend !== "normal" ? ` style="mix-blend-mode:${blend}"` : "";
       if (lay.mode === "path") {
-        return `${indent}  <g${fill}${strokeAttr}${op2} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style} text-anchor="start">\n${pathBody}\n${indent}  </g>`;
+        return `${indent}  <g${fill}${strokeAttr}${op2}${bm} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style} text-anchor="start">\n${pathBody}\n${indent}  </g>`;
       }
       if (lay.vertical) {
         const body = `${indent}  <g${fill}${strokeAttr}${op2} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}>\n${verticalBody}${withDecor && decor ? `\n${decor}` : ""}\n${indent}  </g>`;
-        return clipId ? `${indent}  <g clip-path="url(#${clipId})">\n${body}\n${indent}  </g>` : body;
+        return clipId ? `${indent}  <g clip-path="url(#${clipId})"${bm}>\n${body}\n${indent}  </g>` : `${indent}  <g${fill}${strokeAttr}${op2}${bm} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}>\n${verticalBody}${withDecor && decor ? `\n${decor}` : ""}\n${indent}  </g>`;
       }
       if (lay.mode === "area") {
         const body = `${indent}  <text transform="scale(${round(hs)} ${round(vs)})" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="start"${fill}${strokeAttr}${op2}>\n${horizontalBody}\n${indent}  </text>`;
         const inner = withDecor && decor
           ? `${body}\n${decor}`
           : body;
-        return `${indent}  <g clip-path="url(#${clipId})">\n${inner}\n${indent}  </g>`;
+        return `${indent}  <g clip-path="url(#${clipId})"${bm}>\n${inner}\n${indent}  </g>`;
       }
-      const text = `${indent}  <text transform="translate(${round(node.x)} ${round(node.y - (node.baseline ?? 0))})${scale}" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="${anchor}"${fill}${strokeAttr}${op2}>\n${horizontalBody}\n${indent}  </text>`;
+      const text = `${indent}  <text transform="translate(${round(node.x)} ${round(node.y - (node.baseline ?? 0))})${scale}" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="${anchor}"${fill}${strokeAttr}${op2}${withDecor ? "" : bm}>\n${horizontalBody}\n${indent}  </text>`;
       if (withDecor && decor) {
-        return `${indent}  <g>\n${text}\n${decor}\n${indent}  </g>`;
+        return `${indent}  <g${bm}>\n${text}\n${decor}\n${indent}  </g>`;
       }
       return text;
     };
@@ -312,8 +315,8 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
     const passes: string[] = [renderPass(node.fill.kind !== "none" ? node.fill : null, node.stroke ?? null, 1, node.fill.kind !== "none")];
     for (const item of node.appearance ?? []) {
       if (!item.visible || item.opacity <= 0) continue;
-      if (item.kind === "fill" && item.fill) passes.push(renderPass(item.fill, null, item.opacity, false));
-      else if (item.kind === "stroke" && item.stroke) passes.push(renderPass(null, item.stroke, item.opacity, false));
+      if (item.kind === "fill" && item.fill) passes.push(renderPass(item.fill, null, item.opacity, false, item.blend));
+      else if (item.kind === "stroke" && item.stroke) passes.push(renderPass(null, item.stroke, item.opacity, false, item.blend));
     }
     return `${indent}<g${op}${blend}>\n${passes.join("\n")}\n${indent}</g>\n`;
   }

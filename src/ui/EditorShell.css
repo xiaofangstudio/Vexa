@@ -2664,11 +2664,46 @@
 }
 
 .apr-item {
-  height: 32px;
-  padding: 3px 4px;
+  display: block;
+  min-width: 0;
+  height: auto;
+  padding: 3px 4px 4px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--surface);
+}
+
+.apr-main {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  height: 25px;
+}
+
+.apr-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 2px 0 21px;
+}
+
+.apr-sub-label {
+  flex: none;
+  color: var(--text-3);
+  font-size: 9.5px;
+}
+
+.apr-blend {
+  flex: 1;
+  min-width: 0;
+  height: 21px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 10px;
 }
 
 .apr-item.is-off {
