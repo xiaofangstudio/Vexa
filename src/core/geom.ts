@@ -543,6 +543,8 @@ function layoutAreaColumns(
   const align = node.align ?? "left";
   const tracking = node.tracking ?? 0;
   const hanging = Math.max(0, Math.min(node.hangingIndent ?? 0, colW - 1));
+  const spaceBefore = Math.max(0, node.spaceBefore ?? 0);
+  const spaceAfter = Math.max(0, node.spaceAfter ?? 0);
   let pi = 0;
   let ci = 0;
   let overflow = false;
@@ -553,10 +555,11 @@ function layoutAreaColumns(
     let firstLine = true;
     while (pi < paras.length) {
       if (baseline > maxBaseline) { break; }
+      if (ci === 0) baseline += spaceBefore;
       const chars = Array.from(paras[pi]);
       if (!chars.length) {
         lines.push({ text: "", x: colX + (firstLine ? indent : 0), baseline, width: 0 });
-        baseline += lh;
+        baseline += lh + spaceAfter;
         firstLine = false;
         pi++;
         ci = 0;
@@ -589,6 +592,7 @@ function layoutAreaColumns(
       if (ci >= chars.length) {
         pi++;
         ci = 0;
+        baseline += spaceAfter;
         if (pi < paras.length) baseline += paraSpace;
       }
     }
@@ -631,6 +635,8 @@ export function textLayout(node: TextNode): TextLayout {
     const indent = Math.max(0, Math.min(node.firstIndent ?? 0, innerW - 1));
     const hanging = Math.max(0, Math.min(node.hangingIndent ?? 0, innerW - 1));
     const paraSpace = Math.max(0, node.paraSpace ?? 0);
+    const spaceBefore = Math.max(0, node.spaceBefore ?? 0);
+    const spaceAfter = Math.max(0, node.spaceAfter ?? 0);
     const columns = Math.max(1, Math.min(6, Math.round(node.columns ?? 1)));
     const gutter = Math.max(0, node.columnGutter ?? 0);
     if (columns > 1) {
@@ -641,13 +647,14 @@ export function textLayout(node: TextNode): TextLayout {
     const plan = wrapAreaText(node, innerW);
     const gaps = Math.max(0, plan.length - 1);
     const lineCount = plan.reduce((n, para) => n + para.length, 0);
-    const blockH = node.size * 1.2 + Math.max(0, lineCount - 1) * lh + gaps * paraSpace + node.size * 0.25;
+    const blockH = node.size * 1.2 + Math.max(0, lineCount - 1) * lh + gaps * paraSpace + plan.length * (spaceBefore + spaceAfter) + node.size * 0.25;
     const free = innerH - blockH;
     const vAlign = node.areaVAlign ?? "top";
     const topOffset = free > 0 ? (vAlign === "middle" ? free / 2 : vAlign === "bottom" ? free : 0) : 0;
     let baseline = box.y + inset + node.size * 1.2 - baselineOffset + topOffset;
     const lines: TextLineLayout[] = [];
     plan.forEach((para, pi) => {
+      baseline += spaceBefore;
       para.forEach((text, li) => {
         const lineIndent = li === 0 ? indent : hanging;
         const avail = Math.max(1, innerW - lineIndent);
@@ -661,6 +668,7 @@ export function textLayout(node: TextNode): TextLayout {
         lines.push({ text, x, baseline, width });
         baseline += lh;
       });
+      baseline += spaceAfter;
       if (pi < plan.length - 1) baseline += paraSpace;
     });
     const maxBaseline = box.y + box.h - inset - node.size * 0.25;
@@ -738,6 +746,8 @@ export function convertTextMode(node: TextNode, mode: "point" | "area"): void {
   delete node.rightIndent;
   delete node.textInset;
   delete node.paraSpace;
+  delete node.spaceBefore;
+  delete node.spaceAfter;
   delete node.columns;
   delete node.columnGutter;
   delete node.kinsoku;

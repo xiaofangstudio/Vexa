@@ -2862,6 +2862,24 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                         {single.textDirection !== "vertical" && (
                           <>
                             <NumField
+                              label="段前"
+                              value={Math.round(single.spaceBefore ?? 0)}
+                              min={0}
+                              unit="px"
+                              onCommit={(v) => setNode((n) => { if (n.kind === "text") n.spaceBefore = Math.max(0, v); })}
+                            />
+                            <NumField
+                              label="段后"
+                              value={Math.round(single.spaceAfter ?? 0)}
+                              min={0}
+                              unit="px"
+                              onCommit={(v) => setNode((n) => { if (n.kind === "text") n.spaceAfter = Math.max(0, v); })}
+                            />
+                          </>
+                        )}
+                        {single.textDirection !== "vertical" && (
+                          <>
+                            <NumField
                               label="分栏"
                               value={Math.round(single.columns ?? 1)}
                               min={1}

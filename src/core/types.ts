@@ -183,6 +183,10 @@ export interface TextNode {
   textInset?: number;
   /** 段间距，单位 px；仅区域文字。 */
   paraSpace?: number;
+  /** 每段之前的额外间距，单位 px；仅横排区域文字。 */
+  spaceBefore?: number;
+  /** 每段之后的额外间距，单位 px；仅横排区域文字。 */
+  spaceAfter?: number;
   /** 区域文字分栏数，默认 1；仅区域文字。 */
   columns?: number;
   /** 分栏之间的栏距，单位 px；仅区域文字。 */

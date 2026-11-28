@@ -61,6 +61,14 @@ assert.equal(
 const top = textLayout({ ...paragraphs, areaVAlign: "top" });
 assert.ok(pl.lines[0].baseline > top.lines[0].baseline, "垂直居中把文本块下移");
 
+const spaced = textLayout({ ...paragraphs, firstIndent: 0, paraSpace: 0, spaceBefore: 8, spaceAfter: 14, areaVAlign: "top" });
+assert.equal(spaced.lines[0].baseline, 80 + AREA_INSET + 20 * 1.2 + 8, "段前间距把首段基线向下推");
+assert.equal(
+  Math.round((spaced.lines[1].baseline - spaced.lines[0].baseline) * 100) / 100,
+  20 * 1.25 + 14 + 8,
+  "段后与下一段段前叠加",
+);
+
 const tight: TextNode = { ...node, boxH: 28 };
 assert.equal(textLayout(tight).overflow, true, "压缩框高应检出溢出");
 
@@ -137,12 +145,14 @@ assert.equal(back.hangingIndent, undefined);
 assert.equal(back.leftIndent, undefined);
 assert.equal(back.rightIndent, undefined);
 assert.equal(back.textInset, undefined);
+assert.equal(back.spaceBefore, undefined);
+assert.equal(back.spaceAfter, undefined);
 assert.equal(back.paraSpace, undefined);
 assert.equal(back.columns, undefined);
 assert.equal(back.columnGutter, undefined);
 
 const doc: VexaDoc = createDoc("区域文字", 400, 300);
-const saved: TextNode = { ...node, areaVAlign: "middle", firstIndent: 24, hangingIndent: 36, leftIndent: 18, rightIndent: 22, textInset: 10, paraSpace: 12, columns: 2, columnGutter: 10, kinsoku: true };
+const saved: TextNode = { ...node, areaVAlign: "middle", firstIndent: 24, hangingIndent: 36, leftIndent: 18, rightIndent: 22, textInset: 10, paraSpace: 12, spaceBefore: 9, spaceAfter: 11, columns: 2, columnGutter: 10, kinsoku: true };
 doc.nodes.t1 = saved;
 doc.root.push("t1");
 const svg = docToSVG(doc);
@@ -161,6 +171,8 @@ assert.equal(rt.leftIndent, 18, ".vex 往返保留左缩进");
 assert.equal(rt.rightIndent, 22, ".vex 往返保留右缩进");
 assert.equal(rt.textInset, 10, ".vex 往返保留内边距");
 assert.equal(rt.paraSpace, 12);
+assert.equal(rt.spaceBefore, 9, ".vex 往返保留段前");
+assert.equal(rt.spaceAfter, 11, ".vex 往返保留段后");
 assert.equal(rt.columns, 2);
 assert.equal(rt.columnGutter, 10);
 assert.equal(rt.kinsoku, true, ".vex 往返保留避头尾");

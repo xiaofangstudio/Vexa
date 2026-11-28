@@ -88,6 +88,8 @@ export function parseVex(text: string): VexaDoc {
         delete n.rightIndent;
         delete n.textInset;
         delete n.paraSpace;
+        delete n.spaceBefore;
+        delete n.spaceAfter;
         delete n.columns;
         delete n.columnGutter;
         delete n.kinsoku;
@@ -106,6 +108,8 @@ export function parseVex(text: string): VexaDoc {
         if (typeof n.textInset !== "number" || !Number.isFinite(n.textInset) || n.textInset < 0) delete n.textInset;
         else n.textInset = Math.min(n.textInset, 200);
         if (typeof n.paraSpace !== "number" || !Number.isFinite(n.paraSpace) || n.paraSpace < 0) delete n.paraSpace;
+        if (typeof n.spaceBefore !== "number" || !Number.isFinite(n.spaceBefore) || n.spaceBefore < 0) delete n.spaceBefore;
+        if (typeof n.spaceAfter !== "number" || !Number.isFinite(n.spaceAfter) || n.spaceAfter < 0) delete n.spaceAfter;
         if (typeof n.columns !== "number" || !Number.isFinite(n.columns) || n.columns < 2 || n.columns > 6) delete n.columns;
         else n.columns = Math.round(n.columns);
         if (typeof n.columnGutter !== "number" || !Number.isFinite(n.columnGutter) || n.columnGutter < 0) delete n.columnGutter;
@@ -120,6 +124,8 @@ export function parseVex(text: string): VexaDoc {
         delete n.rightIndent;
         delete n.textInset;
         delete n.paraSpace;
+        delete n.spaceBefore;
+        delete n.spaceAfter;
         delete n.columns;
         delete n.columnGutter;
         delete n.kinsoku;
