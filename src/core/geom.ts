@@ -112,6 +112,25 @@ function textEmWidth(line: string): number {
 /** 区域文字的内边距，保持文字不贴框。 */
 export const AREA_INSET = 4;
 
+/** 避头尾：这些字符不能出现在行首（收尾标点、闭合括号、后引号）。 */
+const KINSOKU_NO_START = new Set(Array.from("、。，．,.!?！？：；:;）)]｝}］〕】》〉」』”’…‥・ー〜～"));
+/** 避头尾：这些字符不能出现在行末（起首标点、开放括号、前引号）。 */
+const KINSOKU_NO_END = new Set(Array.from("（([｛{［〈《「『【〔“‘"));
+
+/**
+ * 调整贪心换行的断点：行首落到收尾标点时，把上一字一起推到下一行；
+ * 行末落到起首标点时，把它也推到下一行。至少保留一个字，避免空行。
+ */
+function kinsokuLineEnd(chars: string[], start: number, end: number, enabled: boolean): number {
+  if (!enabled || end >= chars.length) return end;
+  let e = end;
+  while (e > start + 1) {
+    if (KINSOKU_NO_START.has(chars[e]) || KINSOKU_NO_END.has(chars[e - 1])) e--;
+    else break;
+  }
+  return e;
+}
+
 export interface TextLineLayout {
   text: string;
   /** 该行基线起点（已含对齐偏移）。 */
@@ -448,28 +467,28 @@ function wrapAreaText(node: TextNode, innerW: number): string[][] {
   const tracking = node.tracking ?? 0;
   const hs = Math.abs((node.hScale ?? 100) / 100) || 1;
   const indent = Math.max(0, Math.min(node.firstIndent ?? 0, innerW - 1));
+  const kinsoku = node.kinsoku === true;
   const paragraphs = node.text.split("\n");
   return paragraphs.map((para) => {
     const chars = Array.from(para);
     if (!chars.length) return [""];
     const lines: string[] = [];
-    let cur = "";
-    let curW = 0;
-    let limit = Math.max(1, innerW - indent);
-    for (const ch of chars) {
-      const cw = textEmWidth(ch) * node.size;
-      const nextW = cur ? curW + tracking + cw : cw;
-      if (cur && (nextW * hs > limit || nextW * hs < 0)) {
-        lines.push(cur);
-        cur = ch;
-        curW = cw;
-        limit = innerW;
-      } else {
-        cur += ch;
-        curW = nextW;
+    let start = 0;
+    while (start < chars.length) {
+      const limit = Math.max(1, innerW - (lines.length === 0 ? indent : 0));
+      let end = start;
+      let width = 0;
+      while (end < chars.length) {
+        const cw = textEmWidth(chars[end]) * node.size;
+        const nextW = end > start ? width + tracking + cw : cw;
+        if (end > start && nextW * hs > limit) break;
+        width = nextW;
+        end++;
       }
+      const adjusted = Math.max(start + 1, kinsokuLineEnd(chars, start, end, kinsoku));
+      lines.push(chars.slice(start, adjusted).join(""));
+      start = adjusted;
     }
-    if (cur || !lines.length) lines.push(cur);
     return lines;
   });
 }
@@ -515,17 +534,20 @@ function layoutAreaColumns(
       }
       const lineIndent = firstLine ? indent : 0;
       const limit = Math.max(1, colW - lineIndent);
-      let line = "";
       let width = 0;
-      while (ci < chars.length) {
-        const ch = chars[ci];
-        const cw = textEmWidth(ch) * node.size;
-        const nextW = line ? width + tracking + cw : cw;
-        if (line && nextW * hs > limit) break;
-        line += ch;
+      let end = ci;
+      while (end < chars.length) {
+        const cw = textEmWidth(chars[end]) * node.size;
+        const nextW = end > ci ? width + tracking + cw : cw;
+        if (end > ci && nextW * hs > limit) break;
         width = nextW;
-        ci++;
+        end++;
       }
+      const adjusted = Math.max(ci + 1, kinsokuLineEnd(chars, ci, end, node.kinsoku === true));
+      const line = chars.slice(ci, adjusted).join("");
+      const lineChars = adjusted - ci;
+      width = textEmWidth(line) * node.size + Math.max(0, lineChars - 1) * tracking;
+      ci = adjusted;
       const scaled = width * hs;
       const x =
         colX + lineIndent +

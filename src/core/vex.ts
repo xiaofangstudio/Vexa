@@ -73,6 +73,7 @@ export function parseVex(text: string): VexaDoc {
       if (n.textDirection !== "vertical") delete n.textDirection;
       if (n.underline !== true) delete n.underline;
       if (n.strike !== true) delete n.strike;
+      if (n.kinsoku !== true) delete n.kinsoku;
       if (n.textMode === "path" && Array.isArray(n.pathSubpaths) && n.pathSubpaths.length) {
         delete n.textDirection;
         if (typeof n.pathStart !== "number" || !Number.isFinite(n.pathStart) || n.pathStart < 0) delete n.pathStart;
@@ -84,6 +85,7 @@ export function parseVex(text: string): VexaDoc {
         delete n.paraSpace;
         delete n.columns;
         delete n.columnGutter;
+        delete n.kinsoku;
       } else if (n.textMode === "area") {
         delete n.pathSubpaths;
         delete n.pathStart;
@@ -105,6 +107,7 @@ export function parseVex(text: string): VexaDoc {
         delete n.paraSpace;
         delete n.columns;
         delete n.columnGutter;
+        delete n.kinsoku;
         delete n.pathSubpaths;
         delete n.pathStart;
         delete n.pathSide;

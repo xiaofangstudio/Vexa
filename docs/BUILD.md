@@ -115,7 +115,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - 可变宽度描边已支持宽度点、单侧加宽、余弦过渡与 SVG/`.vex` 往返；均匀描边已支持平/圆/方端帽与尖角/圆角/斜角连接，但可变宽度轮廓不跟随这些设置，仍按平头外框绘制；虚线暂不随轮廓走（有宽度点时按实线轮廓输出），箭头仍按基础线宽；宽度手柄只画在第一条子路径，复合路径各子路径共用同一 `t` 轮廓
 - 渐变支持线性/径向多色标、独立透明度、插值中点与画布轴线/色标直拖；径向渐变的圆心固定在 bbox 中心、半径固定为半对角线，画布手柄只沿右侧半径显示；尚缺网格/自由渐变、渐变描边、图案填充、符号、画笔、图形样式
 - SVG 导入已覆盖基础图形、变换、线性/径向渐变、色标透明度、`href` 继承、`fill/stroke-opacity`、`<use>` / 嵌套 use、`<clipPath>` 嵌套交集裁切、symbol viewBox/width 缩放与 `<text>` / `<tspan>` 可编辑文字；尚缺图案、滤镜、`mask`、`objectBoundingBox` 剪裁、`gradientTransform` / `spreadMethod` 的完整语义，文本旋转/斜切只映射位置与缩放、不旋转字形
-- 文字已支持单点/区域/路径文字、1–6 栏分栏、文字转路径与横/直排切换；直排为逐字向下、换列向左，汉字正立、拉丁随列旋转 90°，区域直排按框高自动换列、支持逐列顶/中/底对齐，SVG/PDF/轮廓/`.vex` 同步；第五十三批补竖排标点定位（逗号/句号右上移、括号旋转 90°），尚未做避头尾禁则与标点挤压；第五十一批补下划线/删除线（颜色跟随填充、逐行/逐列输出，SVG/PDF/`.vex` 同步），路径文字不输出装饰线，转轮廓会丢弃装饰线，渐变填充的装饰线取首个色标实色；仍缺避头尾、悬挂缩进、OpenType 特性与更细的直排标点挤压
+- 文字已支持单点/区域/路径文字、1–6 栏分栏、文字转路径与横/直排切换；直排为逐字向下、换列向左，汉字正立、拉丁随列旋转 90°，区域直排按框高自动换列、支持逐列顶/中/底对齐，SVG/PDF/轮廓/`.vex` 同步；第五十三批补竖排标点定位（逗号/句号右上移、括号旋转 90°），第五十四批补横排区域文字避头尾（行首不落收尾标点、行末不落起首标点，含分栏；直排避头尾与标点挤压尚未做）；第五十一批补下划线/删除线（颜色跟随填充、逐行/逐列输出，SVG/PDF/`.vex` 同步），路径文字不输出装饰线，转轮廓会丢弃装饰线，渐变填充的装饰线取首个色标实色；仍缺直排避头尾、悬挂缩进、OpenType 特性与更细的直排标点挤压
 - 旋转/翻转对文本与位图只做位置级变换（没有旋转属性，见 `docs/PARITY.md`）；第三十六批斜切同样只变换路径锚点与手柄，纯文字/位图不参与，组内混排文字跳过，角度限 ±80°，不生成 SVG 斜切矩阵，导出为变形后的路径坐标
 - 拖拽撤销粒度较粗（一次拖拽一步）
 - 图层树已支持组内排序、把子层拖出组、把顶层拖入组、Ctrl/Shift 多选与批量显隐/锁定，第二十八批补了名称/类型搜索、6 色标记和按标记筛选；折叠组内的子层需先展开才能拖动。颜色标记不参与导出，搜索不搜节点内文字。
@@ -130,15 +130,16 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 ## 发布构建
 
-- 版本：`0.1.0`（第五十三批：竖排标点定位）
+- 版本：`0.1.0`（第五十四批：区域文字避头尾）
 - 文件：`release\Vexa.exe`
-- 大小：`7,818,752 B`
-- SHA256：`307FCBFF31C21EB60138050010A332F0B50A7C2DA061C92BFD14EF1309083A07`
-- 构建时间：`2026-11-28 09:07:22`
+- 大小：`7,819,264 B`
+- SHA256：`E30DEE01E1A4DFC509A71E88BAF28574276D40B431CAE8BADFC568C38FE00398`
+- 构建时间：`2026-11-28 11:40:24`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,377,672 B`，SHA256 `E7290B98CD370B074CAAB74B5F51FD1C72BB01C1177B96963C315D11716AE361`
-- 前端产物：`dist/assets/pdf-CrcpnFna.js` 21.47 kB / gzip 8.13；`dist/assets/index-CxG1iaRQ.js` 389.40 kB / gzip 161.95；`dist/assets/index-OX04Sk36.js` 562.74 kB / gzip 177.80；`dist/assets/index-DUak87G1.css` 61.99 kB / gzip 11.60；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
-- 竖排标点验收（第五十三批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.vertical-text.mts` 通过（逗号/句号在字格内右移 0.22em、上移 0.18em；冒号/分号小幅右上；括号随列旋转 90°；`.vex` 无需新增字段；SVG 标点按偏移落点并输出括号 `rotate(90)`；PDF `warnings 0`）。真实 Tauri/WebView2 1600×1000 窗口：`「直排」、（标）。` 单点直排、40px、行距 54px；逗号/句号停在字格右上，圆括号转向包住“标”，引号保持正立，选择框 54×360 完整包住 9 个字，属性坞显示“单点 / 直排”，窗口无横向溢出。截图 `docs/shots/vertical-punctuation.png`。
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,378,302 B`，SHA256 `1CCF52CD3D87699ABCD1532D61D614243AD5407921F620D20D6693103FE076B4`
+- 前端产物：`dist/assets/pdf-wUCNnt-f.js` 21.47 kB / gzip 8.13；`dist/assets/index-CxG1iaRQ.js` 389.40 kB / gzip 161.95；`dist/assets/index-bgzq0RtM.js` 563.73 kB / gzip 178.26；`dist/assets/index-DUak87G1.css` 61.99 kB / gzip 11.60；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 区域文字避头尾验收（第五十四批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.area-text.mts` 通过（180px 框、20px 字：未开启时行首落 `。`；开启后第一行由 8 字回退到 7 字、下一行从“容”开始；`.vex` 往返保留 `kinsoku`）。26 个冒烟脚本全部通过。真实 Tauri/WebView2 1600×1000 窗口：`T` 拖 `360×260` 区域框，写入含标点样本，设 26px，属性坞“排版”行出现“避”开关（默认关闭，点击后节点 `kinsoku=true`、按钮高亮）；第一行“这是测试文本内容排版示例”，第二行从“句。”开始，句号不再落行首，选择框完整，窗口无横向溢出。截图 `docs/shots/text-kinsoku.png`。
+- 竖排标点定位验收（第五十三批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.vertical-text.mts` 通过（逗号/句号在字格内右移 0.22em、上移 0.18em；冒号/分号小幅右上；括号随列旋转 90°；`.vex` 无需新增字段；SVG 标点按偏移落点并输出括号 `rotate(90)`；PDF `warnings 0`）。真实 Tauri/WebView2 1600×1000 窗口：`「直排」、（标）。` 单点直排、40px、行距 54px；逗号/句号停在字格右上，圆括号转向包住“标”，引号保持正立，选择框 54×360 完整包住 9 个字，属性坞显示“单点 / 直排”，窗口无横向溢出。截图 `docs/shots/vertical-punctuation.png`。
 - 直排逐列对齐验收（第五十二批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.vertical-text.mts` 通过（新增 `"直\n区域"` 两列不等长：顶对齐时两列底端不齐，底对齐后两列底端对齐到同一 `maxBottom`，短列被单独下移；中/顶行为不变；逐字 `col` 记录列序号）。真实 Tauri/WebView2 1600×1000 窗口：拖 `280×320` 区域框，写入三段不等长直排样本，设 32px，切直排，属性坞“垂直”点“底”；三列从右往左依次排版，短列整体下移、三列底端齐平，选择框完整包住文本，属性坞同时显示“直排 / 底 / 框内对齐”，窗口无横向溢出。截图 `docs/shots/vertical-column-align.png`。
 - 文字装饰验收（第五十一批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.text-decoration.mts` 通过（未开启不产生线；两行 × 下划线/删除线 = 4 条，下划线在基线下 0.12em、删除线在基线上 0.3em、线宽 0.06em；区域按实际行数逐行输出；直排每列一条下划线与一条删除线，下划线在列右 0.45em；SVG 输出 4 条 `<line>`；PDF `warnings 0`；`.vex` 往返保留字段；路径文字暂不装饰）。真实 Tauri/WebView2 1600×1000 窗口：单点输入两行 42px 文本，行距 2，属性坞依次点“下划线”“删除线”，两按钮均显示开启态，画布出现基线下线与字中删除线；撤销只移除删除线并保留下划线，重做恢复；窗口无横向溢出。截图 `docs/shots/text-decoration.png`。
 - 直排文字验收（第五十批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.vertical-text.mts` 通过（单点直排首列以锚点为中心、同列逐字向下、换列向左；拉丁 `A` 旋转、汉字正立；区域 `60×70` 自动两列并贴右内框，排完 `overflow=false`、超长文本 `overflow=true`；底对齐下移；SVG 每字 `dominant-baseline="central"` + 拉丁 `rotate(90)`；PDF `warnings 0`；`.vex` 往返保留 `textDirection=vertical`，横排不写方向；四点转轮廓得到 4 个字形）。真实 Tauri/WebView2 1600×1000 窗口：文字工具点出单点文字，输入三列样本，设 30px / 行距 40px，属性坞“方向”切“直排”；汉字逐字向下、换列向左，拉丁 `ABC` 随列旋转 90°，属性坞显示“单点 / 直排 / 逐字向下 · 列向左”，撤销回横排、重做恢复直排；窗口无横向溢出。全部 26 个冒烟脚本复跑通过。截图 `docs/shots/vertical-text.png`。

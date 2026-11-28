@@ -64,6 +64,20 @@ assert.ok(pl.lines[0].baseline > top.lines[0].baseline, "垂直居中把文本�
 const tight: TextNode = { ...node, boxH: 28 };
 assert.equal(textLayout(tight).overflow, true, "压缩框高应检出溢出");
 
+const kinsokuText: TextNode = {
+  ...node,
+  text: "这是测试文本内容。后续文字继续排。",
+  boxW: 180,
+  boxH: 200,
+};
+const rawWrap = textLayout(kinsokuText);
+assert.equal(rawWrap.lines[0].text, "这是测试文本内容", "未开启避头尾时先排满 8 字");
+assert.ok(rawWrap.lines[1].text.startsWith("。"), "未开启避头尾时句号落到行首");
+const kinWrap = textLayout({ ...kinsokuText, kinsoku: true });
+assert.equal(kinWrap.lines[0].text, "这是测试文本内", "避头尾把上一字一起推到下一行");
+assert.equal(kinWrap.lines[1].text[0], "容", "句号不再落行首");
+assert.ok(kinWrap.lines.every((l) => !l.text.startsWith("。") && !l.text.startsWith("，")), "所有行首都不落收尾标点");
+
 const columns: TextNode = {
   ...node,
   text: "区域文字分栏会先把第一栏填满再流到第二栏，跨栏保留段落顺序并继续换行。",
@@ -99,7 +113,7 @@ assert.equal(back.columns, undefined);
 assert.equal(back.columnGutter, undefined);
 
 const doc: VexaDoc = createDoc("区域文字", 400, 300);
-const saved: TextNode = { ...node, areaVAlign: "middle", firstIndent: 24, paraSpace: 12, columns: 2, columnGutter: 10 };
+const saved: TextNode = { ...node, areaVAlign: "middle", firstIndent: 24, paraSpace: 12, columns: 2, columnGutter: 10, kinsoku: true };
 doc.nodes.t1 = saved;
 doc.root.push("t1");
 const svg = docToSVG(doc);
@@ -116,6 +130,7 @@ assert.equal(rt.firstIndent, 24);
 assert.equal(rt.paraSpace, 12);
 assert.equal(rt.columns, 2);
 assert.equal(rt.columnGutter, 10);
+assert.equal(rt.kinsoku, true, ".vex 往返保留避头尾");
 
 const pdf = await exportPDF(doc, {
   fontLoader: () => new Uint8Array(fs.readFileSync("C:/Windows/Fonts/simhei.ttf")),

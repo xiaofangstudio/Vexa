@@ -2878,6 +2878,17 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       <span className="faint">框内对齐</span>
                     </div>
                   )}
+                  {single.textMode === "area" && single.textDirection !== "vertical" && (
+                    <div className="char-row">
+                      <span className="faint">排版</span>
+                      <button
+                        className={"char-btn" + (single.kinsoku ? " is-on" : "")}
+                        onClick={() => setNode((n) => { if (n.kind === "text") n.kinsoku = n.kinsoku ? undefined : true; })}
+                        title="避头尾：行首不落收尾标点，行末不落起首标点"
+                      >避</button>
+                      <span className="faint">标点自动回移</span>
+                    </div>
+                  )}
                   {single.textMode === "path" && (
                     <div className="char-row">
                       <span className="faint">路径侧</span>

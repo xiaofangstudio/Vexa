@@ -185,6 +185,8 @@ export interface TextNode {
   underline?: boolean;
   /** 删除线；颜色跟随填充。 */
   strike?: boolean;
+  /** 区域文字避头尾：行首不落收尾标点、行末不落起首标点；缺省关闭。 */
+  kinsoku?: boolean;
   fill: Paint;
   opacity: number;
   visible: boolean;
