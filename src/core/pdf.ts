@@ -5,6 +5,7 @@ import { AREA_INSET, nodeBox, pathTextLayout, textBox, textDecorationLines, text
 import { gradLine, radialGeom, renderGradStops, stopAlpha } from "./paint";
 import type { Artboard, GradStop, Node, Paint, PathNode, TextNode, VexaDoc } from "./types";
 import { widthOutline } from "./width";
+import { brushById, brushPattern, brushStamps } from "./brushes";
 
 export interface PdfExportOptions {
   /** 只导出这一块画板；缺省时每块画板一页。 */
@@ -535,12 +536,12 @@ class PdfBuilder {
     c.Q();
   }
 
-  private drawNode(c: Content, node: Node, inheritedAlpha: number, inheritedBlend: string): void {
+  private drawNode(c: Content, node: Node, inheritedAlpha: number, inheritedBlend: string, noBrush = false): void {
     if (!node.visible) return;
     const alpha = inheritedAlpha * (node.opacity ?? 1);
     const blend = node.blend ?? inheritedBlend;
     if (node.kind === "path") {
-      this.drawPath(c, node, alpha, blend);
+      this.drawPath(c, node, alpha, blend, noBrush);
       return;
     }
     if (node.kind === "text") {
@@ -566,7 +567,7 @@ class PdfBuilder {
       this.doc = { ...saved, nodes: def.nodes, root: def.root };
       for (const id of def.root) {
         const child = def.nodes[id];
-        if (child) this.drawNode(c, child, alpha, blend);
+        if (child) this.drawNode(c, child, alpha, blend, noBrush);
       }
       this.doc = saved;
       c.Q();
@@ -584,7 +585,7 @@ class PdfBuilder {
     for (const id of node.children) {
       if (id === node.clip) continue;
       const child = this.doc.nodes[id];
-      if (child) this.drawNode(c, child, alpha, blend);
+      if (child) this.drawNode(c, child, alpha, blend, noBrush);
     }
     if (clipNode && clipNode.kind === "path") {
       const ops = pathOps(clipNode);
@@ -592,7 +593,7 @@ class PdfBuilder {
     }
   }
 
-  private drawPath(c: Content, node: PathNode, alpha: number, blend: string): void {
+  private drawPath(c: Content, node: PathNode, alpha: number, blend: string, noBrush = false): void {
     const box = nodeBox(node);
     const fill = node.fill;
     if (fill && fill.kind !== "none") {
@@ -624,6 +625,27 @@ class PdfBuilder {
       }
     }
     const stroke = node.stroke;
+    const brush = !noBrush && stroke.brushId ? brushById(this.doc, stroke.brushId) : undefined;
+    const brushTile = brushPattern(this.doc, brush);
+    if (brush && brushTile) {
+      const strokeAlpha = alpha * (stroke.opacity ?? 1);
+      const saved = this.doc;
+      this.doc = { ...saved, nodes: brushTile.nodes, root: brushTile.root };
+      for (const st of brushStamps(saved, node, brush)) {
+        const cs = Math.cos(-st.angle);
+        const sn = Math.sin(-st.angle);
+        c.q();
+        c.cm(cs, sn, -sn, cs, st.x, st.y);
+        c.cm(brush.scale, 0, 0, brush.scale, -brushTile.w / 2, -brushTile.h / 2);
+        for (const id of brushTile.root) {
+          const child = brushTile.nodes[id];
+          if (child) this.drawNode(c, child, strokeAlpha, blend, true);
+        }
+        c.Q();
+      }
+      this.doc = saved;
+      return;
+    }
     if (stroke && stroke.kind !== "none" && stroke.width > 0) {
       const strokeAlpha = alpha * (stroke.opacity ?? 1);
       const outline = widthOutline(node);

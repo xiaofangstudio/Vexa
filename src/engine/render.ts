@@ -1,5 +1,6 @@
 /** 画面渲染：粘贴板点阵、画板、矢量对象、选择框与锚点手柄。 */
 import { flatten, nodeBox, textDecorationLines, textLayout, unionBox, type Box } from "../core/geom";
+import { brushById, brushPattern, brushStamps } from "../core/brushes";
 import { canvasPaint, gradAxis, gradHandlePoints, paintStops, stopAlpha, stopCssColor } from "../core/paint";
 import { widthHandles, widthOutline, widthPreview } from "../core/width";
 import { pointInArtboards } from "../core/artboards";
@@ -406,6 +407,7 @@ function drawNode(
   view?: View,
   size?: { w: number; h: number },
   hideOutside = false,
+  noBrush = false,
 ): void {
   if (!node.visible) return;
   if (view && size && !nodeVisible(doc, node, view, size.w, size.h, hideOutside)) return;
@@ -421,24 +423,42 @@ function drawNode(
       ctx.fill();
       ctx.globalAlpha /= node.fill.opacity || 1;
     }
-    if (node.stroke.kind !== "none" && node.stroke.width > 0) {
+    if ((node.stroke.kind !== "none" && node.stroke.width > 0) || node.stroke.brushId) {
       ctx.globalAlpha *= node.stroke.opacity;
-      const outline = widthOutline(node);
-      if (outline) {
-        ctx.fillStyle = node.stroke.color;
-        ctx.beginPath();
-        loopsToPath(ctx, outline);
-        ctx.fill("nonzero");
+      const brush = !noBrush && node.stroke.brushId ? brushById(doc, node.stroke.brushId) : undefined;
+      const pattern = brushPattern(doc, brush);
+      if (brush && pattern) {
+        const tileDoc: VexaDoc = { ...doc, nodes: pattern.nodes, root: pattern.root };
+        for (const stamp of brushStamps(doc, node, brush)) {
+          ctx.save();
+          ctx.translate(stamp.x, stamp.y);
+          ctx.rotate(stamp.angle);
+          ctx.scale(brush.scale, brush.scale);
+          ctx.translate(-pattern.w / 2, -pattern.h / 2);
+          for (const id of pattern.root) {
+            const child = pattern.nodes[id];
+            if (child) drawNode(ctx, tileDoc, child, onImage, undefined, undefined, false, true);
+          }
+          ctx.restore();
+        }
       } else {
-        ctx.strokeStyle = node.stroke.color;
-        ctx.lineWidth = node.stroke.width;
-        ctx.lineJoin = node.stroke.join ?? "miter";
-        ctx.lineCap = node.stroke.cap ?? "butt";
-        ctx.setLineDash(node.stroke.dash);
-        ctx.stroke();
-        ctx.setLineDash([]);
+        const outline = widthOutline(node);
+        if (outline) {
+          ctx.fillStyle = node.stroke.color;
+          ctx.beginPath();
+          loopsToPath(ctx, outline);
+          ctx.fill("nonzero");
+        } else {
+          ctx.strokeStyle = node.stroke.color;
+          ctx.lineWidth = node.stroke.width;
+          ctx.lineJoin = node.stroke.join ?? "miter";
+          ctx.lineCap = node.stroke.cap ?? "butt";
+          ctx.setLineDash(node.stroke.dash);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        drawArrow(ctx, node);
       }
-      drawArrow(ctx, node);
     }
   } else if (node.kind === "text") {
     if (node.fill.kind !== "none") {
@@ -539,7 +559,7 @@ function drawNode(
       ctx.scale(sx, sy);
       for (const id of def.root) {
         const child = def.nodes[id];
-        if (child) drawNode(ctx, tempDoc, child, onImage);
+        if (child) drawNode(ctx, tempDoc, child, onImage, undefined, undefined, false, noBrush);
       }
       ctx.restore();
     }
@@ -554,7 +574,7 @@ function drawNode(
     for (const id of node.children) {
       if (id === node.clip) continue;
       const child = doc.nodes[id];
-      if (child) drawNode(ctx, doc, child, onImage, view, size, hideOutside);
+      if (child) drawNode(ctx, doc, child, onImage, view, size, hideOutside, noBrush);
     }
   }
   ctx.restore();

@@ -68,8 +68,10 @@ import SwatchesDialog from "./SwatchesDialog";
 import GraphicStylesPanel from "./GraphicStylesPanel";
 import SymbolsPanel from "./SymbolsPanel";
 import PatternsPanel from "./PatternsPanel";
+import BrushesPanel from "./BrushesPanel";
 import { expandSymbolInstance, symbolById, symbolUsage } from "../core/symbols";
 import { patternById } from "../core/patterns";
+import { brushById } from "../core/brushes";
 import "./EditorShell.css";
 
 const BLEND_LABELS: Record<BlendMode, string> = {
@@ -375,7 +377,7 @@ export default function EditorShell(props: Props) {
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View | null>(null);
   const [space, setSpace] = useState(false);
-  const [tab, setTab] = useState<"props" | "layers" | "styles" | "symbols" | "patterns">("props");
+  const [tab, setTab] = useState<"props" | "layers" | "styles" | "symbols" | "patterns" | "brushes">("props");
   const [dockOpen, setDockOpen] = useState(true);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [ctxShift, setCtxShift] = useState(0);
@@ -1645,12 +1647,13 @@ export default function EditorShell(props: Props) {
     {
       label: zh.menu.window,
       items: [
-        { label: "右侧属性 / 图层 / 样式 / 符号 / 图案面板", checked: dockOpen, run: () => setDockOpen((v) => !v) },
+        { label: "右侧属性 / 图层 / 样式 / 符号 / 图案 / 画笔面板", checked: dockOpen, run: () => setDockOpen((v) => !v) },
         { label: "打开属性面板", run: () => { setTab("props"); setDockOpen(true); } },
         { label: "打开图层面板", run: () => { setTab("layers"); setDockOpen(true); } },
         { label: "打开图形样式面板", run: () => { setTab("styles"); setDockOpen(true); } },
         { label: "打开符号面板", run: () => { setTab("symbols"); setDockOpen(true); } },
         { label: "打开图案面板", run: () => { setTab("patterns"); setDockOpen(true); } },
+        { label: "打开画笔面板", run: () => { setTab("brushes"); setDockOpen(true); } },
         { label: "文档色板…", run: () => setSwatchesOpen(true) },
         { label: "", sep: true },
         { label: "恢复默认工作区", run: () => { setTab("props"); setDockOpen(true); fit(); } },
@@ -2181,8 +2184,8 @@ export default function EditorShell(props: Props) {
 interface DockProps {
   doc: VexaDoc;
   ids: string[];
-  tab: "props" | "layers" | "styles" | "symbols" | "patterns";
-  onTab: (t: "props" | "layers" | "styles" | "symbols" | "patterns") => void;
+  tab: "props" | "layers" | "styles" | "symbols" | "patterns" | "brushes";
+  onTab: (t: "props" | "layers" | "styles" | "symbols" | "patterns" | "brushes") => void;
   store: ReturnType<typeof useDocStore>;
   onSelect: (ids: string[]) => void;
   onToast: (msg: string) => void;
@@ -2658,6 +2661,9 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
         <button className={"dock-tab" + (tab === "patterns" ? " is-on" : "")} onClick={() => onTab("patterns")}>
           <Icon name="grid" size={14} /> {zh.dock.patterns}
         </button>
+        <button className={"dock-tab" + (tab === "brushes" ? " is-on" : "")} onClick={() => onTab("brushes")}>
+          <Icon name="pencil" size={14} /> {zh.dock.brushes}
+        </button>
         <button type="button" className="dock-collapse" title="收起右侧面板" onClick={onCollapse}>
           <Icon name="chevron" size={14} />
         </button>
@@ -2678,6 +2684,12 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
       {tab === "patterns" && (
         <div className="dock-body" key="patterns">
           <PatternsPanel doc={doc} store={store} ids={ids} onSay={onToast} />
+        </div>
+      )}
+
+      {tab === "brushes" && (
+        <div className="dock-body" key="brushes">
+          <BrushesPanel doc={doc} store={store} ids={ids} onSay={onToast} />
         </div>
       )}
 
@@ -3320,6 +3332,23 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       {zh.dock.none}
                     </button>
                   </div>
+                  {single.stroke.brushId && (
+                    <div className="paint-pattern">
+                      <button className="paint-pattern-name" type="button" onClick={() => onTab("brushes")}>
+                        <Icon name="pencil" size={13} />
+                        <span>{brushById(doc, single.stroke.brushId)?.name ?? zh.dock.brushMissing}</span>
+                      </button>
+                      <button
+                        className="paint-pattern-unlink"
+                        type="button"
+                        onClick={() => setNode((n) => {
+                          if (n.kind === "path") delete n.stroke.brushId;
+                        })}
+                      >
+                        断开
+                      </button>
+                    </div>
+                  )}
                   <ColorSwatches
                     value={single.stroke.color}
                     swatchId={single.stroke.swatch}

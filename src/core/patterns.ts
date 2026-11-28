@@ -1,5 +1,6 @@
 /** 图案填充：捕获矢量砖、套用到路径/文字、砖排平铺、重定义与删除。 */
 import { nodeBox } from "./geom";
+import { pruneBrushesForPattern } from "./brushes";
 import { captureArtwork, cleanDefNode } from "./symbols";
 import type { Node, PatternDef, PatternTile, Paint, VexaDoc } from "./types";
 import { solid } from "./types";
@@ -262,6 +263,7 @@ export function deletePattern(doc: VexaDoc, id: string): number {
     }
   }
   doc.patterns = patternsOf(doc).filter((p) => p.id !== id);
+  pruneBrushesForPattern(doc, id);
   return replaced;
 }
 

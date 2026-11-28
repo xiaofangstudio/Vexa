@@ -7,6 +7,7 @@ import { normalizeSwatches } from "./swatches";
 import { normalizeGraphicStyles } from "./graphicStyles";
 import { normalizeSymbols } from "./symbols";
 import { cleanPatternLinks, normalizePatterns } from "./patterns";
+import { cleanBrushLinks, normalizeBrushes } from "./brushes";
 
 export interface VexFile {
   format: "vexa";
@@ -47,6 +48,7 @@ export function parseVex(text: string): VexaDoc {
   doc.symbols = normalizeSymbols(doc.symbols);
   const symbolIds = new Set(doc.symbols.map((s) => s.id));
   normalizePatterns(doc);
+  normalizeBrushes(doc);
   const layerTagIds = new Set(LAYER_TAGS.map((t) => t.id));
   const danglingSymbols: string[] = [];
   for (const [id, n] of Object.entries(doc.nodes as Record<string, Node>)) {
@@ -173,5 +175,6 @@ export function parseVex(text: string): VexaDoc {
     }
   }
   cleanPatternLinks(doc);
+  cleanBrushLinks(doc);
   return doc;
 }

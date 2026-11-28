@@ -42,6 +42,19 @@ export interface Swatch {
   kind: SwatchKind;
 }
 
+/** 文档级图案画笔：把图案砖沿路径切线重复盖章。 */
+export interface BrushDef {
+  id: string;
+  name: string;
+  kind: "pattern";
+  patternId: string;
+  /** 砖缩放倍数，0.1–10。 */
+  scale: number;
+  /** 砖间距，占砖宽的百分比，20–400。 */
+  spacing: number;
+  rev?: number;
+}
+
 /** 文档级图形样式：记录填充、描边、透明度与混合模式；套用后可继续更新链接对象。 */
 export interface GraphicStyle {
   id: string;
@@ -78,6 +91,8 @@ export interface Stroke {
   widthPoints?: WidthPoint[];
   /** 链接的文档色板 id；仅实色描边有效。 */
   swatch?: string;
+  /** 图案画笔 id；存在时描边改由画笔沿路径盖章，忽略宽度/虚线。 */
+  brushId?: string;
 }
 
 /** 锚点。hIn / hOut 是绝对坐标；null 表示该侧没有手柄（直线段）。 */
@@ -334,6 +349,8 @@ export interface VexaDoc {
   symbols?: SymbolDef[];
   /** 文档级图案定义；老工程可缺省。 */
   patterns?: PatternDef[];
+  /** 文档级图案画笔。 */
+  brushes?: BrushDef[];
 }
 
 export const solid = (color: string, opacity = 1): Paint => ({ kind: "solid", color, opacity });

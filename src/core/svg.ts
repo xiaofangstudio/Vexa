@@ -2,6 +2,7 @@
 import { pathD, parseD, textBox, textDecorationLines, textLayout } from "./geom";
 import { gradLine, normalizeGradStops, radialGeom, renderGradStops, stopAlpha } from "./paint";
 import { widthOutline } from "./width";
+import { brushById, brushPattern, brushStamps } from "./brushes";
 import {
   noPaint,
   noStroke,
@@ -176,13 +177,30 @@ function textDecorationSVG(node: TextNode, lay: ReturnType<typeof textLayout>, i
     .join("\n");
 }
 
-function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: { n: number }): string {
+function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: { n: number }, noBrush = false): string {
   if (!node.visible) return "";
   const op = node.opacity < 1 ? ` opacity="${round(node.opacity)}"` : "";
   const blend = node.blend && node.blend !== "normal" ? ` style="mix-blend-mode:${node.blend}"` : "";
   if (node.kind === "path") {
     const id = `g${seq.n++}`;
     const fill = fillAttrs(node.fill, nodeBBox(node), defs, id, doc, seq);
+    const brush = !noBrush && node.stroke.brushId ? brushById(doc, node.stroke.brushId) : undefined;
+    const brushTile = brushPattern(doc, brush);
+    if (brush && brushTile) {
+      const tileDoc: VexaDoc = { ...doc, nodes: brushTile.nodes, root: brushTile.root };
+      const body = brushStamps(doc, node, brush)
+        .map((st) => {
+          const deg = round((st.angle * 180) / Math.PI);
+          const kids = brushTile.root
+            .map((cid) => brushTile.nodes[cid])
+            .filter((n): n is Node => !!n)
+            .map((n) => nodeSVG(tileDoc, n, `${indent}    `, defs, seq, true))
+            .join("");
+          return `${indent}  <g transform="translate(${round(st.x)} ${round(st.y)}) rotate(${deg}) scale(${round(brush.scale)}) translate(${round(-brushTile.w / 2)} ${round(-brushTile.h / 2)})">\n${kids}${indent}  </g>`;
+        })
+        .join("\n");
+      return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <g opacity="${round(node.stroke.opacity)}">\n${body}\n${indent}  </g>\n${indent}</g>\n`;
+    }
     const outline = widthOutline(node);
     if (outline && outline.length) {
       return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <path d="${loopsD(outline)}" fill="${node.stroke.color}" fill-opacity="${round(node.stroke.opacity)}"/>\n${indent}</g>\n`;
@@ -276,7 +294,7 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
     .filter((id) => id !== node.clip)
     .map((id) => doc.nodes[id])
     .filter((n): n is Node => !!n)
-    .map((n) => nodeSVG(doc, n, indent + "  ", defs, seq))
+    .map((n) => nodeSVG(doc, n, indent + "  ", defs, seq, noBrush))
     .join("");
   return `${indent}<g${op}${blend}${clipAttr}>\n${kids}${indent}</g>\n`;
 }

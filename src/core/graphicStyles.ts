@@ -62,6 +62,7 @@ function normalizeStroke(raw: unknown): Stroke | undefined {
   const join = s.join === "round" || s.join === "bevel" ? s.join : "miter";
   const arrow = s.arrow === "triangle" || s.arrow === "open" || s.arrow === "diamond" ? s.arrow : "none";
   const stroke: Stroke = { kind: s.kind, color, opacity, width, dash, cap, join, arrow };
+  if (typeof s.brushId === "string" && /^[a-z0-9_-]{1,32}$/i.test(s.brushId)) stroke.brushId = s.brushId;
   const widthPoints = normalizeWidthPoints(s.widthPoints);
   if (widthPoints.length >= 2) stroke.widthPoints = widthPoints;
   return stroke;
