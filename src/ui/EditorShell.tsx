@@ -67,7 +67,9 @@ import DocumentDialog from "./DocumentDialog";
 import SwatchesDialog from "./SwatchesDialog";
 import GraphicStylesPanel from "./GraphicStylesPanel";
 import SymbolsPanel from "./SymbolsPanel";
+import PatternsPanel from "./PatternsPanel";
 import { expandSymbolInstance, symbolById, symbolUsage } from "../core/symbols";
+import { patternById } from "../core/patterns";
 import "./EditorShell.css";
 
 const BLEND_LABELS: Record<BlendMode, string> = {
@@ -373,7 +375,7 @@ export default function EditorShell(props: Props) {
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View | null>(null);
   const [space, setSpace] = useState(false);
-  const [tab, setTab] = useState<"props" | "layers" | "styles" | "symbols">("props");
+  const [tab, setTab] = useState<"props" | "layers" | "styles" | "symbols" | "patterns">("props");
   const [dockOpen, setDockOpen] = useState(true);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [ctxShift, setCtxShift] = useState(0);
@@ -1643,11 +1645,12 @@ export default function EditorShell(props: Props) {
     {
       label: zh.menu.window,
       items: [
-        { label: "右侧属性 / 图层 / 样式 / 符号面板", checked: dockOpen, run: () => setDockOpen((v) => !v) },
+        { label: "右侧属性 / 图层 / 样式 / 符号 / 图案面板", checked: dockOpen, run: () => setDockOpen((v) => !v) },
         { label: "打开属性面板", run: () => { setTab("props"); setDockOpen(true); } },
         { label: "打开图层面板", run: () => { setTab("layers"); setDockOpen(true); } },
         { label: "打开图形样式面板", run: () => { setTab("styles"); setDockOpen(true); } },
         { label: "打开符号面板", run: () => { setTab("symbols"); setDockOpen(true); } },
+        { label: "打开图案面板", run: () => { setTab("patterns"); setDockOpen(true); } },
         { label: "文档色板…", run: () => setSwatchesOpen(true) },
         { label: "", sep: true },
         { label: "恢复默认工作区", run: () => { setTab("props"); setDockOpen(true); fit(); } },
@@ -2178,8 +2181,8 @@ export default function EditorShell(props: Props) {
 interface DockProps {
   doc: VexaDoc;
   ids: string[];
-  tab: "props" | "layers" | "styles" | "symbols";
-  onTab: (t: "props" | "layers" | "styles" | "symbols") => void;
+  tab: "props" | "layers" | "styles" | "symbols" | "patterns";
+  onTab: (t: "props" | "layers" | "styles" | "symbols" | "patterns") => void;
   store: ReturnType<typeof useDocStore>;
   onSelect: (ids: string[]) => void;
   onToast: (msg: string) => void;
@@ -2652,6 +2655,9 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
         <button className={"dock-tab" + (tab === "symbols" ? " is-on" : "")} onClick={() => onTab("symbols")}>
           <Icon name="star" size={14} /> {zh.dock.symbols}
         </button>
+        <button className={"dock-tab" + (tab === "patterns" ? " is-on" : "")} onClick={() => onTab("patterns")}>
+          <Icon name="grid" size={14} /> {zh.dock.patterns}
+        </button>
         <button type="button" className="dock-collapse" title="收起右侧面板" onClick={onCollapse}>
           <Icon name="chevron" size={14} />
         </button>
@@ -2666,6 +2672,12 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
       {tab === "symbols" && (
         <div className="dock-body" key="symbols">
           <SymbolsPanel doc={doc} store={store} ids={ids} onSay={onToast} onSelect={onSelect} />
+        </div>
+      )}
+
+      {tab === "patterns" && (
+        <div className="dock-body" key="patterns">
+          <PatternsPanel doc={doc} store={store} ids={ids} onSay={onToast} />
         </div>
       )}
 
@@ -3129,6 +3141,41 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       })}
                       onManage={() => onSwatches()}
                     />
+                  )}
+                  {single.fill.kind === "pattern" && (
+                    <div className="paint-pattern">
+                      <button className="paint-pattern-name" type="button" onClick={() => onTab("patterns")}>
+                        <Icon name="grid" size={13} />
+                        <span>{patternById(doc, single.fill.patternId)?.name ?? zh.dock.patternMissing}</span>
+                      </button>
+                      <label className="paint-pattern-scale">
+                        <input
+                          className="field-input num"
+                          type="number"
+                          min={25}
+                          max={400}
+                          step={5}
+                          value={Math.round((single.fill.patternScale ?? 1) * 100)}
+                          onChange={(e) => {
+                            const v = Number(e.target.value);
+                            if (!Number.isFinite(v)) return;
+                            setNode((n) => {
+                              if ("fill" in n) n.fill.patternScale = Math.min(20, Math.max(0.05, v / 100));
+                            });
+                          }}
+                        />
+                        <em>%</em>
+                      </label>
+                      <button
+                        className="paint-pattern-unlink"
+                        type="button"
+                        onClick={() => setNode((n) => {
+                          if ("fill" in n) n.fill = solid(n.fill.color || "#0f76d6", n.fill.opacity);
+                        })}
+                      >
+                        断开
+                      </button>
+                    </div>
                   )}
                   {(single.fill.kind === "linear" || single.fill.kind === "radial") && (
                     <div className="paint-grad">

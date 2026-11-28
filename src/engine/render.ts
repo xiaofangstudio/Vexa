@@ -5,7 +5,7 @@ import { widthHandles, widthOutline, widthPreview } from "../core/width";
 import { pointInArtboards } from "../core/artboards";
 import { groupBox } from "./pick";
 import { handleLayout } from "./handles";
-import type { Anchor, AnchorRef, Node, PathNode, Pt, VexaDoc } from "../core/types";
+import type { Anchor, AnchorRef, Node, PathNode, PatternDef, Pt, VexaDoc } from "../core/types";
 import { docToScreen, type View } from "./view";
 
 export type ToolId =
@@ -264,6 +264,75 @@ function loopsToPath(ctx: CanvasRenderingContext2D, loops: Pt[][]): void {  for 
   }
 }
 
+/** 把图案砖画进离屏画布；砖排用 2×2 复制保证半格错位接缝闭合。 */
+export function patternTileCanvas(
+  doc: VexaDoc,
+  def: PatternDef,
+  scale = 1,
+): { canvas: HTMLCanvasElement; w: number; h: number; res: number } | null {
+  const s = Math.min(20, Math.max(0.05, scale));
+  const w = Math.max(1, def.w * (def.tile === "brick" ? 2 : 1) * s);
+  const h = Math.max(1, def.h * (def.tile === "brick" ? 2 : 1) * s);
+  const res = 1;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(w * res));
+  canvas.height = Math.max(1, Math.round(h * res));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.scale(res, res);
+  const temp: VexaDoc = { ...doc, nodes: def.nodes, root: def.root };
+  const drawCopy = (x: number, y: number): void => {
+    ctx.save();
+    ctx.translate(x, y);
+    for (const id of def.root) {
+      const node = def.nodes[id];
+      if (node) drawNode(ctx, temp, node, () => {}, undefined, undefined, false);
+    }
+    ctx.restore();
+  };
+  if (def.tile === "brick") {
+    drawCopy(0, 0);
+    drawCopy(def.w, 0);
+    drawCopy(def.w / 2, def.h);
+    drawCopy(def.w * 1.5, def.h);
+  } else {
+    drawCopy(0, 0);
+  }
+  return { canvas, w, h, res };
+}
+
+const patternCache = new WeakMap<VexaDoc, Map<string, { canvas: HTMLCanvasElement; res: number }>>();
+
+/** 画布图案：按定义版本缓存砖图，平铺原点固定在文档 0,0。 */
+function patternPaint(ctx: CanvasRenderingContext2D, doc: VexaDoc, fill: import("../core/types").Paint): CanvasPattern | string {
+  const def = (doc.patterns ?? []).find((p) => p.id === fill.patternId);
+  if (!def) return fill.color || "#0f76d6";
+  const scale = Math.min(20, Math.max(0.05, fill.patternScale ?? 1));
+  const key = `${def.id}|${def.rev ?? 1}|${scale}|${def.tile}|${def.w}|${def.h}`;
+  let cache = patternCache.get(doc);
+  if (!cache) {
+    cache = new Map();
+    patternCache.set(doc, cache);
+  }
+  let tile = cache.get(key);
+  if (!tile) {
+    const made = patternTileCanvas(doc, def, scale);
+    if (!made) return fill.color || "#0f76d6";
+    tile = { canvas: made.canvas, res: made.res };
+    if (cache.size > 32) cache.clear();
+    cache.set(key, tile);
+  }
+  const patt = ctx.createPattern(tile.canvas, "repeat");
+  if (!patt) return fill.color || "#0f76d6";
+  patt.setTransform(new DOMMatrix([1 / tile.res, 0, 0, 1 / tile.res, 0, 0]));
+  return patt;
+}
+
+function fillPaint(ctx: CanvasRenderingContext2D, doc: VexaDoc, fill: import("../core/types").Paint, box: Box): string | CanvasGradient | CanvasPattern {
+  if (fill.kind === "pattern") return patternPaint(ctx, doc, fill);
+  return canvasPaint(ctx, fill, box);
+}
+
 function nodeToPath(ctx: CanvasRenderingContext2D, node: PathNode): void {
   for (const sub of node.subpaths) {
     const a = sub.anchors;
@@ -348,7 +417,7 @@ function drawNode(
     nodeToPath(ctx, node);
     if (node.fill.kind !== "none") {
       ctx.globalAlpha *= node.fill.opacity;
-      ctx.fillStyle = canvasPaint(ctx, node.fill, nodeBox(node));
+      ctx.fillStyle = fillPaint(ctx, doc, node.fill, nodeBox(node));
       ctx.fill();
       ctx.globalAlpha /= node.fill.opacity || 1;
     }
@@ -377,7 +446,7 @@ function drawNode(
       const hs = (node.hScale ?? 100) / 100;
       const vs = (node.vScale ?? 100) / 100;
       const tracking = node.tracking ?? 0;
-      ctx.fillStyle = canvasPaint(ctx, node.fill, lay.box);
+      ctx.fillStyle = fillPaint(ctx, doc, node.fill, lay.box);
       ctx.font = `${node.italic ? "italic " : ""}${node.bold ? "700 " : ""}${node.size}px ${node.font}`;
       ctx.textBaseline = "alphabetic";
       if (lay.mode === "path") {

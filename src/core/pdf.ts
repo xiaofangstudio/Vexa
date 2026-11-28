@@ -193,6 +193,8 @@ class PdfBuilder {
   private images = new Map<string, { id: number; name: string }>();
   private imageCache = new Map<string, number | null>();
   private fontCache = new Map<string, { font: Font; bold: boolean; italic: boolean }>();
+  private patterns = new Map<string, { id: number; name: string }>();
+  private currentBoard: Artboard | null = null;
   warnings: string[] = [];
 
   constructor(
@@ -391,6 +393,13 @@ class PdfBuilder {
       if (box.x > b.x + b.w || box.y > b.y + b.h || box.x + box.w < b.x || box.y + box.h < b.y) continue;
       visit(node, this.doc.nodes);
     }
+    // 图案砖里的位图也要嵌入，否则 PDF 中图案会少图。
+    for (const def of this.doc.patterns ?? []) {
+      for (const id of def.root) {
+        const node = def.nodes[id];
+        if (node) visit(node, def.nodes);
+      }
+    }
     for (const src of srcs) {
       if (this.images.has(src)) continue;
       const id = await this.decodeImage(src);
@@ -430,6 +439,12 @@ class PdfBuilder {
       const n = this.doc.nodes[id];
       if (n) visit(n, this.doc.nodes);
     }
+    for (const def of this.doc.patterns ?? []) {
+      for (const id of def.root) {
+        const node = def.nodes[id];
+        if (node) visit(node, def.nodes);
+      }
+    }
     for (const f of faces) {
       try {
         const bytes = await this.opts.fontLoader(f.family, f.bold, f.italic);
@@ -440,14 +455,75 @@ class PdfBuilder {
     }
   }
 
-  resourcesDict(): string {
+  private resourceParts(withPatterns: boolean): string {
     const gs = [...this.gs.values(), ...this.softGs.values()].map((g) => `/${g.name} ${g.id} 0 R`).join(" ");
     const sh = [...this.shadings.values()].map((g) => `/${g.name} ${g.id} 0 R`).join(" ");
     const im = [...this.images.values()].map((g) => `/${g.name} ${g.id} 0 R`).join(" ");
-    return `<< /ProcSet [/PDF /Text /ImageB /ImageC] /ExtGState << ${gs} >> /Shading << ${sh} >> /XObject << ${im} >> >>`;
+    const pt = withPatterns
+      ? [...this.patterns.values()].map((g) => `/${g.name} ${g.id} 0 R`).join(" ")
+      : "";
+    return `<< /ProcSet [/PDF /Text /ImageB /ImageC] /ExtGState << ${gs} >> /Shading << ${sh} >> /XObject << ${im} >>${pt ? ` /Pattern << ${pt} >>` : ""} >>`;
+  }
+
+  resourcesDict(): string {
+    return this.resourceParts(true);
+  }
+
+  private patternFor(paint: Paint): { name: string } | null {
+    const def = (this.doc.patterns ?? []).find((p) => p.id === paint.patternId);
+    const board = this.currentBoard;
+    if (!def || !board) return null;
+    const scale = Math.min(20, Math.max(0.05, paint.patternScale ?? 1));
+    const key = `${def.id}|${def.rev ?? 1}|${scale}|${def.tile}|${def.w}|${def.h}|${board.id}`;
+    const hit = this.patterns.get(key);
+    if (hit) return { name: hit.name };
+    const tileW = def.tile === "brick" ? def.w * 2 : def.w;
+    const tileH = def.tile === "brick" ? def.h * 2 : def.h;
+    const c = new Content(this);
+    const oldDoc = this.doc;
+    this.doc = { ...this.doc, nodes: def.nodes, root: def.root };
+    const drawCopy = (x: number, y: number): void => {
+      c.op(`1 0 0 1 ${n(x)} ${n(y)} cm`);
+      for (const id of def.root) {
+        const node = def.nodes[id];
+        if (node) this.drawNode(c, node, 1, "normal");
+      }
+    };
+    if (def.tile === "brick") {
+      drawCopy(0, 0);
+      drawCopy(def.w, 0);
+      drawCopy(def.w / 2, def.h);
+      drawCopy(def.w * 1.5, def.h);
+    } else {
+      drawCopy(0, 0);
+    }
+    this.doc = oldDoc;
+    const resources = this.resourceParts(false);
+    const matrix = `[${n(scale)} 0 0 ${n(-scale)} ${n(-board.x)} ${n(board.y + board.h)}]`;
+    const id = this.writer.stream(
+      `/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 ${n(tileW)} ${n(tileH)}] /XStep ${n(tileW)} /YStep ${n(tileH)} /Matrix ${matrix} /Resources ${resources}`,
+      c.bytes(),
+      true,
+    );
+    const name = `P${this.patterns.size}`;
+    this.patterns.set(key, { id, name });
+    return { name };
+  }
+
+  private patternFillOps(c: Content, ops: string[], paint: Paint, alpha: number, blend: string): boolean {
+    const pat = this.patternFor(paint);
+    if (!pat) return false;
+    c.q();
+    c.gs(alpha, blend);
+    c.path(ops);
+    c.op(`/${pat.name} scn`);
+    c.op("f");
+    c.Q();
+    return true;
   }
 
   drawBoard(c: Content, board: Artboard): void {
+    this.currentBoard = board;
     const bg = parseColor(board.bg);
     c.q();
     c.cm(1, 0, 0, -1, -board.x, board.y + board.h);
@@ -523,6 +599,17 @@ class PdfBuilder {
       const fillAlpha = alpha * (fill.opacity ?? 1);
       if (fill.kind === "linear" || fill.kind === "radial") {
         this.gradientFill(c, node, box, fillAlpha, blend);
+      } else if (fill.kind === "pattern") {
+        const ops = pathOps(node);
+        if (!this.patternFillOps(c, ops, fill, fillAlpha, blend)) {
+          const col = parseColor(fill.color);
+          c.q();
+          c.gs(fillAlpha, blend);
+          c.path(ops);
+          c.fillColor(col.r, col.g, col.b);
+          c.op("f");
+          c.Q();
+        }
       } else {
         const col = parseColor(fill.color);
         const ops = pathOps(node);
@@ -607,6 +694,8 @@ class PdfBuilder {
     }
     if (node.fill.kind === "linear" || node.fill.kind === "radial") {
       this.gradientFillOps(c, glyphs.ops, node.fill, box, fillAlpha, blend);
+    } else if (node.fill.kind === "pattern" && this.patternFillOps(c, glyphs.ops, node.fill, fillAlpha, blend)) {
+      // 图案直接以字形轮廓为填充路径。
     } else {
       const col = parseColor(node.fill.color);
       c.q();

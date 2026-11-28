@@ -46,7 +46,7 @@ function collectTree(doc: VexaDoc, id: string, out: Set<string>, seen = new Set<
 }
 
 /** 捕获一组选中对象为定义内容；坐标平移到左上角 0,0。 */
-function captureArtwork(doc: VexaDoc, ids: string[]): { w: number; h: number; nodes: Record<string, Node>; root: string[] } | null {
+export function captureArtwork(doc: VexaDoc, ids: string[]): { w: number; h: number; nodes: Record<string, Node>; root: string[] } | null {
   const selected = new Set(ids.filter((id) => doc.nodes[id]));
   if (!selected.size) return null;
   const parentOf = new Map<string, string>();
@@ -112,7 +112,7 @@ function shiftNode(n: Node, dx: number, dy: number): void {
   }
 }
 
-function cleanDefNode(raw: Node): Node | null {
+export function cleanDefNode(raw: Node): Node | null {
   if (!raw || typeof raw !== "object" || !raw.id) return null;
   if (raw.kind === "symbol") return null;
   if (typeof raw.name !== "string" || !raw.name.trim()) raw.name = "对象";

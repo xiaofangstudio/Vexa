@@ -24,9 +24,19 @@ function clone<T>(value: T): T {
 function normalizePaint(raw: unknown, fallback = "#0f76d6"): Paint | null {
   if (!raw || typeof raw !== "object") return null;
   const p = raw as Partial<Paint>;
-  if (p.kind !== "none" && p.kind !== "solid" && p.kind !== "linear" && p.kind !== "radial") return null;
+  if (p.kind !== "none" && p.kind !== "solid" && p.kind !== "linear" && p.kind !== "radial" && p.kind !== "pattern") return null;
   const color = typeof p.color === "string" && HEX_RE.test(p.color) ? p.color.toLowerCase() : fallback;
   const opacity = typeof p.opacity === "number" && Number.isFinite(p.opacity) ? Math.max(0, Math.min(1, p.opacity)) : 1;
+  if (p.kind === "pattern") {
+    if (typeof p.patternId !== "string" || !ID_RE.test(p.patternId)) return { kind: "solid", color, opacity };
+    return {
+      kind: "pattern",
+      color,
+      opacity,
+      patternId: p.patternId,
+      patternScale: Number.isFinite(p.patternScale) ? Math.min(20, Math.max(0.05, p.patternScale as number)) : 1,
+    };
+  }
   if (p.kind === "linear" || p.kind === "radial") {
     const stops = Array.isArray(p.grad?.stops) ? normalizeGradStops(p.grad.stops, color) : null;
     if (!stops || stops.length < 2) return { kind: "solid", color, opacity };

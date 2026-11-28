@@ -113,7 +113,8 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - 路径布尔是**多边形级**（曲线先拍平），曲线级保真布尔还没做；偏移/描边轮廓是折线近似（尖角斜接、平头端帽），路径效果生成的轮廓尚未支持圆头/方头端帽与曲线保真
 - 直接选择已支持 `Shift` 多锚点、跨节点同步拖动、方向键微移、开放子路径连接、六向锚点对齐、锚点水平/垂直等距分布、跨路径节点开放端点连接、拖框选锚点与 `Delete` 删单个锚点；框选只从当前已选路径/组收集，不能一次框选未选中路径；删到剩 2 个锚点的闭合路径保留成线；剪切蒙版路径不可删；长按方向键仍会产生多步撤销；分布只做等距，跨路径连接只合并端点所在子路径
 - 可变宽度描边已支持宽度点、单侧加宽、余弦过渡与 SVG/`.vex` 往返；均匀描边已支持平/圆/方端帽与尖角/圆角/斜角连接，但可变宽度轮廓不跟随这些设置，仍按平头外框绘制；虚线暂不随轮廓走（有宽度点时按实线轮廓输出），箭头仍按基础线宽；宽度手柄只画在第一条子路径，复合路径各子路径共用同一 `t` 轮廓
-- 渐变支持线性/径向多色标、独立透明度、插值中点与画布轴线/色标直拖；径向渐变的圆心固定在 bbox 中心、半径固定为半对角线，画布手柄只沿右侧半径显示；尚缺网格/自由渐变、渐变描边、图案填充、画笔
+- 渐变支持线性/径向多色标、独立透明度、插值中点与画布轴线/色标直拖；径向渐变的圆心固定在 bbox 中心、半径固定为半对角线，画布手柄只沿右侧半径显示；尚缺网格/自由渐变、渐变描边、画笔
+- 图案填充已在第六十一批完成：文档级 `PatternDef` 保存独立坐标系的节点树与砖尺寸，填充只记 `patternId/patternScale`；从选中路径/文字/组捕获（多选取并集、坐标归零），`grid` 网格与 `brick` 砖排两种排法，平铺缩放 5%–2000%；画布用离屏砖 canvas 平铺，SVG 输出 `<pattern patternUnits="userSpaceOnUse">`，PDF 输出 `/PatternType 1` 矢量平铺图案；“用选中重定义”递增 `rev` 并让全部填充同步换图；删除先把普通节点、符号定义与图形样式的引用降级为近似实色再移除定义；`.vex` 往返保留定义与引用并清理悬空 `patternId`。上限 32 个，图案内禁止嵌套图案；填充原点固定在文档 0,0，图案内旋转/斜切未支持，图案画笔未做；画布砖为 1× 位图缓存，高倍缩放清晰度有限，SVG/PDF 仍为矢量
 - 符号系统已在第六十批完成：文档级 `SymbolDef` 保存独立坐标系的定义内容，画布上的 `SymbolNode` 只存 `symbolId` 与位置/尺寸，不复制子节点；从选中路径/文字/图片/组捕获定义（多选取并集、坐标归零），置入实例可自由缩放；“用选中重定义”会换掉定义并让全部实例同步换图；展开实例生成普通组并保持层序，“断开链接”同义；删除符号先把全部实例展开为组再移除定义，画面不丢；`.vex` 往返保留定义与实例并清理悬空 `symbolId`；SVG 导出为 `<symbol>` + `<use>`，PDF 用 `cm` 矩阵递归绘制并收集符号内位图/字体。上限 64 个，符号内不允许嵌套符号；实例旋转/斜切尚未支持
 - 图形样式已在第五十九批完成：文档级 `GraphicStyle` 记录填充/描边/不透明度/混合模式，最多 64 个；可从选中路径或文字捕获、套用到单个/多个/组（组递归），对象记 `graphicStyle` 链接；“更新选中样式”用当前对象外观改写样式并同步所有链接对象；删除只解链、保留对象当前外观；`.vex` 往返保留样式与链接并清理悬空引用。仍只是单填充 + 单描边，不含多填充/多描边 Appearance 栈、效果行、层级排序/显隐；文字样式无描边；手动改对象填充/描边不会自动解链，需再点“更新选中样式”覆盖链接对象
 - SVG 导入已覆盖基础图形、变换、线性/径向渐变、色标透明度、`href` 继承、`fill/stroke-opacity`、`<use>` / 嵌套 use、`<clipPath>` 嵌套交集裁切、symbol viewBox/width 缩放与 `<text>` / `<tspan>` 可编辑文字；尚缺图案、滤镜、`mask`、`objectBoundingBox` 剪裁、`gradientTransform` / `spreadMethod` 的完整语义，文本旋转/斜切只映射位置与缩放、不旋转字形
@@ -127,20 +128,21 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - 第二十二批已消除 React 壳层的高频重渲染（live 不再递增 UI 版本、光标/视口/滑块/图层名走局部路径），但画布本身仍是全场景 `renderScene` 重绘，尚未做 dirty-rect / 分层画布；超大节点数文档若仍掉帧，下一步应做节点视口剔除或脏矩形重绘。
 - 文件关联已注册，双击 `.vex` / `.svg` 启动并载入已接：`launch_intent` 读第一个真实存在的路径参数；已开实例由 `tauri-plugin-single-instance` 把路径 emit 成 `vexa://launch-open` 并聚焦主窗口；SVG 用 `svgIntrinsicSize` 建同尺寸画板、`svgToNodes` 转可编辑节点。Vexa 只接 `.vex` / `.svg`，不导入 Groma 工程；需要把 Vexa 的图交给 Groma 时，在 Vexa 导出 SVG，再到 Groma“导入 Vexa 画的图”。PNG/JPG 不接。
 - 自动保存只在已有路径时生效；未保存过的新工程仍需手动 `Ctrl+S`
-- PDF 导出已支持多画板、原生线性/径向渐变、渐变文字、实色/虚线/端帽/连接、透明位图与文字轮廓；文字是路径、不可选中/搜索，渐变描边、图案填充、渐变网格未做，组透明度按节点复合 alpha 近似；字体只读本机文件，不打包不联网
+- PDF 导出已支持多画板、原生线性/径向渐变、矢量平铺图案（路径与文字轮廓均可填充）、渐变文字、实色/虚线/端帽/连接、透明位图与文字轮廓；文字是路径、不可选中/搜索，渐变描边、渐变网格未做，组透明度按节点复合 alpha 近似；字体只读本机文件，不打包不联网
 - SVG 导入现支持 `<text>` / `<tspan>` 可编辑文字、`<use>` / `xlink:href` 引用与嵌套 use、`<clipPath>` 组裁切（含嵌套交集）、symbol viewBox/width 缩放；`objectBoundingBox` 剪裁、图案、滤镜、`mask` 仍未处理，文本旋转/斜切只映射位置与缩放、不旋转字形
 
 ## 发布构建
 
-- 版本：`0.1.0`（第六十批：符号系统）
+- 版本：`0.1.0`（第六十一批：图案填充）
 - 文件：`release\Vexa.exe`
-- 大小：`7,823,872 B`
-- SHA256：`4BF79BF44CD6C47B4E5F189380798210F02E42280D42672D7CBB393A6BA19AA2`
-- 构建时间：`2026-11-28 16:03:21`
+- 大小：`7,829,504 B`
+- SHA256：`A9ADB5C2C2B5FB20C68353A97931F56F546D40C579C4672463B701CC6D063E5C`
+- 构建时间：`2026-11-28 16:42:17`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,383,152 B`，SHA256 `042E3638A4B1F87D528EB99AC300ACB55DA1D65F7E8EAC91EF45A8F969964F6B`
-- 前端产物：`dist/assets/pdf-Dov0BnnG.js` 22.11 kB / gzip 8.28；`dist/assets/index-CxG1iaRQ.js` 389.40 kB / gzip 161.95；`dist/assets/index-CpzxMqQG.js` 589.13 kB / gzip 185.46；`dist/assets/index-BWpIeia7.css` 66.17 kB / gzip 12.20；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
-- 符号系统验收（第六十批）：`npx tsc --noEmit` 通过；`npm run build` 163 modules 通过；新增 `npx tsx scripts/smoke.symbols.mts` 通过（坏输入/空定义/嵌套符号/64 上限、多选与组捕获并归零坐标、置入与缩放、重定义同步 2 个实例、SVG `<symbol>/<use>`、PDF 输出、根层与组内展开不重复、删除先展开全部实例、改名、`.vex` 往返与悬空实例清理），28 个冒烟脚本全部通过。真实 Tauri/WebView2 1600×1000 窗口：两块矩形多选建“品牌徽标”，删除源图后置入两个 260×130 实例；椭圆建“角标”，1 个 90×90 实例；绿色长条重定义品牌徽标，两个实例同步换图；符号卡显示 2/1 个实例与实时缩略预览；断开链接变普通组、撤销恢复；删除角标先展开实例再删定义、撤销恢复；1200×900 四标签、面板与卡片无横向溢出。截图 `docs/shots/symbols.png`。
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,389,904 B`，SHA256 `6BFB0C3DBBEC94362545A14A9D81FDBCFEC60B830A89A8EB1DB0C423DC2FFDD6`
+- 前端产物：`dist/assets/pdf-DmO4H3Z0.js` 23.85 kB / gzip 8.79；`dist/assets/index-Y9fOR7qW.js` 603.21 kB / gzip 189.20；`dist/assets/index-CxG1iaRQ.js` 389.40 kB / gzip 161.95；`dist/assets/index-CKmq28ev.css` 68.37 kB / gzip 12.51；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 图案填充验收（第六十一批）：`npx tsc --noEmit` 通过；`npm run build` 165 modules 通过；新增 `npx tsx scripts/smoke.patterns.mts` 通过（非数组/空定义修复、32 上限、嵌套图案剥离、坐标归零、多选与组捕获、缩放夹取、砖排、重定义递增版本、SVG `<pattern>`、PDF `/PatternType 1`、`.vex` 往返、悬空引用清理、删除降级普通节点/样式引用），全部 29 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口：两块矩形多选建“蓝红竖纹”并删除源图；目标矩形套图案后切砖排、50% 缩放重新填充；椭圆建“绿色圆点”并套到第二块目标；金色圆形源重定义第一块图案，两处填充同步换图，源图删除后填充保留；面板两张卡显示 1 处填充与实时缩略；删除第二块图案时 1 处填充转实色、撤销恢复；1200×900 五标签、面板与卡片无横向溢出；截图 `docs/shots/patterns.png`。
+- 符号系统验收（第六十批）：`npx tsc --noEmit` 通过；`npm run build` 163 modules 通过；新增 `npx tsx scripts/smoke.symbols.mts` 通过（坏输入/空定义/嵌套符号/64 上限、多选与组捕获并归零坐标、置入与缩放、重定义同步 2 个实例、SVG `<symbol>/<use>`、PDF 输出、根层与组内展开不重复、删除先展开全部实例、改名、`.vex` 往返与悬空实例清理），28 个冒烟脚本全部通过。真实 Tauri/WebView2 1600×1000 窗口：两块矩形多选建“品牌徽标”，删除源图后置入两个 260×130 实例；椭圆建“角标”，1 个 90×90 实例；绿色长条重定义品牌徽标，两个实例同步换图；符号卡显示 2/1 个实例与实时缩略预览；断开链接变普通组、撤销恢复；删除角标先展开实例再删定义、撤销恢复；1200×900 四标签、面板与卡片无横向溢出。该批截图已按清理惯例删除。
 - 图形样式验收（第五十九批）：`npx tsc --noEmit` 通过；`npm run build` 161 modules 通过；新增 `npx tsx scripts/smoke.styles.mts` 通过（捕获路径填充/描边、文字无描边、坏输入与 64 上限、渐变修复、套用/组递归、链接计数、更新同步、删除解链保留外观、`.vex` 往返与悬空清理），27 个冒烟脚本全部通过。真实 Tauri/WebView2 1600×1000 窗口：画三块矩形，图层分别存“品牌蓝 / 警示红 / 辅助绿”；图层面板多选第二三块套品牌蓝（2 个链接），第一块单套警示红（1 个链接）；选中第二块改深蓝 10px 后“更新选中样式”，第三块同步、警示红对象不变；删除警示红仅解链、红色 8px 保留，撤销恢复样式与 `graphicStyle=gs2`；1200×900 三标签、样式卡与面板均无横向溢出。截图 `docs/shots/graphic-styles.png`。
 - 区域文字避头尾验收（第五十四批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.area-text.mts` 通过（180px 框、20px 字：未开启时行首落 `。`；开启后第一行由 8 字回退到 7 字、下一行从“容”开始；`.vex` 往返保留 `kinsoku`）。26 个冒烟脚本全部通过。真实 Tauri/WebView2 1600×1000 窗口：`T` 拖 `360×260` 区域框，写入含标点样本，设 26px，属性坞“排版”行出现“避”开关（默认关闭，点击后节点 `kinsoku=true`、按钮高亮）；第一行“这是测试文本内容排版示例”，第二行从“句。”开始，句号不再落行首，选择框完整，窗口无横向溢出。截图 `docs/shots/text-kinsoku.png`。
 - 竖排标点定位验收（第五十三批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.vertical-text.mts` 通过（逗号/句号在字格内右移 0.22em、上移 0.18em；冒号/分号小幅右上；括号随列旋转 90°；`.vex` 无需新增字段；SVG 标点按偏移落点并输出括号 `rotate(90)`；PDF `warnings 0`）。真实 Tauri/WebView2 1600×1000 窗口：`「直排」、（标）。` 单点直排、40px、行距 54px；逗号/句号停在字格右上，圆括号转向包住“标”，引号保持正立，选择框 54×360 完整包住 9 个字，属性坞显示“单点 / 直排”，窗口无横向溢出。截图 `docs/shots/vertical-punctuation.png`。

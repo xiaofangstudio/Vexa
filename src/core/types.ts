@@ -2,7 +2,7 @@
 
 export type Pt = { x: number; y: number };
 
-export type PaintKind = "none" | "solid" | "linear" | "radial";
+export type PaintKind = "none" | "solid" | "linear" | "radial" | "pattern";
 
 export interface GradStop {
   offset: number;
@@ -24,6 +24,10 @@ export interface Paint {
   color: string;
   opacity: number;
   grad?: LinearGrad;
+  /** 图案填充引用的文档级 PatternDef。 */
+  patternId?: string;
+  /** 图案平铺缩放，1 = 定义原始尺寸。 */
+  patternScale?: number;
   /** 链接的文档色板 id；仅实色填充/描边有效，改色板时同步换色。 */
   swatch?: string;
 }
@@ -284,6 +288,22 @@ export interface SymbolDef {
   root: string[];
 }
 
+/** 图案平铺方式：网格逐行对齐，砖排隔行错开半格。 */
+export type PatternTile = "grid" | "brick";
+
+/** 图案定义：保存一块独立坐标系的矢量砖，填充时按平铺方式重复。 */
+export interface PatternDef {
+  id: string;
+  name: string;
+  w: number;
+  h: number;
+  tile: PatternTile;
+  nodes: Record<string, Node>;
+  root: string[];
+  /** 定义内容版本，重定义时递增，用于失效画布图案缓存。 */
+  rev?: number;
+}
+
 export type Node = PathNode | TextNode | ImageNode | GroupNode | SymbolNode;
 
 export interface Artboard {
@@ -312,6 +332,8 @@ export interface VexaDoc {
   styles?: GraphicStyle[];
   /** 文档级符号定义；老工程可缺省。 */
   symbols?: SymbolDef[];
+  /** 文档级图案定义；老工程可缺省。 */
+  patterns?: PatternDef[];
 }
 
 export const solid = (color: string, opacity = 1): Paint => ({ kind: "solid", color, opacity });

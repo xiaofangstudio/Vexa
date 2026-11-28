@@ -78,8 +78,43 @@ function nodeBBox(node: Node): BBox {
 }
 
 /** 填充属性；渐变顺手把 defs 塞进收集器。 */
-function fillAttrs(fill: Paint, box: BBox, defs: string[], id: string): string {
+function patternFillSVG(doc: VexaDoc, fill: Paint, defs: string[], id: string, seq: { n: number }): string {
+  const def = (doc.patterns ?? []).find((p) => p.id === fill.patternId);
+  if (!def) return ` fill="${fill.color}" fill-opacity="${round(fill.opacity)}"`;
+  const scale = Math.min(20, Math.max(0.05, fill.patternScale ?? 1));
+  const temp: VexaDoc = { ...doc, nodes: def.nodes, root: def.root };
+  const body = (): string =>
+    def.root
+      .map((nodeId) => {
+        const node = def.nodes[nodeId];
+        return node ? nodeSVG(temp, node, "      ", defs, seq) : "";
+      })
+      .join("");
+  if (def.tile === "brick") {
+    const tileW = def.w * 2;
+    const tileH = def.h * 2;
+    const copies = [
+      [0, 0],
+      [def.w, 0],
+      [def.w / 2, def.h],
+      [def.w * 1.5, def.h],
+    ]
+      .map(([x, y]) => `<g transform="translate(${round(x)} ${round(y)})">\n${body()}</g>`)
+      .join("\n");
+    defs.push(
+      `    <pattern id="pt${id}" patternUnits="userSpaceOnUse" width="${round(tileW * scale)}" height="${round(tileH * scale)}" viewBox="0 0 ${round(tileW)} ${round(tileH)}">\n${copies}\n    </pattern>`,
+    );
+  } else {
+    defs.push(
+      `    <pattern id="pt${id}" patternUnits="userSpaceOnUse" width="${round(def.w * scale)}" height="${round(def.h * scale)}" viewBox="0 0 ${round(def.w)} ${round(def.h)}">\n${body()}\n    </pattern>`,
+    );
+  }
+  return ` fill="url(#pt${id})" fill-opacity="${round(fill.opacity)}"`;
+}
+
+function fillAttrs(fill: Paint, box: BBox, defs: string[], id: string, doc: VexaDoc, seq: { n: number }): string {
   if (fill.kind === "none") return ` fill="none"`;
+  if (fill.kind === "pattern") return patternFillSVG(doc, fill, defs, id, seq);
   const stops = renderGradStops(fill)
     .map((s) => {
       const opacity = stopAlpha(s);
@@ -147,7 +182,7 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
   const blend = node.blend && node.blend !== "normal" ? ` style="mix-blend-mode:${node.blend}"` : "";
   if (node.kind === "path") {
     const id = `g${seq.n++}`;
-    const fill = fillAttrs(node.fill, nodeBBox(node), defs, id);
+    const fill = fillAttrs(node.fill, nodeBBox(node), defs, id, doc, seq);
     const outline = widthOutline(node);
     if (outline && outline.length) {
       return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <path d="${loopsD(outline)}" fill="${node.stroke.color}" fill-opacity="${round(node.stroke.opacity)}"/>\n${indent}</g>\n`;
@@ -158,7 +193,7 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
   }
   if (node.kind === "text") {
     const lay = textLayout(node);
-    const fill = fillAttrs(node.fill, nodeBBox(node), defs, `g${seq.n++}`);
+    const fill = fillAttrs(node.fill, nodeBBox(node), defs, `g${seq.n++}`, doc, seq);
     const hs = (node.hScale ?? 100) / 100 || 1;
     const vs = (node.vScale ?? 100) / 100 || 1;
     const tracking = node.tracking ? ` letter-spacing="${round(node.tracking)}"` : "";
