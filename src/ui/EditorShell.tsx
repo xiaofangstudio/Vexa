@@ -66,6 +66,8 @@ import BoardPresetDialog from "./BoardPresetDialog";
 import DocumentDialog from "./DocumentDialog";
 import SwatchesDialog from "./SwatchesDialog";
 import GraphicStylesPanel from "./GraphicStylesPanel";
+import SymbolsPanel from "./SymbolsPanel";
+import { expandSymbolInstance, symbolById, symbolUsage } from "../core/symbols";
 import "./EditorShell.css";
 
 const BLEND_LABELS: Record<BlendMode, string> = {
@@ -338,7 +340,7 @@ function fitNodes(nodes: Node[], board: Artboard, roots?: string[]): void {
       }
       return;
     }
-    if (n.kind === "image") {
+    if (n.kind === "image" || n.kind === "symbol") {
       n.x = n.x * s + offX;
       n.y = n.y * s + offY;
       n.w *= s;
@@ -371,7 +373,7 @@ export default function EditorShell(props: Props) {
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View | null>(null);
   const [space, setSpace] = useState(false);
-  const [tab, setTab] = useState<"props" | "layers" | "styles">("props");
+  const [tab, setTab] = useState<"props" | "layers" | "styles" | "symbols">("props");
   const [dockOpen, setDockOpen] = useState(true);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [ctxShift, setCtxShift] = useState(0);
@@ -875,7 +877,7 @@ export default function EditorShell(props: Props) {
         const n = d.nodes[id];
         if (!n) continue;
         const copy = JSON.parse(JSON.stringify(n)) as Node;
-        const nid = newId(d, n.kind === "text" ? "t" : n.kind === "image" ? "im" : "n");
+        const nid = newId(d, n.kind === "text" ? "t" : n.kind === "image" ? "im" : n.kind === "symbol" ? "sym" : "n");
         copy.id = nid;
         d.nodes[nid] = copy;
         d.root.push(nid);
@@ -886,7 +888,7 @@ export default function EditorShell(props: Props) {
             if (a.hIn) { a.hIn.x += 12; a.hIn.y += 12; }
             if (a.hOut) { a.hOut.x += 12; a.hOut.y += 12; }
           }
-        } else if (copy.kind === "text" || copy.kind === "image") {
+        } else if (copy.kind === "text" || copy.kind === "image" || copy.kind === "symbol") {
           copy.x += 12;
           copy.y += 12;
         }
@@ -1641,10 +1643,11 @@ export default function EditorShell(props: Props) {
     {
       label: zh.menu.window,
       items: [
-        { label: "右侧属性 / 图层 / 样式面板", checked: dockOpen, run: () => setDockOpen((v) => !v) },
+        { label: "右侧属性 / 图层 / 样式 / 符号面板", checked: dockOpen, run: () => setDockOpen((v) => !v) },
         { label: "打开属性面板", run: () => { setTab("props"); setDockOpen(true); } },
         { label: "打开图层面板", run: () => { setTab("layers"); setDockOpen(true); } },
         { label: "打开图形样式面板", run: () => { setTab("styles"); setDockOpen(true); } },
+        { label: "打开符号面板", run: () => { setTab("symbols"); setDockOpen(true); } },
         { label: "文档色板…", run: () => setSwatchesOpen(true) },
         { label: "", sep: true },
         { label: "恢复默认工作区", run: () => { setTab("props"); setDockOpen(true); fit(); } },
@@ -2175,8 +2178,8 @@ export default function EditorShell(props: Props) {
 interface DockProps {
   doc: VexaDoc;
   ids: string[];
-  tab: "props" | "layers" | "styles";
-  onTab: (t: "props" | "layers" | "styles") => void;
+  tab: "props" | "layers" | "styles" | "symbols";
+  onTab: (t: "props" | "layers" | "styles" | "symbols") => void;
   store: ReturnType<typeof useDocStore>;
   onSelect: (ids: string[]) => void;
   onToast: (msg: string) => void;
@@ -2646,6 +2649,9 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
         <button className={"dock-tab" + (tab === "styles" ? " is-on" : "")} onClick={() => onTab("styles")}>
           <Icon name="grid" size={14} /> {zh.dock.styles}
         </button>
+        <button className={"dock-tab" + (tab === "symbols" ? " is-on" : "")} onClick={() => onTab("symbols")}>
+          <Icon name="star" size={14} /> {zh.dock.symbols}
+        </button>
         <button type="button" className="dock-collapse" title="收起右侧面板" onClick={onCollapse}>
           <Icon name="chevron" size={14} />
         </button>
@@ -2654,6 +2660,12 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
       {tab === "styles" && (
         <div className="dock-body" key="styles">
           <GraphicStylesPanel doc={doc} store={store} ids={ids} onSay={onToast} />
+        </div>
+      )}
+
+      {tab === "symbols" && (
+        <div className="dock-body" key="symbols">
+          <SymbolsPanel doc={doc} store={store} ids={ids} onSay={onToast} onSelect={onSelect} />
         </div>
       )}
 
@@ -3018,6 +3030,33 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       </>
                     )}
                   </div>
+                </section>
+              )}
+
+              {single.kind === "symbol" && (
+                <section className="dock-sec">
+                  <div className="dock-sec-head">
+                    <span>链接符号</span>
+                    <em className="faint">{symbolById(doc, single.symbolId)?.name ?? "缺失定义"}</em>
+                  </div>
+                  <p className="dock-note">
+                    实例跟随定义同步：修改符号后所有实例一起换图。共 {symbolUsage(doc, single.symbolId)} 个实例。
+                  </p>
+                  <button
+                    className="gs-btn"
+                    type="button"
+                    disabled={!symbolById(doc, single.symbolId)}
+                    onClick={() => {
+                      let gid: string | null = null;
+                      store.commit((d) => { gid = expandSymbolInstance(d, single.id); });
+                      if (gid) {
+                        onSelect([gid]);
+                        onToast(zh.dock.symbolExpand);
+                      }
+                    }}
+                  >
+                    {zh.dock.symbolUnlink}
+                  </button>
                 </section>
               )}
 
@@ -3596,6 +3635,7 @@ function kindLabel(n: Node): string {
   if (n.kind === "path") return "路径";
   if (n.kind === "text") return "文本";
   if (n.kind === "image") return "图片";
+  if (n.kind === "symbol") return "符号";
   return "组";
 }
 
@@ -3633,6 +3673,7 @@ function kindGlyph(n: Node): string {
   if (n.kind === "path") return "P";
   if (n.kind === "text") return "T";
   if (n.kind === "image") return "I";
+  if (n.kind === "symbol") return "S";
   return "G";
 }
 

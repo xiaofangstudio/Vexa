@@ -256,7 +256,35 @@ export interface GroupNode {
   tag?: LayerTag;
 }
 
-export type Node = PathNode | TextNode | ImageNode | GroupNode;
+/** 符号实例：引用文档级 SymbolDef，按 x/y/w/h 缩放绘制；改定义后所有实例同步。 */
+export interface SymbolNode {
+  kind: "symbol";
+  id: string;
+  name: string;
+  symbolId: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  opacity: number;
+  visible: boolean;
+  locked: boolean;
+  blend?: BlendMode;
+  /** 图层颜色标记，仅用于图层面板分组和筛选。 */
+  tag?: LayerTag;
+}
+
+/** 符号定义：保存一份独立坐标系的 artwork，实例只引用它。 */
+export interface SymbolDef {
+  id: string;
+  name: string;
+  w: number;
+  h: number;
+  nodes: Record<string, Node>;
+  root: string[];
+}
+
+export type Node = PathNode | TextNode | ImageNode | GroupNode | SymbolNode;
 
 export interface Artboard {
   id: string;
@@ -282,6 +310,8 @@ export interface VexaDoc {
   swatches?: Swatch[];
   /** 文档级图形样式；老工程可缺省。 */
   styles?: GraphicStyle[];
+  /** 文档级符号定义；老工程可缺省。 */
+  symbols?: SymbolDef[];
 }
 
 export const solid = (color: string, opacity = 1): Paint => ({ kind: "solid", color, opacity });

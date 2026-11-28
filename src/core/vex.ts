@@ -5,6 +5,7 @@ import { normalizeGradStops } from "./paint";
 import { normalizeWidthPoints } from "./width";
 import { normalizeSwatches } from "./swatches";
 import { normalizeGraphicStyles } from "./graphicStyles";
+import { normalizeSymbols } from "./symbols";
 
 export interface VexFile {
   format: "vexa";
@@ -42,7 +43,10 @@ export function parseVex(text: string): VexaDoc {
   const swatchIds = new Set(doc.swatches.map((s) => s.id));
   doc.styles = normalizeGraphicStyles(doc.styles, swatchIds);
   const styleIds = new Set(doc.styles.map((s) => s.id));
+  doc.symbols = normalizeSymbols(doc.symbols);
+  const symbolIds = new Set(doc.symbols.map((s) => s.id));
   const layerTagIds = new Set(LAYER_TAGS.map((t) => t.id));
+  const danglingSymbols: string[] = [];
   for (const [id, n] of Object.entries(doc.nodes as Record<string, Node>)) {
     if (!n.id) n.id = id;
     if (n.visible === undefined) n.visible = true;
@@ -51,6 +55,13 @@ export function parseVex(text: string): VexaDoc {
     if (n.blend && !BLEND_MODES.includes(n.blend)) delete n.blend;
     if (n.tag !== undefined && !layerTagIds.has(n.tag)) delete n.tag;
     if ((n.kind === "path" || n.kind === "text") && n.graphicStyle && !styleIds.has(n.graphicStyle)) delete n.graphicStyle;
+    if (n.kind === "symbol") {
+      if (!symbolIds.has(n.symbolId)) danglingSymbols.push(n.id);
+      if (!Number.isFinite(n.x)) n.x = 0;
+      if (!Number.isFinite(n.y)) n.y = 0;
+      if (!Number.isFinite(n.w) || n.w <= 0) n.w = 1;
+      if (!Number.isFinite(n.h) || n.h <= 0) n.h = 1;
+    }
     if (n.kind === "group" && n.clip && !doc.nodes[n.clip]) delete n.clip;
     if (n.kind === "path" || n.kind === "text") {
       if (!n.fill || typeof n.fill !== "object") n.fill = { kind: "none", color: "#000000", opacity: 1 };
@@ -150,6 +161,13 @@ export function parseVex(text: string): VexaDoc {
         if (points.length >= 2) n.stroke.widthPoints = points;
         else delete n.stroke.widthPoints;
       }
+    }
+  }
+  for (const id of danglingSymbols) {
+    delete doc.nodes[id];
+    doc.root = doc.root.filter((r) => r !== id);
+    for (const n of Object.values(doc.nodes)) {
+      if (n.kind === "group") n.children = n.children.filter((c) => c !== id);
     }
   }
   return doc;

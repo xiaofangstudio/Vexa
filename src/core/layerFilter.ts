@@ -31,6 +31,7 @@ export function layerKindName(n: Node): string {
   if (n.kind === "path") return "路径";
   if (n.kind === "text") return "文本";
   if (n.kind === "image") return "图片";
+  if (n.kind === "symbol") return "符号";
   return "组";
 }
 

@@ -757,6 +757,7 @@ export function nodeBox(node: Node): Box {
   if (node.kind === "path") return boxOfPoints(pathPoints(node));
   if (node.kind === "text") return textBox(node);
   if (node.kind === "image") return { x: node.x, y: node.y, w: node.w, h: node.h };
+  if (node.kind === "symbol") return { x: node.x, y: node.y, w: node.w, h: node.h };
   return { x: 0, y: 0, w: 0, h: 0 };
 }
 

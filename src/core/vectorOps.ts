@@ -220,7 +220,7 @@ export function translateNode(doc: VexaDoc, n: Node, dx: number, dy: number): vo
         }
       }
     }
-  } else if (n.kind === "text" || n.kind === "image") {
+  } else if (n.kind === "text" || n.kind === "image" || n.kind === "symbol") {
     n.x += dx;
     n.y += dy;
   } else if (n.kind === "group") {
@@ -313,6 +313,11 @@ export function scaleNodes(doc: VexaDoc, ids: string[], box: Box, sx: number, sy
       n.y = oy + (n.y - oy) * sy;
       n.w *= sx;
       n.h *= sy;
+    } else if (n.kind === "symbol") {
+      n.x = ox + (n.x - ox) * sx;
+      n.y = oy + (n.y - oy) * sy;
+      n.w = Math.max(1, n.w * sx);
+      n.h = Math.max(1, n.h * sy);
     } else if (n.kind === "text") {
       n.x = ox + (n.x - ox) * sx;
       n.y = oy + (n.y - oy) * sy;

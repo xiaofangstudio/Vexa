@@ -217,6 +217,19 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
   if (node.kind === "image") {
     return `${indent}<image x="${round(node.x)}" y="${round(node.y)}" width="${round(node.w)}" height="${round(node.h)}" href="${esc(node.src)}"${op}${blend}/>\n`;
   }
+  if (node.kind === "symbol") {
+    const def = doc.symbols?.find((s) => s.id === node.symbolId);
+    if (!def) return "";
+    const symId = `sym${seq.n++}`;
+    const tempDoc: VexaDoc = { ...doc, nodes: def.nodes, root: def.root };
+    const body = def.root
+      .map((id) => def.nodes[id])
+      .filter((n): n is Node => !!n)
+      .map((n) => nodeSVG(tempDoc, n, "    ", defs, seq))
+      .join("");
+    defs.push(`    <symbol id="${symId}" viewBox="0 0 ${round(def.w)} ${round(def.h)}">\n${body}    </symbol>`);
+    return `${indent}<use href="#${symId}" xlink:href="#${symId}" x="${round(node.x)}" y="${round(node.y)}" width="${round(node.w)}" height="${round(node.h)}"${op}${blend}/>\n`;
+  }
   let clipAttr = "";
   const clipNode = node.clip ? doc.nodes[node.clip] : undefined;
   if (clipNode && clipNode.kind === "path") {

@@ -369,11 +369,19 @@ class PdfBuilder {
 
   async prepareImages(boards: Artboard[]): Promise<void> {
     const srcs = new Set<string>();
-    const visit = (id: string) => {
-      const node = this.doc.nodes[id];
+    const visit = (node: Node, nodes: Record<string, Node>): void => {
       if (!node) return;
       if (node.kind === "image") srcs.add(node.src);
-      else if (node.kind === "group") for (const c of node.children) visit(c);
+      else if (node.kind === "group") for (const c of node.children) {
+        const child = nodes[c];
+        if (child) visit(child, nodes);
+      } else if (node.kind === "symbol") {
+        const def = this.doc.symbols?.find((s) => s.id === node.symbolId);
+        if (def) for (const id of def.root) {
+          const child = def.nodes[id];
+          if (child) visit(child, def.nodes);
+        }
+      }
     };
     for (const b of boards) for (const id of this.doc.root) {
       const node = this.doc.nodes[id];
@@ -381,7 +389,7 @@ class PdfBuilder {
       const box = node.kind === "group" ? groupBox(this.doc, node) : nodeBox(node);
       if (box.w <= 0 && box.h <= 0) continue;
       if (box.x > b.x + b.w || box.y > b.y + b.h || box.x + box.w < b.x || box.y + box.h < b.y) continue;
-      visit(id);
+      visit(node, this.doc.nodes);
     }
     for (const src of srcs) {
       if (this.images.has(src)) continue;
@@ -400,7 +408,7 @@ class PdfBuilder {
     if (!this.opts.fontLoader) return;
     const faces: Array<{ key: string; family: string; bold: boolean; italic: boolean }> = [];
     const seen = new Set<string>();
-    const visit = (n: Node) => {
+    const visit = (n: Node, nodes: Record<string, Node>): void => {
       if (n.kind === "text") {
         const key = `${n.font}|${!!n.bold}|${!!n.italic}`;
         if (!seen.has(key)) {
@@ -408,13 +416,19 @@ class PdfBuilder {
           faces.push({ key, family: n.font, bold: !!n.bold, italic: !!n.italic });
         }
       } else if (n.kind === "group") for (const id of n.children) {
-        const c = this.doc.nodes[id];
-        if (c) visit(c);
+        const c = nodes[id];
+        if (c) visit(c, nodes);
+      } else if (n.kind === "symbol") {
+        const def = this.doc.symbols?.find((s) => s.id === n.symbolId);
+        if (def) for (const id of def.root) {
+          const c = def.nodes[id];
+          if (c) visit(c, def.nodes);
+        }
       }
     };
     for (const id of this.doc.root) {
       const n = this.doc.nodes[id];
-      if (n) visit(n);
+      if (n) visit(n, this.doc.nodes);
     }
     for (const f of faces) {
       try {
@@ -464,6 +478,21 @@ class PdfBuilder {
       c.gs(alpha, blend);
       c.op(`${n(node.w)} 0 0 ${n(-node.h)} ${n(node.x)} ${n(node.y + node.h)} cm`);
       c.op(`/${name} Do`);
+      c.Q();
+      return;
+    }
+    if (node.kind === "symbol") {
+      const def = this.doc.symbols?.find((s) => s.id === node.symbolId);
+      if (!def) return;
+      c.q();
+      c.op(`${n(node.w / Math.max(1, def.w))} 0 0 ${n(node.h / Math.max(1, def.h))} ${n(node.x)} ${n(node.y)} cm`);
+      const saved = this.doc;
+      this.doc = { ...saved, nodes: def.nodes, root: def.root };
+      for (const id of def.root) {
+        const child = def.nodes[id];
+        if (child) this.drawNode(c, child, alpha, blend);
+      }
+      this.doc = saved;
       c.Q();
       return;
     }

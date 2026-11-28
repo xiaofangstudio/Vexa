@@ -459,6 +459,21 @@ function drawNode(
   } else if (node.kind === "image") {
     const img = getImage(node.src, onImage);
     if (img) ctx.drawImage(img, node.x, node.y, node.w, node.h);
+  } else if (node.kind === "symbol") {
+    const def = doc.symbols?.find((s) => s.id === node.symbolId);
+    if (def) {
+      const tempDoc: VexaDoc = { ...doc, nodes: def.nodes, root: def.root };
+      const sx = node.w / Math.max(1, def.w);
+      const sy = node.h / Math.max(1, def.h);
+      ctx.save();
+      ctx.translate(node.x, node.y);
+      ctx.scale(sx, sy);
+      for (const id of def.root) {
+        const child = def.nodes[id];
+        if (child) drawNode(ctx, tempDoc, child, onImage);
+      }
+      ctx.restore();
+    }
   } else {
     // 剪切蒙版：clip 子节点只提供裁切轮廓，本身不绘制
     const clipNode = node.clip ? doc.nodes[node.clip] : undefined;
