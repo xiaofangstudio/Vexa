@@ -355,6 +355,7 @@ export function verticalTextLayout(node: TextNode): VerticalTextLayout {
   const topY = box.y + inset;
   const maxBottom = box.y + box.h - inset;
   const used: number[] = new Array(cols).fill(topY);
+  const counts: number[] = new Array(cols).fill(0);
   let col = 0;
   let penY = topY;
 
@@ -375,17 +376,35 @@ export function verticalTextLayout(node: TextNode): VerticalTextLayout {
     penY += Math.max(0, node.firstIndent ?? 0);
     for (const ch of para) {
       const adv = verticalAdvance(node, ch);
+      let carry: VerticalTextChar | undefined;
       if (penY + adv > maxBottom + 0.01) {
+        if (node.kinsoku === true && col + 1 < cols && chars.length) {
+          const last = chars[chars.length - 1];
+          if (last.col === col && counts[col] > 1 && (KINSOKU_NO_START.has(ch) || KINSOKU_NO_END.has(last.ch))) {
+            carry = chars.pop();
+            counts[col]--;
+            penY = carry!.y;
+            used[col] = penY;
+          }
+        }
         col++;
         penY = topY;
         if (col >= cols) {
           overflow = true;
           break;
         }
+        if (carry) {
+          const cx = rightX - col * colStep;
+          chars.push({ ...carry, col, x: cx, y: penY });
+          counts[col]++;
+          penY += carry.advance;
+          used[col] = Math.max(used[col], penY);
+        }
       }
       const x = rightX - col * colStep;
       const adj = verticalGlyphOffset(ch, node.size);
       chars.push({ ch, x, y: penY, advance: adv, rotate: adj.rotate ?? !isVerticalUpright(ch), col, dx: adj.dx, dy: adj.dy });
+      counts[col]++;
       penY += adv;
       used[col] = Math.max(used[col], penY);
     }

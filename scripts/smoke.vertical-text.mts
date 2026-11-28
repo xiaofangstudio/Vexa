@@ -96,6 +96,25 @@ const topCol0 = unevenTop.chars.filter((c) => c.col === 0);
 assert.ok(bottomOf(col0) > bottomOf(topCol0) + 0.5, "短列被单独下移");
 assert.ok(bottomOf(unevenTop.chars.filter((c) => c.col === 0)) < bottomOf(unevenTop.chars.filter((c) => c.col === 1)), "顶对齐时两列底端不齐");
 
+const vkinBase: TextNode = {
+  ...area,
+  text: "一二三。四",
+  boxW: 100,
+  boxH: 110,
+  size: 26,
+  lineHeight: 1.25,
+};
+const vkinOff = verticalTextLayout(vkinBase);
+const offCol1 = vkinOff.chars.filter((c) => c.col === 1);
+assert.equal(offCol1[0].ch, "。", "未开启直排避头尾时句号落到新列顶部");
+const vkinOn = verticalTextLayout({ ...vkinBase, kinsoku: true });
+const onCol0 = vkinOn.chars.filter((c) => c.col === 0);
+const onCol1 = vkinOn.chars.filter((c) => c.col === 1);
+assert.equal(onCol0.length, 2, "直排避头尾把上一字一起推到下一列");
+assert.equal(onCol1[0].ch, "三", "上一字移到新列顶部");
+assert.equal(onCol1[1].ch, "。", "句号跟在上一字之后，不落列首");
+assert.ok(onCol1.every((c) => c.ch !== "。" || c.y > onCol1[0].y), "句号不在列顶");
+
 const doc: VexaDoc = createDoc("直排文字", 400, 300);
 const saved: TextNode = { ...point, text: "直排 A1" };
 doc.nodes.t1 = saved;
