@@ -605,6 +605,34 @@ class PdfBuilder {
     }
   }
 
+  /** 叠加外观：底层画完后按栈顺序逐项绘制，复用同一套填充/描边路径语义。 */
+  private drawAppearance(c: Content, node: PathNode, alpha: number, blend: string): void {
+    for (const item of node.appearance ?? []) {
+      if (!item.visible || item.opacity <= 0) continue;
+      const itemAlpha = alpha * item.opacity;
+      if (item.kind === "fill" && item.fill && item.fill.kind !== "none") {
+        this.drawPath(
+          c,
+          { ...node, fill: item.fill, stroke: { ...node.stroke, kind: "none", brushId: undefined }, appearance: undefined },
+          itemAlpha,
+          blend,
+        );
+      } else if (item.kind === "stroke" && item.stroke && item.stroke.kind !== "none" && item.stroke.width > 0) {
+        this.drawPath(
+          c,
+          {
+            ...node,
+            fill: { kind: "none", color: "#000000", opacity: 1 },
+            stroke: { ...item.stroke, brushId: undefined },
+            appearance: undefined,
+          },
+          itemAlpha,
+          blend,
+        );
+      }
+    }
+  }
+
   private drawPath(c: Content, node: PathNode, alpha: number, blend: string, noBrush = false): void {
     const box = nodeBox(node);
     const fill = node.fill;
@@ -653,6 +681,7 @@ class PdfBuilder {
         c.op("f");
         c.Q();
       }
+      this.drawAppearance(c, node, alpha, blend);
       return;
     }
     if (brush && brushTile) {
@@ -673,6 +702,7 @@ class PdfBuilder {
         c.Q();
       }
       this.doc = saved;
+      this.drawAppearance(c, node, alpha, blend);
       return;
     }
     if (stroke && stroke.kind !== "none" && stroke.width > 0) {
@@ -703,6 +733,7 @@ class PdfBuilder {
       }
       if (stroke.arrow && stroke.arrow !== "none") this.drawArrow(c, node, strokeAlpha, blend);
     }
+    this.drawAppearance(c, node, alpha, blend);
   }
 
   private gradientFill(c: Content, node: PathNode, box: Box, alpha: number, blend: string): void {

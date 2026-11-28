@@ -69,6 +69,7 @@ import GraphicStylesPanel from "./GraphicStylesPanel";
 import SymbolsPanel from "./SymbolsPanel";
 import PatternsPanel from "./PatternsPanel";
 import BrushesPanel from "./BrushesPanel";
+import AppearancePanel from "./AppearancePanel";
 import { expandSymbolInstance, symbolById, symbolUsage } from "../core/symbols";
 import { patternById } from "../core/patterns";
 import { brushById } from "../core/brushes";
@@ -377,7 +378,7 @@ export default function EditorShell(props: Props) {
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View | null>(null);
   const [space, setSpace] = useState(false);
-  const [tab, setTab] = useState<"props" | "layers" | "styles" | "symbols" | "patterns" | "brushes">("props");
+  const [tab, setTab] = useState<"props" | "layers" | "styles" | "symbols" | "patterns" | "brushes" | "appearance">("props");
   const [dockOpen, setDockOpen] = useState(true);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [ctxShift, setCtxShift] = useState(0);
@@ -1654,6 +1655,7 @@ export default function EditorShell(props: Props) {
         { label: "打开符号面板", run: () => { setTab("symbols"); setDockOpen(true); } },
         { label: "打开图案面板", run: () => { setTab("patterns"); setDockOpen(true); } },
         { label: "打开画笔面板", run: () => { setTab("brushes"); setDockOpen(true); } },
+        { label: "打开外观面板", run: () => { setTab("appearance"); setDockOpen(true); } },
         { label: "文档色板…", run: () => setSwatchesOpen(true) },
         { label: "", sep: true },
         { label: "恢复默认工作区", run: () => { setTab("props"); setDockOpen(true); fit(); } },
@@ -2184,8 +2186,8 @@ export default function EditorShell(props: Props) {
 interface DockProps {
   doc: VexaDoc;
   ids: string[];
-  tab: "props" | "layers" | "styles" | "symbols" | "patterns" | "brushes";
-  onTab: (t: "props" | "layers" | "styles" | "symbols" | "patterns" | "brushes") => void;
+  tab: "props" | "layers" | "styles" | "symbols" | "patterns" | "brushes" | "appearance";
+  onTab: (t: "props" | "layers" | "styles" | "symbols" | "patterns" | "brushes" | "appearance") => void;
   store: ReturnType<typeof useDocStore>;
   onSelect: (ids: string[]) => void;
   onToast: (msg: string) => void;
@@ -2664,6 +2666,9 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
         <button className={"dock-tab" + (tab === "brushes" ? " is-on" : "")} onClick={() => onTab("brushes")}>
           <Icon name="pencil" size={14} /> {zh.dock.brushes}
         </button>
+        <button className={"dock-tab" + (tab === "appearance" ? " is-on" : "")} onClick={() => onTab("appearance")}>
+          <Icon name="layers" size={14} /> {zh.dock.appearancePanel}
+        </button>
         <button type="button" className="dock-collapse" title="收起右侧面板" onClick={onCollapse}>
           <Icon name="chevron" size={14} />
         </button>
@@ -2690,6 +2695,12 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
       {tab === "brushes" && (
         <div className="dock-body" key="brushes">
           <BrushesPanel doc={doc} store={store} ids={ids} onSay={onToast} />
+        </div>
+      )}
+
+      {tab === "appearance" && (
+        <div className="dock-body" key="appearance">
+          <AppearancePanel doc={doc} store={store} ids={ids} onSay={onToast} />
         </div>
       )}
 

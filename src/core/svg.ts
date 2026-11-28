@@ -165,6 +165,25 @@ function strokeAttrs(stroke: Stroke, defs: string[], id: string): string {
   return s;
 }
 
+/** 路径叠加外观：底层元素之后按栈顺序追加，独立透明度；描边不参与画笔盖章。 */
+function appearanceSVG(doc: VexaDoc, node: PathNode, indent: string, defs: string[], seq: { n: number }): string {
+  const rows: string[] = [];
+  for (const item of node.appearance ?? []) {
+    if (!item.visible || item.opacity <= 0) continue;
+    const op = item.opacity < 1 ? ` opacity="${round(item.opacity)}"` : "";
+    if (item.kind === "fill" && item.fill && item.fill.kind !== "none") {
+      const id = `g${seq.n++}`;
+      const fill = fillAttrs(item.fill, nodeBBox(node), defs, id, doc, seq);
+      rows.push(`${indent}<path d="${pathD(node)}"${fill}${op}/>`);
+    } else if (item.kind === "stroke" && item.stroke && item.stroke.kind !== "none" && item.stroke.width > 0) {
+      const id = `s${seq.n++}`;
+      const stroke = strokeAttrs({ ...item.stroke, arrow: "none" }, defs, id);
+      rows.push(`${indent}<path d="${pathD(node)}" fill="none"${stroke}${op}/>`);
+    }
+  }
+  return rows.length ? `\n${rows.join("\n")}` : "";
+}
+
 function textDecorationSVG(node: TextNode, lay: ReturnType<typeof textLayout>, indent: string): string {
   if (node.fill.kind === "none") return "";
   const lines = textDecorationLines(node, lay);
@@ -186,6 +205,7 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
     const fill = fillAttrs(node.fill, nodeBBox(node), defs, id, doc, seq);
     const brush = !noBrush && node.stroke.brushId ? brushById(doc, node.stroke.brushId) : undefined;
     const brushTile = brushPattern(doc, brush);
+    const extra = appearanceSVG(doc, node, indent, defs, seq);
     if (brush && brush.kind === "calligraphic") {
       const body = calligraphyStamps(node, brush)
         .map(
@@ -193,7 +213,7 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
             `${indent}    <ellipse cx="${round(st.x)}" cy="${round(st.y)}" rx="${round(st.rx)}" ry="${round(st.ry)}" transform="rotate(${round((st.angle * 180) / Math.PI)} ${round(st.x)} ${round(st.y)})"/>`,
         )
         .join("\n");
-      return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <g fill="${node.stroke.color}" fill-opacity="${round(node.stroke.opacity)}">\n${body}\n${indent}  </g>\n${indent}</g>\n`;
+      return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <g fill="${node.stroke.color}" fill-opacity="${round(node.stroke.opacity)}">\n${body}\n${indent}  </g>\n${indent}</g>\n${extra}`;
     }
     if (brush && brushTile) {
       const tileDoc: VexaDoc = { ...doc, nodes: brushTile.nodes, root: brushTile.root };
@@ -213,15 +233,15 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
           return `${indent}  <g transform="translate(${round(st.x)} ${round(st.y)}) rotate(${deg}) scale(${round(st.sx)} ${round(st.sy)}) translate(${round(-brushTile.w / 2)} ${round(-brushTile.h / 2)})">\n${clipDef}${inner}${indent}  </g>`;
         })
         .join("\n");
-      return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <g opacity="${round(node.stroke.opacity)}">\n${body}\n${indent}  </g>\n${indent}</g>\n`;
+      return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <g opacity="${round(node.stroke.opacity)}">\n${body}\n${indent}  </g>\n${indent}</g>\n${extra}`;
     }
     const outline = widthOutline(node);
     if (outline && outline.length) {
-      return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <path d="${loopsD(outline)}" fill="${node.stroke.color}" fill-opacity="${round(node.stroke.opacity)}"/>\n${indent}</g>\n`;
+      return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <path d="${loopsD(outline)}" fill="${node.stroke.color}" fill-opacity="${round(node.stroke.opacity)}"/>\n${indent}</g>\n${extra}`;
     }
     const hasOpen = node.subpaths.some((s) => !s.closed && s.anchors.length > 1);
     const stroke = strokeAttrs(hasOpen ? node.stroke : { ...node.stroke, arrow: "none" }, defs, `a${id}`);
-    return `${indent}<path d="${pathD(node)}"${fill}${stroke}${op}${blend}/>\n`;
+    return `${indent}<path d="${pathD(node)}"${fill}${stroke}${op}${blend}/>\n${extra}`;
   }
   if (node.kind === "text") {
     const lay = textLayout(node);

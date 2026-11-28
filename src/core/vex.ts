@@ -8,6 +8,7 @@ import { normalizeGraphicStyles } from "./graphicStyles";
 import { normalizeSymbols } from "./symbols";
 import { cleanPatternLinks, normalizePatterns } from "./patterns";
 import { cleanBrushLinks, normalizeBrushes } from "./brushes";
+import { normalizeAppearance } from "./appearance";
 
 export interface VexFile {
   format: "vexa";
@@ -176,5 +177,6 @@ export function parseVex(text: string): VexaDoc {
   }
   cleanPatternLinks(doc);
   cleanBrushLinks(doc);
+  normalizeAppearance(doc);
   return doc;
 }

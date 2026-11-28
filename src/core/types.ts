@@ -163,6 +163,21 @@ export const LAYER_TAGS: Array<{ id: LayerTag; label: string; color: string }> =
   { id: "purple", label: "紫", color: "#8b6bb3" },
 ];
 
+export type AppearanceKind = "fill" | "stroke";
+
+/** 路径叠加外观：底层填充/描边之上再叠一层，可单独显隐、调透明度与排序。 */
+export interface AppearanceItem {
+  id: string;
+  kind: AppearanceKind;
+  /** 填充项使用；描边项为空。 */
+  fill?: Paint;
+  /** 描边项使用；不参与画笔盖章。 */
+  stroke?: Stroke;
+  /** 该项自身不透明度，0–1。 */
+  opacity: number;
+  visible: boolean;
+}
+
 export interface PathNode {
   kind: "path";
   id: string;
@@ -170,6 +185,8 @@ export interface PathNode {
   subpaths: SubPath[];
   fill: Paint;
   stroke: Stroke;
+  /** 叠加在底层填充/描边之上的外观栈，最多 8 项；底层始终先绘制。 */
+  appearance?: AppearanceItem[];
   /** 链接的图形样式 id；样式面板更新时同步外观。 */
   graphicStyle?: string;
   opacity: number;

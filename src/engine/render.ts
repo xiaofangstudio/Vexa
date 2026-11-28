@@ -399,6 +399,92 @@ function drawArrow(ctx: CanvasRenderingContext2D, node: PathNode): void {
   }
 }
 
+function drawPathStroke(
+  ctx: CanvasRenderingContext2D,
+  doc: VexaDoc,
+  node: PathNode,
+  onImage: () => void,
+  noBrush = false,
+  stroke = node.stroke,
+): void {
+  if (!((stroke.kind !== "none" && stroke.width > 0) || stroke.brushId)) return;
+  ctx.save();
+  ctx.globalAlpha *= stroke.opacity;
+  const brush = !noBrush && stroke.brushId ? brushById(doc, stroke.brushId) : undefined;
+  const pattern = brushPattern(doc, brush);
+  const painted = { ...node, stroke };
+  if (brush && brush.kind === "calligraphic") {
+    ctx.fillStyle = stroke.color;
+    for (const st of calligraphyStamps(node, brush)) {
+      ctx.save();
+      ctx.translate(st.x, st.y);
+      ctx.rotate(st.angle);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, st.rx, st.ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  } else if (brush && pattern) {
+    const tileDoc: VexaDoc = { ...doc, nodes: pattern.nodes, root: pattern.root };
+    for (const stamp of brushStamps(doc, node, brush)) {
+      ctx.save();
+      ctx.translate(stamp.x, stamp.y);
+      ctx.rotate(stamp.angle);
+      ctx.scale(stamp.sx, stamp.sy);
+      ctx.translate(-pattern.w / 2, -pattern.h / 2);
+      if (stamp.slice) {
+        ctx.beginPath();
+        ctx.rect(stamp.slice.x, 0, stamp.slice.w, pattern.h);
+        ctx.clip();
+      }
+      for (const id of pattern.root) {
+        const child = pattern.nodes[id];
+        if (child) drawNode(ctx, tileDoc, child, onImage, undefined, undefined, false, true);
+      }
+      ctx.restore();
+    }
+  } else {
+    const outline = widthOutline(painted);
+    if (outline) {
+      ctx.fillStyle = stroke.color;
+      ctx.beginPath();
+      loopsToPath(ctx, outline);
+      ctx.fill("nonzero");
+    } else {
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+      ctx.lineJoin = stroke.join ?? "miter";
+      ctx.lineCap = stroke.cap ?? "butt";
+      ctx.setLineDash(stroke.dash);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    drawArrow(ctx, painted);
+  }
+  ctx.restore();
+}
+
+/** 叠加外观：底层填充/描边绘制完之后，按数组顺序自底向上叠放。 */
+function drawAppearance(ctx: CanvasRenderingContext2D, doc: VexaDoc, node: PathNode, onImage: () => void): void {
+  for (const item of node.appearance ?? []) {
+    if (!item.visible || item.opacity <= 0) continue;
+    ctx.save();
+    ctx.globalAlpha *= item.opacity;
+    if (item.kind === "fill") {
+      if (item.fill && item.fill.kind !== "none") {
+        ctx.beginPath();
+        nodeToPath(ctx, node);
+        ctx.globalAlpha *= item.fill.opacity;
+        ctx.fillStyle = fillPaint(ctx, doc, item.fill, nodeBox(node));
+        ctx.fill();
+      }
+    } else if (item.stroke) {
+      drawPathStroke(ctx, doc, node, onImage, true, item.stroke);
+    }
+    ctx.restore();
+  }
+}
+
 function drawNode(
   ctx: CanvasRenderingContext2D,
   doc: VexaDoc,
@@ -423,59 +509,8 @@ function drawNode(
       ctx.fill();
       ctx.globalAlpha /= node.fill.opacity || 1;
     }
-    if ((node.stroke.kind !== "none" && node.stroke.width > 0) || node.stroke.brushId) {
-      ctx.globalAlpha *= node.stroke.opacity;
-      const brush = !noBrush && node.stroke.brushId ? brushById(doc, node.stroke.brushId) : undefined;
-      const pattern = brushPattern(doc, brush);
-      if (brush && brush.kind === "calligraphic") {
-        ctx.fillStyle = node.stroke.color;
-        for (const st of calligraphyStamps(node, brush)) {
-          ctx.save();
-          ctx.translate(st.x, st.y);
-          ctx.rotate(st.angle);
-          ctx.beginPath();
-          ctx.ellipse(0, 0, st.rx, st.ry, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.restore();
-        }
-      } else if (brush && pattern) {
-        const tileDoc: VexaDoc = { ...doc, nodes: pattern.nodes, root: pattern.root };
-        for (const stamp of brushStamps(doc, node, brush)) {
-          ctx.save();
-          ctx.translate(stamp.x, stamp.y);
-          ctx.rotate(stamp.angle);
-          ctx.scale(stamp.sx, stamp.sy);
-          ctx.translate(-pattern.w / 2, -pattern.h / 2);
-          if (stamp.slice) {
-            ctx.beginPath();
-            ctx.rect(stamp.slice.x, 0, stamp.slice.w, pattern.h);
-            ctx.clip();
-          }
-          for (const id of pattern.root) {
-            const child = pattern.nodes[id];
-            if (child) drawNode(ctx, tileDoc, child, onImage, undefined, undefined, false, true);
-          }
-          ctx.restore();
-        }
-      } else {
-        const outline = widthOutline(node);
-        if (outline) {
-          ctx.fillStyle = node.stroke.color;
-          ctx.beginPath();
-          loopsToPath(ctx, outline);
-          ctx.fill("nonzero");
-        } else {
-          ctx.strokeStyle = node.stroke.color;
-          ctx.lineWidth = node.stroke.width;
-          ctx.lineJoin = node.stroke.join ?? "miter";
-          ctx.lineCap = node.stroke.cap ?? "butt";
-          ctx.setLineDash(node.stroke.dash);
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-        drawArrow(ctx, node);
-      }
-    }
+    drawPathStroke(ctx, doc, node, onImage, noBrush);
+    drawAppearance(ctx, doc, node, onImage);
   } else if (node.kind === "text") {
     if (node.fill.kind !== "none") {
       const lay = textLayout(node);
