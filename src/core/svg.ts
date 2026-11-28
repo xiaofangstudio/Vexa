@@ -245,61 +245,77 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
   }
   if (node.kind === "text") {
     const lay = textLayout(node);
-    const fill = fillAttrs(node.fill, nodeBBox(node), defs, `g${seq.n++}`, doc, seq);
     const hs = (node.hScale ?? 100) / 100 || 1;
     const vs = (node.vScale ?? 100) / 100 || 1;
     const tracking = node.tracking ? ` letter-spacing="${round(node.tracking)}"` : "";
     const weight = node.bold ? ` font-weight="700"` : "";
     const style = node.italic ? ` font-style="italic"` : "";
-    if (lay.mode === "path") {
-      const chars = (lay.path?.chars ?? []).filter((c) => c.ch.trim());
-      const body = chars
-        .map((c) => {
-          const deg = round((c.angle * 180) / Math.PI);
-          return `${indent}  <text transform="translate(${round(c.x)} ${round(c.y)}) rotate(${deg}) scale(${round(hs)} ${round(vs)})" xml:space="preserve">${esc(c.ch)}</text>`;
-        })
-        .join("\n");
-      return `${indent}<g${fill}${op}${blend} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style} text-anchor="start">\n${body}\n${indent}</g>\n`;
-    }
-    if (lay.vertical) {
-      const clipId = lay.mode === "area" ? `tc${seq.n++}` : "";
-      if (clipId) {
-        defs.push(
-          `<clipPath id="${clipId}"><rect x="${round(lay.box.x)}" y="${round(lay.box.y)}" width="${round(lay.box.w)}" height="${round(lay.box.h)}"/></clipPath>`,
-        );
-      }
-      const body = lay.vertical.chars
-        .filter((c) => c.ch.trim())
-        .map((c) => {
-          const t = `translate(${round(c.x + (c.dx ?? 0))} ${round(c.y + c.advance / 2 + (c.dy ?? 0))})${c.rotate ? " rotate(90)" : ""} scale(${round(hs)} ${round(vs)})`;
-          return `${indent}  <text transform="${t}" text-anchor="middle" dominant-baseline="central" xml:space="preserve">${esc(c.ch)}</text>`;
-        })
-        .join("\n");
-      const decor = textDecorationSVG(node, lay, `${indent}  `);
-      const open = clipId ? `${indent}<g clip-path="url(#${clipId})">\n${indent}<g` : `${indent}<g`;
-      return `${open}${fill}${op}${blend} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}>\n${body}${decor ? `\n${decor}` : ""}\n${indent}</g>${clipId ? `\n${indent}</g>` : ""}\n`;
-    }
-    if (lay.mode === "area") {
-      const clipId = `tc${seq.n++}`;
+    const box = nodeBBox(node);
+    const clipId = lay.mode === "area" ? `tc${seq.n++}` : "";
+    if (clipId) {
       defs.push(
         `<clipPath id="${clipId}"><rect x="${round(lay.box.x)}" y="${round(lay.box.y)}" width="${round(lay.box.w)}" height="${round(lay.box.h)}"/></clipPath>`,
       );
-      const body = lay.lines
-        .map((l) => `${indent}  <tspan x="${round(l.x / hs)}" y="${round(l.baseline / vs)}">${esc(l.text)}</tspan>`)
-        .join("\n");
-      const decor = textDecorationSVG(node, lay, `${indent}  `);
-      return `${indent}<g clip-path="url(#${clipId})"${op}${blend}>\n${indent}<text transform="scale(${round(hs)} ${round(vs)})" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="start"${fill}>\n${body}\n${indent}</text>${decor ? `\n${decor}` : ""}\n${indent}</g>\n`;
     }
-    const body = lay.lines
-      .map((l, i) => `${indent}  <tspan x="0" dy="${i === 0 ? 0 : round(node.size * (node.lineHeight ?? 1.25))}">${esc(l.text)}</tspan>`)
+    const pathBody = lay.mode === "path"
+      ? (lay.path?.chars ?? [])
+          .filter((c) => c.ch.trim())
+          .map((c) => {
+            const deg = round((c.angle * 180) / Math.PI);
+            return `${indent}    <text transform="translate(${round(c.x)} ${round(c.y)}) rotate(${deg}) scale(${round(hs)} ${round(vs)})" xml:space="preserve">${esc(c.ch)}</text>`;
+          })
+          .join("\n")
+      : "";
+    const verticalBody = lay.vertical
+      ? lay.vertical.chars
+          .filter((c) => c.ch.trim())
+          .map((c) => {
+            const t = `translate(${round(c.x + (c.dx ?? 0))} ${round(c.y + c.advance / 2 + (c.dy ?? 0))})${c.rotate ? " rotate(90)" : ""} scale(${round(hs)} ${round(vs)})`;
+            return `${indent}    <text transform="${t}" text-anchor="middle" dominant-baseline="central" xml:space="preserve">${esc(c.ch)}</text>`;
+          })
+          .join("\n")
+      : "";
+    const horizontalBody = lay.lines
+      .map((l, i) => lay.mode === "area"
+        ? `${indent}    <tspan x="${round(l.x / hs)}" y="${round(l.baseline / vs)}">${esc(l.text)}</tspan>`
+        : `${indent}    <tspan x="0" dy="${i === 0 ? 0 : round(node.size * (node.lineHeight ?? 1.25))}">${esc(l.text)}</tspan>`)
       .join("\n");
     const scale = hs !== 1 || vs !== 1 ? ` scale(${round(hs)} ${round(vs)})` : "";
     const anchor = node.align === "center" ? "middle" : node.align === "right" ? "end" : "start";
-    const decor = textDecorationSVG(node, lay, `${indent}  `);
-    if (decor) {
-      return `${indent}<g${op}${blend}>\n${indent}  <text transform="translate(${round(node.x)} ${round(node.y - (node.baseline ?? 0))})${scale}" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="${anchor}"${fill}>\n${body}\n${indent}  </text>\n${decor}\n${indent}</g>\n`;
+    const decor = lay.mode === "path" ? "" : textDecorationSVG(node, lay, `${indent}    `);
+
+    const renderPass = (paint: Paint | null, stroke: Stroke | null, alpha: number, withDecor: boolean): string => {
+      const fill = paint ? fillAttrs(paint, box, defs, `g${seq.n++}`, doc, seq) : ` fill="none"`;
+      const strokeAttr = stroke ? strokeAttrs({ ...stroke, arrow: "none" }, defs, `a${seq.n++}`) : "";
+      const op2 = alpha < 1 ? ` opacity="${round(alpha)}"` : "";
+      if (lay.mode === "path") {
+        return `${indent}  <g${fill}${strokeAttr}${op2} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style} text-anchor="start">\n${pathBody}\n${indent}  </g>`;
+      }
+      if (lay.vertical) {
+        const body = `${indent}  <g${fill}${strokeAttr}${op2} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}>\n${verticalBody}${withDecor && decor ? `\n${decor}` : ""}\n${indent}  </g>`;
+        return clipId ? `${indent}  <g clip-path="url(#${clipId})">\n${body}\n${indent}  </g>` : body;
+      }
+      if (lay.mode === "area") {
+        const body = `${indent}  <text transform="scale(${round(hs)} ${round(vs)})" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="start"${fill}${strokeAttr}${op2}>\n${horizontalBody}\n${indent}  </text>`;
+        const inner = withDecor && decor
+          ? `${body}\n${decor}`
+          : body;
+        return `${indent}  <g clip-path="url(#${clipId})">\n${inner}\n${indent}  </g>`;
+      }
+      const text = `${indent}  <text transform="translate(${round(node.x)} ${round(node.y - (node.baseline ?? 0))})${scale}" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="${anchor}"${fill}${strokeAttr}${op2}>\n${horizontalBody}\n${indent}  </text>`;
+      if (withDecor && decor) {
+        return `${indent}  <g>\n${text}\n${decor}\n${indent}  </g>`;
+      }
+      return text;
+    };
+
+    const passes: string[] = [renderPass(node.fill.kind !== "none" ? node.fill : null, node.stroke ?? null, 1, node.fill.kind !== "none")];
+    for (const item of node.appearance ?? []) {
+      if (!item.visible || item.opacity <= 0) continue;
+      if (item.kind === "fill" && item.fill) passes.push(renderPass(item.fill, null, item.opacity, false));
+      else if (item.kind === "stroke" && item.stroke) passes.push(renderPass(null, item.stroke, item.opacity, false));
     }
-    return `${indent}<text transform="translate(${round(node.x)} ${round(node.y - (node.baseline ?? 0))})${scale}" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="${anchor}"${fill}${op}${blend}>\n${body}\n${indent}</text>\n`;
+    return `${indent}<g${op}${blend}>\n${passes.join("\n")}\n${indent}</g>\n`;
   }
   if (node.kind === "image") {
     return `${indent}<image x="${round(node.x)}" y="${round(node.y)}" width="${round(node.w)}" height="${round(node.h)}" href="${esc(node.src)}"${op}${blend}/>\n`;

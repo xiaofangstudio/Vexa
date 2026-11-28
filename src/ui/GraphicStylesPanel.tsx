@@ -115,7 +115,7 @@ export default function GraphicStylesPanel({ doc, store, ids, onSay }: Props) {
                 className={`gs-card${isActive ? " is-active" : ""}`}
                 role="button"
                 tabIndex={0}
-                title={`${s.name} · ${formatText(zh.dock.styleLinked, { n: use })}`}
+                title={`${s.name} · ${formatText(zh.dock.styleLinked, { n: use })}${s.appearance?.length ? ` · ${s.appearance.length} 层叠加外观` : ""}`}
                 onClick={() => apply(s.id)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -133,7 +133,7 @@ export default function GraphicStylesPanel({ doc, store, ids, onSay }: Props) {
                 />
                 <span className="gs-meta">
                   <b>{s.name}</b>
-                  <em>{formatText(zh.dock.styleLinked, { n: use })}</em>
+                  <em>{formatText(zh.dock.styleLinked, { n: use })}{s.appearance?.length ? ` · 外观 ${s.appearance.length}` : ""}</em>
                 </span>
                 <span className="gs-alpha">{Math.round(s.opacity * 100)}%</span>
                 <button

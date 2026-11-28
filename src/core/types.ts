@@ -67,7 +67,7 @@ export interface BrushDef {
   rev?: number;
 }
 
-/** 文档级图形样式：记录填充、描边、透明度与混合模式；套用后可继续更新链接对象。 */
+/** 文档级图形样式：记录填充、描边、透明度、混合模式与外观栈；套用后可继续更新链接对象。 */
 export interface GraphicStyle {
   id: string;
   name: string;
@@ -75,6 +75,8 @@ export interface GraphicStyle {
   stroke?: Stroke;
   opacity: number;
   blend?: BlendMode;
+  /** 叠加在底层填充/描边之上的外观栈，随样式捕获与套用。 */
+  appearance?: AppearanceItem[];
 }
 
 /** 宽度点：t 为沿子路径长度的比例；left / right 是相对描边宽度的倍数。 */
@@ -262,6 +264,10 @@ export interface TextNode {
   /** 直排标点挤压：收尾/起首标点的字格缩到 0.55em；缺省关闭。 */
   punctCompress?: boolean;
   fill: Paint;
+  /** 文字轮廓描边；未设置时文字只有填充。 */
+  stroke?: Stroke;
+  /** 叠加在底层填充/描边之上的外观栈，最多 8 项；底层始终先绘制。 */
+  appearance?: AppearanceItem[];
   /** 链接的图形样式 id；样式面板更新时同步外观。 */
   graphicStyle?: string;
   opacity: number;

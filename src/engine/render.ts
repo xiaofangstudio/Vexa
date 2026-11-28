@@ -512,89 +512,118 @@ function drawNode(
     drawPathStroke(ctx, doc, node, onImage, noBrush);
     drawAppearance(ctx, doc, node, onImage);
   } else if (node.kind === "text") {
-    if (node.fill.kind !== "none") {
-      const lay = textLayout(node);
-      const hs = (node.hScale ?? 100) / 100;
-      const vs = (node.vScale ?? 100) / 100;
-      const tracking = node.tracking ?? 0;
-      ctx.fillStyle = fillPaint(ctx, doc, node.fill, lay.box);
+    const lay = textLayout(node);
+    const hs = (node.hScale ?? 100) / 100;
+    const vs = (node.vScale ?? 100) / 100;
+    const tracking = node.tracking ?? 0;
+    const paintGlyphs = (paint: import("../core/types").Paint | null, stroke: import("../core/types").Stroke | null) => {
+      if (!paint && !stroke) return;
+      const stroking = !!stroke && stroke.kind !== "none" && stroke.width > 0;
+      const painting = !!paint && paint.kind !== "none";
+      if (!stroking && !painting) return;
+      ctx.save();
+      if (lay.mode === "area") {
+        ctx.beginPath();
+        ctx.rect(lay.box.x, lay.box.y, lay.box.w, lay.box.h);
+        ctx.clip();
+      }
       ctx.font = `${node.italic ? "italic " : ""}${node.bold ? "700 " : ""}${node.size}px ${node.font}`;
-      ctx.textBaseline = "alphabetic";
+      if (stroking) {
+        ctx.globalAlpha *= stroke.opacity ?? 1;
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.width;
+        ctx.lineCap = stroke.cap ?? "butt";
+        ctx.lineJoin = stroke.join ?? "miter";
+        ctx.setLineDash(stroke.dash ?? []);
+      } else if (painting) {
+        ctx.globalAlpha *= paint.opacity ?? 1;
+        ctx.fillStyle = fillPaint(ctx, doc, paint, lay.box);
+      }
+      const emit = (ch: string, x: number, y: number) => {
+        if (stroking) ctx.strokeText(ch, x, y);
+        else ctx.fillText(ch, x, y);
+      };
       if (lay.mode === "path") {
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
         for (const c of lay.path?.chars ?? []) {
           if (!c.ch.trim()) continue;
           ctx.save();
           ctx.translate(c.x, c.y);
           ctx.rotate(c.angle);
           ctx.scale(hs, vs);
-          ctx.fillText(c.ch, 0, 0);
+          emit(c.ch, 0, 0);
+          ctx.restore();
+        }
+      } else if (lay.vertical) {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        for (const c of lay.vertical.chars) {
+          if (!c.ch.trim()) continue;
+          ctx.save();
+          ctx.translate(c.x + (c.dx ?? 0), c.y + c.advance / 2 + (c.dy ?? 0));
+          if (c.rotate) ctx.rotate(Math.PI / 2);
+          ctx.scale(hs, vs);
+          emit(c.ch, 0, 0);
           ctx.restore();
         }
       } else {
-        ctx.save();
-        if (lay.mode === "area") {
-          ctx.beginPath();
-          ctx.rect(lay.box.x, lay.box.y, lay.box.w, lay.box.h);
-          ctx.clip();
-        }
-        if (lay.vertical) {
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          for (const c of lay.vertical.chars) {
-            if (!c.ch.trim()) continue;
-            ctx.save();
-            ctx.translate(c.x + (c.dx ?? 0), c.y + c.advance / 2 + (c.dy ?? 0));
-            if (c.rotate) ctx.rotate(Math.PI / 2);
-            ctx.scale(hs, vs);
-            ctx.fillText(c.ch, 0, 0);
-            ctx.restore();
-          }
-        } else {
-          ctx.textAlign = "left";
-          ctx.textBaseline = "alphabetic";
-          lay.lines.forEach((line) => {
-            const chars = Array.from(line.text);
-            const widths = chars.map((ch) => ctx.measureText(ch).width);
-            ctx.save();
-            ctx.translate(line.x, line.baseline);
-            ctx.scale(hs, vs);
-            if (tracking === 0) {
-              ctx.fillText(line.text, 0, 0);
-            } else {
-              let x = 0;
-              chars.forEach((ch, k) => {
-                ctx.fillText(ch, x, 0);
-                x += widths[k] + tracking;
-              });
-            }
-            ctx.restore();
-          });
-        }
-        ctx.restore();
-        const decor = textDecorationLines(node, lay);
-        if (decor.length) {
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        lay.lines.forEach((line) => {
+          const chars = Array.from(line.text);
+          const widths = chars.map((ch) => ctx.measureText(ch).width);
           ctx.save();
-          ctx.globalAlpha *= node.fill.opacity;
-          ctx.strokeStyle = node.fill.color;
-          ctx.lineWidth = 1;
-          ctx.lineCap = "butt";
-          for (const line of decor) {
-            ctx.lineWidth = line.thickness;
-            ctx.beginPath();
-            ctx.moveTo(line.x1, line.y1);
-            ctx.lineTo(line.x2, line.y2);
-            ctx.stroke();
+          ctx.translate(line.x, line.baseline);
+          ctx.scale(hs, vs);
+          if (tracking === 0) {
+            emit(line.text, 0, 0);
+          } else {
+            let x = 0;
+            chars.forEach((ch, k) => {
+              emit(ch, x, 0);
+              x += widths[k] + tracking;
+            });
           }
           ctx.restore();
-        }
-        if (lay.mode === "area" && lay.overflow) {
-          const ox = lay.box.x + lay.box.w - 11;
-          const oy = lay.box.y + lay.box.h - 11;
-          ctx.fillStyle = "#e5484d";
-          ctx.fillRect(ox - 3, oy - 0.6, 6, 1.2);
-          ctx.fillRect(ox - 0.6, oy - 3, 1.2, 6);
-        }
+        });
       }
+      ctx.restore();
+    };
+
+    paintGlyphs(node.fill.kind !== "none" ? node.fill : null, null);
+    if (node.stroke) paintGlyphs(null, node.stroke);
+    for (const item of node.appearance ?? []) {
+      if (!item.visible) continue;
+      ctx.save();
+      ctx.globalAlpha *= item.opacity;
+      if (item.kind === "fill" && item.fill) paintGlyphs(item.fill, null);
+      else if (item.kind === "stroke" && item.stroke) paintGlyphs(null, item.stroke);
+      ctx.restore();
+    }
+
+    const decor = textDecorationLines(node, lay);
+    if (decor.length && node.fill.kind !== "none") {
+      ctx.save();
+      ctx.globalAlpha *= node.fill.opacity;
+      ctx.strokeStyle = node.fill.color;
+      ctx.lineWidth = 1;
+      ctx.lineCap = "butt";
+      for (const line of decor) {
+        ctx.lineWidth = line.thickness;
+        ctx.beginPath();
+        ctx.moveTo(line.x1, line.y1);
+        ctx.lineTo(line.x2, line.y2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (lay.mode === "area" && lay.overflow) {
+      const ox = lay.box.x + lay.box.w - 11;
+      const oy = lay.box.y + lay.box.h - 11;
+      ctx.fillStyle = "#e5484d";
+      ctx.fillRect(ox - 3, oy - 0.6, 6, 1.2);
+      ctx.fillRect(ox - 0.6, oy - 3, 1.2, 6);
     }
   } else if (node.kind === "image") {
     const img = getImage(node.src, onImage);

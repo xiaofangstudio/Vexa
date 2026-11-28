@@ -3,7 +3,7 @@ import { create as createFont, type Font, type FontCollection, type Glyph } from
 import { zlibSync } from "fflate";
 import { AREA_INSET, nodeBox, pathTextLayout, textBox, textDecorationLines, textLayout, verticalTextLayout, type Box } from "./geom";
 import { gradLine, radialGeom, renderGradStops, stopAlpha } from "./paint";
-import type { Artboard, GradStop, Node, Paint, PathNode, TextNode, VexaDoc } from "./types";
+import type { Artboard, GradStop, Node, Paint, PathNode, Stroke, TextNode, VexaDoc } from "./types";
 import { widthOutline } from "./width";
 import { brushById, brushPattern, brushStamps, calligraphyStamps } from "./brushes";
 
@@ -755,7 +755,6 @@ class PdfBuilder {
   }
 
   private drawText(c: Content, node: TextNode, alpha: number, blend: string): void {
-    if (node.fill.kind === "none") return;
     const font = this.fontFor(node);
     if (!font) {
       this.warnings.push(`字体 ${node.font} 不可用，文字「${node.text.slice(0, 8)}」未写入 PDF`);
@@ -769,29 +768,23 @@ class PdfBuilder {
     if (!glyphs.ops.length) return;
     const box = textBox(node);
     const area = (node.textMode ?? "point") === "area";
-    const fillAlpha = alpha * (node.fill.opacity ?? 1);
     if (area) {
       c.q();
       c.clipRect(box.x, box.y, box.w, box.h);
     }
-    if (node.fill.kind === "linear" || node.fill.kind === "radial") {
-      this.gradientFillOps(c, glyphs.ops, node.fill, box, fillAlpha, blend);
-    } else if (node.fill.kind === "pattern" && this.patternFillOps(c, glyphs.ops, node.fill, fillAlpha, blend)) {
-      // 图案直接以字形轮廓为填充路径。
-    } else {
-      const col = parseColor(node.fill.color);
-      c.q();
-      c.gs(fillAlpha, blend);
-      c.path(glyphs.ops);
-      c.fillColor(col.r, col.g, col.b);
-      c.op("f");
-      c.Q();
+    if (node.fill.kind !== "none") this.textFillPass(c, glyphs.ops, node.fill, box, alpha, blend);
+    if (node.stroke) this.textStrokePass(c, glyphs.ops, node.stroke, alpha, blend);
+    for (const item of node.appearance ?? []) {
+      if (!item.visible || item.opacity <= 0) continue;
+      const a = alpha * item.opacity;
+      if (item.kind === "fill" && item.fill) this.textFillPass(c, glyphs.ops, item.fill, box, a, blend);
+      else if (item.kind === "stroke" && item.stroke) this.textStrokePass(c, glyphs.ops, item.stroke, a, blend);
     }
     const decor = textDecorationLines(node);
-    if (decor.length) {
+    if (decor.length && node.fill.kind !== "none") {
       const col = parseColor(node.fill.color);
       c.q();
-      c.gs(fillAlpha, blend);
+      c.gs(alpha * (node.fill.opacity ?? 1), blend);
       for (const line of decor) {
         const dx = line.x2 - line.x1;
         const dy = line.y2 - line.y1;
@@ -804,6 +797,36 @@ class PdfBuilder {
       c.Q();
     }
     if (area) c.Q();
+  }
+
+  private textFillPass(c: Content, ops: string[], paint: Paint, box: Box, alpha: number, blend: string): void {
+    if (paint.kind === "none" || alpha <= 0) return;
+    const fillAlpha = alpha * (paint.opacity ?? 1);
+    if (paint.kind === "linear" || paint.kind === "radial") {
+      this.gradientFillOps(c, ops, paint, box, fillAlpha, blend);
+    } else if (paint.kind === "pattern" && this.patternFillOps(c, ops, paint, fillAlpha, blend)) {
+      // 图案直接以字形轮廓为填充路径。
+    } else {
+      const col = parseColor(paint.color);
+      c.q();
+      c.gs(fillAlpha, blend);
+      c.path(ops);
+      c.fillColor(col.r, col.g, col.b);
+      c.op("f");
+      c.Q();
+    }
+  }
+
+  private textStrokePass(c: Content, ops: string[], stroke: Stroke, alpha: number, blend: string): void {
+    if (stroke.kind === "none" || stroke.width <= 0 || alpha <= 0) return;
+    const col = parseColor(stroke.color);
+    c.q();
+    c.gs(alpha * (stroke.opacity ?? 1), blend);
+    c.path(ops);
+    c.strokeSettings(stroke.width, stroke.cap ?? "butt", stroke.join ?? "miter", stroke.dash ?? []);
+    c.strokeColor(col.r, col.g, col.b);
+    c.op("S");
+    c.Q();
   }
 
   private fontFor(node: TextNode): { font: Font; bold: boolean; italic: boolean } | null {

@@ -1,6 +1,6 @@
-/** 外观面板：在路径底层填充/描边之上叠加多层填充与描边，可显隐、排序、调透明度。 */
+/** 外观面板：在路径/文字底层填充/描边之上叠加多层填充与描边，可显隐、排序、调透明度。 */
 import { zh } from "../i18n/zh";
-import type { AppearanceItem, PathNode, VexaDoc } from "../core/types";
+import type { AppearanceItem, Node, PathNode, TextNode, VexaDoc } from "../core/types";
 import {
   MAX_APPEARANCE,
   addAppearance,
@@ -10,12 +10,14 @@ import {
   updateAppearance,
 } from "../core/appearance";
 import type { DocStore } from "../stores/docStore";
+import { expandAppearance } from "../core/expandAppearance";
 
 interface Props {
   doc: VexaDoc;
   store: DocStore;
   ids: string[];
   onSay: (msg: string) => void;
+  onSelect: (ids: string[]) => void;
 }
 
 function formatText(template: string, values: Record<string, string | number>): string {
@@ -31,11 +33,11 @@ function paintPreview(color: string, kind: string): string {
 
 function AppearanceRow({
   item,
-  path,
+  nodeId,
   store,
 }: {
   item: AppearanceItem;
-  path: PathNode;
+  nodeId: string;
   store: DocStore;
 }) {
   const fill = item.kind === "fill" ? item.fill : undefined;
@@ -46,8 +48,8 @@ function AppearanceRow({
 
   const commit = (patch: Parameters<typeof updateAppearance>[2]) => {
     store.commit((d) => {
-      const node = d.nodes[path.id];
-      if (node?.kind === "path") updateAppearance(node, item.id, patch);
+      const node = d.nodes[nodeId];
+      if (node) updateAppearance(node, item.id, patch);
     });
   };
 
@@ -115,8 +117,8 @@ function AppearanceRow({
           aria-label={zh.dock.aprUp}
           onClick={() =>
             store.commit((d) => {
-              const node = d.nodes[path.id];
-              if (node?.kind === "path") moveAppearance(node, item.id, 1);
+              const node = d.nodes[nodeId];
+              if (node) moveAppearance(node, item.id, 1);
             })
           }
         >
@@ -128,8 +130,8 @@ function AppearanceRow({
           aria-label={zh.dock.aprDown}
           onClick={() =>
             store.commit((d) => {
-              const node = d.nodes[path.id];
-              if (node?.kind === "path") moveAppearance(node, item.id, -1);
+              const node = d.nodes[nodeId];
+              if (node) moveAppearance(node, item.id, -1);
             })
           }
         >
@@ -142,8 +144,8 @@ function AppearanceRow({
         aria-label={zh.dock.aprDelete}
         onClick={() => {
           store.commit((d) => {
-            const node = d.nodes[path.id];
-            if (node?.kind === "path") removeAppearance(node, item.id);
+            const node = d.nodes[nodeId];
+            if (node) removeAppearance(node, item.id);
           });
         }}
       >
@@ -153,26 +155,43 @@ function AppearanceRow({
   );
 }
 
-export default function AppearancePanel({ doc, store, ids, onSay }: Props) {
+export default function AppearancePanel({ doc, store, ids, onSay, onSelect }: Props) {
   const node = ids.length === 1 ? doc.nodes[ids[0]] : undefined;
-  const path = node?.kind === "path" ? node : undefined;
-  const items = path ? appearanceOf(path) : [];
+  const host: PathNode | TextNode | undefined = node?.kind === "path" || node?.kind === "text" ? node : undefined;
+  const items = host ? appearanceOf(host) : [];
   const count = items.length;
+  const baseStroke = host?.stroke;
 
   const add = (kind: "fill" | "stroke") => {
-    if (!path) return;
+    if (!host) return;
     let ok = false;
     let error = "";
     store.commit((d) => {
-      const hit = d.nodes[path.id];
-      if (hit?.kind === "path") {
-        const res = addAppearance(hit, kind);
-        ok = res.ok;
-        error = res.error ?? "";
-      }
+      const hit: Node | undefined = d.nodes[host.id];
+      if (!hit) return;
+      const res = addAppearance(hit, kind);
+      ok = res.ok;
+      error = res.error ?? "";
     });
     if (ok) onSay(formatText(zh.dock.aprAdded, { n: kind === "fill" ? zh.dock.aprFill : zh.dock.aprStroke }));
     else if (error) onSay(error);
+  };
+
+  const expand = () => {
+    if (!host || !count) return;
+    let groups: string[] = [];
+    let layers = 0;
+    store.commit((d) => {
+      const res = expandAppearance(d, [host.id]);
+      groups = res.groups;
+      layers = res.layers;
+    });
+    if (groups.length) {
+      onSelect(groups);
+      onSay(formatText(zh.dock.aprExpandDone, { n: groups.length, m: layers }));
+    } else {
+      onSay(zh.dock.aprEmptyStack);
+    }
   };
 
   return (
@@ -182,7 +201,7 @@ export default function AppearancePanel({ doc, store, ids, onSay }: Props) {
         <span className={"apr-count" + (count ? " has" : "")}>{count}/{MAX_APPEARANCE}</span>
       </div>
 
-      {!path ? (
+      {!host ? (
         <div className="apr-empty">{zh.dock.aprEmpty}</div>
       ) : (
         <>
@@ -193,14 +212,14 @@ export default function AppearancePanel({ doc, store, ids, onSay }: Props) {
               <span className="apr-type apr-type-fill">{zh.dock.aprFill}</span>
               <span
                 className="apr-swatch"
-                style={{ background: paintPreview(path.fill.color, path.fill.kind) }}
+                style={{ background: paintPreview(host.fill.color, host.fill.kind) }}
               />
               <span className="apr-base-meta">
-                {path.fill.kind === "none"
+                {host.fill.kind === "none"
                   ? zh.dock.none
-                  : path.fill.kind === "solid"
-                    ? path.fill.color.toUpperCase()
-                    : path.fill.kind === "pattern"
+                  : host.fill.kind === "solid"
+                    ? host.fill.color.toUpperCase()
+                    : host.fill.kind === "pattern"
                       ? zh.dock.patterns
                       : zh.dock.aprGradient}
               </span>
@@ -210,10 +229,10 @@ export default function AppearancePanel({ doc, store, ids, onSay }: Props) {
               <span className="apr-type apr-type-stroke">{zh.dock.aprStroke}</span>
               <span
                 className="apr-swatch"
-                style={{ background: paintPreview(path.stroke.color, path.stroke.kind) }}
+                style={{ background: baseStroke ? paintPreview(baseStroke.color, baseStroke.kind) : "transparent", borderStyle: baseStroke ? "solid" : "dashed" }}
               />
               <span className="apr-base-meta">
-                {path.stroke.kind === "none" || path.stroke.width <= 0 ? zh.dock.none : `${Math.round(path.stroke.width * 10) / 10} px`}
+                {!baseStroke || baseStroke.kind === "none" || baseStroke.width <= 0 ? zh.dock.none : `${Math.round(baseStroke.width * 10) / 10} px`}
               </span>
             </div>
           </div>
@@ -228,7 +247,7 @@ export default function AppearancePanel({ doc, store, ids, onSay }: Props) {
           ) : (
             <div className="apr-stack">
               {[...items].reverse().map((item) => (
-                <AppearanceRow key={item.id} item={item} path={path} store={store} />
+                <AppearanceRow key={item.id} item={item} nodeId={host.id} store={store} />
               ))}
             </div>
           )}
@@ -241,6 +260,9 @@ export default function AppearancePanel({ doc, store, ids, onSay }: Props) {
               ＋ {zh.dock.aprAddStroke}
             </button>
           </div>
+          <button type="button" className="apr-expand" disabled={count === 0} onClick={expand} title="把底层填充、描边与每层叠加拆成组内独立图层">
+            {zh.dock.aprExpand}
+          </button>
           <div className="apr-note">{formatText(zh.dock.aprLimit, { n: MAX_APPEARANCE })}</div>
         </>
       )}

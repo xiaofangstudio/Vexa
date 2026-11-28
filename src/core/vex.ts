@@ -154,14 +154,18 @@ export function parseVex(text: string): VexaDoc {
         delete n.pathSide;
       }
     }
-    if (n.kind === "path" && n.stroke) {
+    if ((n.kind === "path" || n.kind === "text") && n.stroke) {
       if (!Array.isArray(n.stroke.dash)) n.stroke.dash = [];
       if (typeof n.stroke.width !== "number") n.stroke.width = 1;
       if (!n.stroke.arrow) n.stroke.arrow = "none";
       if (n.stroke.cap !== "round" && n.stroke.cap !== "square") n.stroke.cap = "butt";
       if (n.stroke.join !== "round" && n.stroke.join !== "bevel") n.stroke.join = "miter";
       if (n.stroke.swatch && !swatchIds.has(n.stroke.swatch)) delete n.stroke.swatch;
-      if (n.stroke.widthPoints !== undefined) {
+      if (n.kind === "text") {
+        delete n.stroke.brushId;
+        delete n.stroke.widthPoints;
+        n.stroke.arrow = "none";
+      } else if (n.stroke.widthPoints !== undefined) {
         const points = normalizeWidthPoints(n.stroke.widthPoints);
         if (points.length >= 2) n.stroke.widthPoints = points;
         else delete n.stroke.widthPoints;

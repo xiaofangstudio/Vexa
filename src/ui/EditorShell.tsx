@@ -71,6 +71,7 @@ import PatternsPanel from "./PatternsPanel";
 import BrushesPanel from "./BrushesPanel";
 import AppearancePanel from "./AppearancePanel";
 import { expandSymbolInstance, symbolById, symbolUsage } from "../core/symbols";
+import { expandAppearance } from "../core/expandAppearance";
 import { patternById } from "../core/patterns";
 import { brushById } from "../core/brushes";
 import "./EditorShell.css";
@@ -1158,6 +1159,23 @@ export default function EditorShell(props: Props) {
     [doc, safeSelected, store, say],
   );
 
+  /** 扩展外观：把选中路径/文字的多层外观拆成组内独立图层。 */
+  const expandAppearanceSel = useCallback(() => {
+    let groups: string[] = [];
+    let layers = 0;
+    store.commit((d) => {
+      const res = expandAppearance(d, safeSelected);
+      groups = res.groups;
+      layers = res.layers;
+    });
+    if (groups.length) {
+      setSelected(groups);
+      say(`已扩展 ${groups.length} 个对象为 ${layers} 个独立图层`);
+    } else {
+      say("选中的路径或文字没有叠加外观可扩展");
+    }
+  }, [safeSelected, store, say]);
+
   /** Path Precision Tools：给每个选中闭合路径添加最大内切活圆。 */
   const addInscribedCircleSel = useCallback(() => {
     const ids = safeSelected.filter((id) => doc.nodes[id]?.kind === "path");
@@ -1503,6 +1521,10 @@ export default function EditorShell(props: Props) {
   const selNone = safeSelected.length === 0;
   const hasPaths = safeSelected.filter((id) => doc.nodes[id]?.kind === "path").length >= 2;
   const hasAnyPath = safeSelected.some((id) => doc.nodes[id]?.kind === "path");
+  const hasAppearance = safeSelected.some((id) => {
+    const n = doc.nodes[id];
+    return (n?.kind === "path" || n?.kind === "text") && (n.appearance?.length ?? 0) > 0;
+  });
   const hasGroup = safeSelected.some((id) => doc.nodes[id]?.kind === "group");
   const hasAnyText = Object.values(doc.nodes).some((n) => n.kind === "text");
 
@@ -1589,6 +1611,7 @@ export default function EditorShell(props: Props) {
         { label: "偏移路径（6px）", run: () => pathFxSel("offset"), disabled: !hasAnyPath },
         { label: "描边转轮廓", run: () => pathFxSel("outline"), disabled: !hasAnyPath },
         { label: "平滑路径", run: () => pathFxSel("smooth"), disabled: !hasAnyPath },
+        { label: "扩展外观", run: expandAppearanceSel, disabled: !hasAppearance },
         {
           label: "插件 · 路径精准工具",
           disabled: !safeSelected.some((id) => doc.nodes[id]?.kind === "path"),
@@ -2700,7 +2723,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
 
       {tab === "appearance" && (
         <div className="dock-body" key="appearance">
-          <AppearancePanel doc={doc} store={store} ids={ids} onSay={onToast} />
+          <AppearancePanel doc={doc} store={store} ids={ids} onSay={onToast} onSelect={onSelect} />
         </div>
       )}
 
@@ -3318,6 +3341,52 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       )}
                     </div>
                   )}
+                </section>
+              )}
+
+              {single.kind === "text" && (
+                <section className="dock-sec">
+                  <div className="dock-sec-head">
+                    <span>文字描边</span>
+                    <em className="faint">跟随字形轮廓</em>
+                  </div>
+                  <div className="paint-row">
+                    <label className="paint-swatch" style={{ background: single.stroke && single.stroke.kind !== "none" ? single.stroke.color : "transparent", borderStyle: single.stroke && single.stroke.kind !== "none" ? "solid" : "dashed" }}>
+                      <input
+                        type="color"
+                        value={single.stroke?.color ?? "#17171c"}
+                        onChange={(e) => { rememberColor(e.target.value); setNode((n) => { if (n.kind === "text") n.stroke = { kind: "solid", color: e.target.value, opacity: 1, width: n.stroke?.width ?? 2, dash: n.stroke?.dash ?? [], cap: "butt", join: "miter", arrow: "none" }; }); }}
+                      />
+                    </label>
+                    <NumField
+                      label={zh.dock.width}
+                      value={single.stroke?.kind === "none" ? 0 : single.stroke?.width ?? 0}
+                      min={0}
+                      onCommit={(v) => setNode((n) => {
+                        if (n.kind !== "text") return;
+                        if (v <= 0) { n.stroke = { kind: "none", color: n.stroke?.color ?? "#17171c", opacity: 1, width: 0, dash: [], cap: "butt", join: "miter", arrow: "none" }; return; }
+                        n.stroke = { kind: "solid", color: n.stroke?.color ?? "#17171c", opacity: 1, width: v, dash: n.stroke?.dash ?? [], cap: "butt", join: "miter", arrow: "none" };
+                      })}
+                      inline
+                    />
+                    <button className="btn btn-ghost btn-mini" onClick={() => setNode((n) => { if (n.kind === "text") delete n.stroke; })}>
+                      {zh.dock.none}
+                    </button>
+                  </div>
+                  <ColorSwatches
+                    value={single.stroke?.color ?? "#17171c"}
+                    swatchId={single.stroke?.swatch}
+                    swatches={swatchesOf(doc)}
+                    onPick={(color, swatchId) => setNode((n) => {
+                      if (n.kind !== "text") return;
+                      const base = n.stroke ?? { kind: "solid" as const, color, opacity: 1, width: 2, dash: [], cap: "butt" as const, join: "miter" as const, arrow: "none" as const };
+                      const sw = swatchId ? swatchById(doc, swatchId) : undefined;
+                      if (sw) { n.stroke = { ...base, kind: "solid", color, swatch: sw.id }; }
+                      else n.stroke = { ...base, kind: "solid", color, swatch: undefined };
+                    })}
+                    onManage={() => onSwatches()}
+                  />
+                  <p className="dock-note">文字描边只沿字形轮廓，不影响区域框与装饰线；叠加多层仍在“外观”页。</p>
                 </section>
               )}
 

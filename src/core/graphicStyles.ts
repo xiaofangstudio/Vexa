@@ -1,8 +1,9 @@
-/** 文档级图形样式：捕获/套用/更新填充、描边、透明度与混合模式。 */
+/** 文档级图形样式：捕获/套用/更新填充、描边、透明度、混合模式与外观栈。 */
 import type { GraphicStyle, Node, Paint, Stroke, VexaDoc } from "./types";
 import { BLEND_MODES, noStroke } from "./types";
 import { normalizeGradStops } from "./paint";
 import { normalizeWidthPoints } from "./width";
+import { cloneAppearanceItem, normalizeAppearanceList } from "./appearance";
 
 export const MAX_GRAPHIC_STYLES = 64;
 const ID_RE = /^[a-z0-9_-]{1,32}$/i;
@@ -85,7 +86,8 @@ export function normalizeGraphicStyles(input: unknown, swatchIds?: Set<string>):
     const blend = raw.blend && BLEND_MODES.includes(raw.blend) ? raw.blend : undefined;
     if (fill.swatch && (!swatchIds || !swatchIds.has(fill.swatch))) delete fill.swatch;
     if (stroke?.swatch && (!swatchIds || !swatchIds.has(stroke.swatch))) delete stroke.swatch;
-    out.push({ id, name, fill, ...(stroke ? { stroke } : {}), opacity, ...(blend ? { blend } : {}) });
+    const appearance = normalizeAppearanceList(raw.appearance);
+    out.push({ id, name, fill, ...(stroke ? { stroke } : {}), opacity, ...(blend ? { blend } : {}), ...(appearance.length ? { appearance } : {}) });
   }
   return out;
 }
@@ -93,11 +95,13 @@ export function normalizeGraphicStyles(input: unknown, swatchIds?: Set<string>):
 /** 从路径/文字捕获外观；组和位图没有可直接套用的图形样式。 */
 export function captureGraphicStyle(node: Node | undefined): Omit<GraphicStyle, "id" | "name"> | null {
   if (!node || (node.kind !== "path" && node.kind !== "text")) return null;
+  const appearance = node.appearance?.length ? node.appearance.map(cloneAppearanceItem) : undefined;
   return {
     fill: clone(node.fill),
-    ...(node.kind === "path" ? { stroke: clone(node.stroke) } : {}),
+    ...(node.stroke ? { stroke: clone(node.stroke) } : {}),
     opacity: node.opacity ?? 1,
     ...(node.blend ? { blend: node.blend } : {}),
+    ...(appearance ? { appearance } : {}),
   };
 }
 
@@ -142,14 +146,20 @@ function applyToNode(doc: VexaDoc, id: string, style: GraphicStyle): number {
     n.opacity = style.opacity;
     if (style.blend) n.blend = style.blend;
     else delete n.blend;
+    if (style.appearance?.length) n.appearance = style.appearance.map(cloneAppearanceItem);
+    else delete n.appearance;
     n.graphicStyle = style.id;
     return 1;
   }
   if (n.kind === "text") {
     n.fill = clone(style.fill);
+    if (style.stroke) n.stroke = clone(style.stroke);
+    else delete n.stroke;
     n.opacity = style.opacity;
     if (style.blend) n.blend = style.blend;
     else delete n.blend;
+    if (style.appearance?.length) n.appearance = style.appearance.map(cloneAppearanceItem);
+    else delete n.appearance;
     n.graphicStyle = style.id;
     return 1;
   }
@@ -184,6 +194,8 @@ export function updateGraphicStyle(doc: VexaDoc, styleId: string, sourceId: stri
   style.opacity = appearance.opacity;
   if (appearance.blend) style.blend = appearance.blend;
   else delete style.blend;
+  if (appearance.appearance?.length) style.appearance = appearance.appearance;
+  else delete style.appearance;
   return syncGraphicStyle(doc, styleId);
 }
 
