@@ -122,6 +122,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - 扩展外观已在第六十六批完成：`expandAppearance(doc, ids)` 把路径/文字的多层外观拆成组内独立对象，底层填充、底层描边与每项叠加按原绘制顺序排列；组承接原对象的不透明度、混合模式、图层标记、显隐与锁定，叠加项透明度/显隐落到子层；顶层对象在根数组原位换组，组内对象在原组 `children` 原位换组，多选可一次展开；入口为外观页“扩展为独立图层”与对象菜单“扩展外观”。已知边界：子层不再跟随图形样式链接；带图案画笔的底层描边仍作为一个对象保留；组与符号实例没有外观栈；已展开子层再次扩展为空操作
 - 外观混合已在第六十七批完成：`AppearanceItem.blend` 可选，外观页每层第二行下拉 16 种混合模式；画布用 `globalCompositeOperation`、SVG 输出 `mix-blend-mode`、PDF 写 `/ExtGState /BM`；`.vex` 清洗只保留合法且非 normal 的值，图形样式克隆/捕获/套用与扩展外观都携带该字段。已知边界：画布逐层混合直接作用于当前画布背景，未做组内隔离；normal 不覆盖上层组的混合继承
 - 渐变描边已在第六十八批完成：`Stroke.grad?: LinearGrad` 复用填充的线性/径向多色标模型，路径描边模式在属性坞扩为“实色/线性/径向/无”，渐变编辑器支持色标颜色、位置、透明度、中点、增删与角度；画布把描边转成 `Paint` 交给同一套渐变采样，SVG 为描边单独生成 `<linearGradient>/<radialGradient>` 并输出 `stroke="url(#…)"`，PDF 在无虚线时把描边转轮廓后用着色填充，SVG 导入/`.vex`/图形样式/扩展外观/色板联动都携带该字段。已知边界：带虚线或宽度超过 160px 的路径渐变描边在 PDF 退回首色实色；文字渐变描边在 PDF 仍退回首色实色；图案画笔内的渐变不生效；渐变描边不参与画笔印章换色
+- 描边对齐已在第六十九批完成：`Stroke.align?: "center" | "inside" | "outside"`，缺省/`center` 为路径中心且不写字段；`src/core/strokeAlign.ts` 只对闭合、无宽度点、有均匀描边的路径生成环带，原路径与内外偏移环（`offsetRingPolygon`）反向组成 `evenodd` 带；画布用 `fill("evenodd")`，SVG 输出组内两条 path 并加 `fill-rule="evenodd"`，PDF 用 `f*` 填充与 `W* n` 渐变裁剪；`.vex` 清洗非法值，图形样式捕获/套用携带 `align`。已知边界：开放路径、带宽度点、画笔路径与无描边回退中心；对齐环带是折线偏移近似，尖角/自交/极小内缩可能不完美；文字描边、组与符号实例不支持对齐；SVG 导入不识别 Illustrator 的 stroke alignment
 - 图案填充已在第六十一批完成：文档级 `PatternDef` 保存独立坐标系的节点树与砖尺寸，填充只记 `patternId/patternScale`；从选中路径/文字/组捕获（多选取并集、坐标归零），`grid` 网格与 `brick` 砖排两种排法，平铺缩放 5%–2000%；画布用离屏砖 canvas 平铺，SVG 输出 `<pattern patternUnits="userSpaceOnUse">`，PDF 输出 `/PatternType 1` 矢量平铺图案；“用选中重定义”递增 `rev` 并让全部填充同步换图；删除先把普通节点、符号定义与图形样式的引用降级为近似实色再移除定义；`.vex` 往返保留定义与引用并清理悬空 `patternId`。上限 32 个，图案内禁止嵌套图案；填充原点固定在文档 0,0，图案内旋转/斜切未支持；画布砖为 1× 位图缓存，高倍缩放清晰度有限，SVG/PDF 仍为矢量
 - 符号系统已在第六十批完成：文档级 `SymbolDef` 保存独立坐标系的定义内容，画布上的 `SymbolNode` 只存 `symbolId` 与位置/尺寸，不复制子节点；从选中路径/文字/图片/组捕获定义（多选取并集、坐标归零），置入实例可自由缩放；“用选中重定义”会换掉定义并让全部实例同步换图；展开实例生成普通组并保持层序，“断开链接”同义；删除符号先把全部实例展开为组再移除定义，画面不丢；`.vex` 往返保留定义与实例并清理悬空 `symbolId`；SVG 导出为 `<symbol>` + `<use>`，PDF 用 `cm` 矩阵递归绘制并收集符号内位图/字体。上限 64 个，符号内不允许嵌套符号；实例旋转/斜切尚未支持
 - 图形样式已在第五十九批完成：文档级 `GraphicStyle` 记录填充/描边/不透明度/混合模式，最多 64 个；可从选中路径或文字捕获、套用到单个/多个/组（组递归），对象记 `graphicStyle` 链接；“更新选中样式”用当前对象外观改写样式并同步所有链接对象；删除只解链、保留对象当前外观；`.vex` 往返保留样式与链接并清理悬空引用。第六十五批起样式携带路径/文字外观栈与文字底层描边。仍缺效果行、层级排序/显隐；手动改对象填充/描边不会自动解链，需再点“更新选中样式”覆盖链接对象
@@ -141,14 +142,15 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 ## 发布构建
 
-- 版本：`0.1.0`（第六十八批：渐变描边）
+- 版本：`0.1.0`（第六十九批：描边对齐）
 - 文件：`release\Vexa.exe`
-- 大小：`7,838,720 B`
-- SHA256：`BD1B0352B791F7A5745F7B02D9AE3CCCD215427888436D31A5B6BEE5F3EB58D8`
-- 构建时间：`2026-11-28 21:58:15`
+- 大小：`7,839,232 B`
+- SHA256：`FC6A6CF2D6742BF196856B2311F2B7FC50DFA86B5884369CBF7BC988E36D04C0`
+- 构建时间：`2026-11-28 22:19:42`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,398,637 B`，SHA256 `51308CF237A5FAAF1EC1E3F5DEDF14671A4EE558523224C070B2F1004F2EAACC`
-- 前端产物：`dist/assets/pdf-mHtUkLmf.js` 26.40 kB / gzip 9.60；`dist/assets/index-DT6w3Hmf.js` 646.90 kB / gzip 200.44；`dist/assets/index-CxG1iaRQ.js` 389.40 kB / gzip 161.95；`dist/assets/index-hpDzrDkR.css` 75.09 kB / gzip 13.56；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,398,273 B`，SHA256 `5CC2427DC067AFDDFFFCA8AF1C552E2DAC2BEA08F7D668179A8F0471F8B4DE76`
+- 前端产物：`dist/assets/pdf-Kcq9kGr-.js` 26.65 kB / gzip 9.73；`dist/assets/index-BHyN4UE6.js` 648.08 kB / gzip 202.53；`dist/assets/index-CxG1iaRQ.js` 389.40 kB / gzip 162.53；`dist/assets/index-hpDzrDkR.css` 75.09 kB / gzip 13.62
+- 描边对齐验收（第六十九批）：`npx tsc --noEmit` 通过；`npm run tauri:build` 172 modules 通过；新增 `npx tsx scripts/smoke.strokealign.mts` 21 项通过（内侧/外侧双环与偏移量、SVG 内外环带、PDF、渐变对齐 PDF、`.vex` 往返与脏值清洗、图形样式、开放路径/宽度点/无描边回退），全部 37 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口：两个 180×130 矩形、填充无、20px 描边，左红“内侧”、右蓝“外侧”；蓝色外框在路径外扩 20px、红色内框在路径内缩 20px，选择框仍贴路径；面板“对齐：居中/内侧/外侧”回显“外侧”；1600×1000 与 1200×900 下描边区、对齐行与标签均无横向溢出；最终截图 `docs/shots/stroke-align.png`。
 - 渐变描边验收（第六十八批）：`npx tsc --noEmit` 通过；`npm run tauri:build` 171 modules 通过；新增 `npx tsx scripts/smoke.gradstroke.mts` 23 项通过（描边转 Paint、SVG 导出/回读、径向定义、PDF 着色、图形样式捕获/套用、`.vex` 往返与脏数据清洗），全部 36 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口：椭圆工具拖 320×240 椭圆，填充设无、描边设线性 20px，三色标 `#ff4d6d → #ffc24b → #12c2a0`、角度 30°，画布呈红金青三色环；描边模式按钮回显“线性”，面板显示三条色标与中点行；1600×1000 与 1200×900 下面板、色标行与标签均无横向溢出；最终截图 `docs/shots/gradient-stroke.png`。
 - 外观混合验收（第六十七批）：`npx tsc --noEmit` 通过；`npm run build` 171 modules 通过；`npm run tauri:build` 通过；新增 `npx tsx scripts/smoke.apblend.mts` 18 项通过（叠加项设置/改回正常、克隆、坏值清洗、路径/文字 SVG `mix-blend-mode`、PDF `/BM /Multiply`、`.vex` 往返、扩展外观承接混合），全部 35 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口：矩形 260×180，底层蓝填充 + 6px 黑描边；外观页红填充 90% 正片叠底、金描边 8px 滤色，画布呈深蓝紫面与亮金外框；两层外观项各显示“混合”第二行，16 种模式下拉回显 `滤色 / 正片叠底`；1200×900 双行外观项无横向溢出；最终截图 `docs/shots/appearance-blend.png`。
 - 扩展外观验收（第六十六批）：`npx tsc --noEmit` 通过；`npm run build` 170 modules 通过；`npm run tauri:build` 通过；新增 `npx tsx scripts/smoke.expandappearance.mts` 39 项通过（路径/文字多填充多描边拆层、底层填充/描边/叠加层顺序、组承接不透明度/混合/标记、原位替换、多选、无叠加不展开、`.vex` 往返、再次扩展为空），全部 34 个冒烟脚本复跑通过。真实 Tauri/WebView2 1600×1000 窗口：矩形 250×170，底层蓝填充 + 6px 黑描边，外观页再加红填充与金描边 8px；点“扩展为独立图层”生成“矩形 扩展外观”组，组内自上而下为叠加 2、叠加 1、底层描边、底层填充；画布保持红面金框；1200×900 图层树与外观面板无横向溢出；该批截图已按清理惯例删除。

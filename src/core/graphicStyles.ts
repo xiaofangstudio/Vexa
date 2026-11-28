@@ -63,6 +63,7 @@ function normalizeStroke(raw: unknown): Stroke | undefined {
   const join = s.join === "round" || s.join === "bevel" ? s.join : "miter";
   const arrow = s.arrow === "triangle" || s.arrow === "open" || s.arrow === "diamond" ? s.arrow : "none";
   const stroke: Stroke = { kind: s.kind, color, opacity, width, dash, cap, join, arrow };
+  if (s.align === "inside" || s.align === "outside") stroke.align = s.align;
   if (s.grad) {
     stroke.grad = {
       angle: typeof s.grad.angle === "number" && Number.isFinite(s.grad.angle) ? s.grad.angle : 0,

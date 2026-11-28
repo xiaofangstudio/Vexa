@@ -3419,6 +3419,30 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       </button>
                     ))}
                   </div>
+                  <div className="dash-row align-row">
+                    <span className="faint">对齐</span>
+                    {(
+                      [
+                        ["center", "居中"],
+                        ["inside", "内侧"],
+                        ["outside", "外侧"],
+                      ] as const
+                    ).map(([align, label]) => (
+                      <button
+                        key={align}
+                        className={"dash-chip" + ((single.stroke.align ?? "center") === align ? " is-on" : "")}
+                        onClick={() =>
+                          setNode((n) => {
+                            if (n.kind !== "path") return;
+                            if (align === "center") delete n.stroke.align;
+                            else n.stroke = { ...n.stroke, align };
+                          })
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                   <div className="paint-row">
                     <label className="paint-swatch" style={{ background: single.stroke.kind === "none" ? "transparent" : paintPreview(strokePaint(single.stroke)), borderStyle: single.stroke.kind === "none" ? "dashed" : "solid" }}>
                       <input

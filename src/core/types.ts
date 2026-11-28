@@ -109,6 +109,8 @@ export interface Stroke {
   brushId?: string;
   /** 线性/径向描边使用；无时按 color 兜底。 */
   grad?: LinearGrad;
+  /** 闭合路径描边对齐；缺省/center 表示以路径为中心，inside/outside 贴路径内侧/外侧。 */
+  align?: "center" | "inside" | "outside";
 }
 
 /** 锚点。hIn / hOut 是绝对坐标；null 表示该侧没有手柄（直线段）。 */

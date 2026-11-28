@@ -3,6 +3,7 @@ import { flatten, nodeBox, textDecorationLines, textLayout, unionBox, type Box }
 import { brushById, brushPattern, brushStamps, calligraphyStamps } from "../core/brushes";
 import { canvasPaint, gradAxis, gradHandlePoints, paintStops, stopAlpha, stopCssColor, strokePaint, strokeSolidColor } from "../core/paint";
 import { widthHandles, widthOutline, widthPreview } from "../core/width";
+import { strokeAlignLoops } from "../core/strokeAlign";
 import { pointInArtboards } from "../core/artboards";
 import { groupBox } from "./pick";
 import { handleLayout } from "./handles";
@@ -414,7 +415,13 @@ function drawPathStroke(
   const pattern = brushPattern(doc, brush);
   const painted = { ...node, stroke };
   const strokeStyle = fillPaint(ctx, doc, strokePaint(stroke), nodeBox(node));
-  if (brush && brush.kind === "calligraphic") {
+  const alignLoops = brush ? null : strokeAlignLoops(node, stroke);
+  if (alignLoops) {
+    ctx.fillStyle = strokeStyle;
+    ctx.beginPath();
+    loopsToPath(ctx, alignLoops);
+    ctx.fill("evenodd");
+  } else if (brush && brush.kind === "calligraphic") {
     ctx.fillStyle = strokeStyle;
     for (const st of calligraphyStamps(node, brush)) {
       ctx.save();

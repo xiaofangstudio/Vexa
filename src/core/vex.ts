@@ -158,6 +158,7 @@ export function parseVex(text: string): VexaDoc {
       if (!Array.isArray(n.stroke.dash)) n.stroke.dash = [];
       if (typeof n.stroke.width !== "number") n.stroke.width = 1;
       if (!n.stroke.arrow) n.stroke.arrow = "none";
+      if (n.stroke.align !== "inside" && n.stroke.align !== "outside") delete n.stroke.align;
       if (n.stroke.kind === "linear" || n.stroke.kind === "radial") {
         n.stroke.grad = {
           angle: Number.isFinite(n.stroke.grad?.angle) ? (n.stroke.grad?.angle as number) : 0,

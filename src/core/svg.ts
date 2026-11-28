@@ -2,6 +2,7 @@
 import { pathD, parseD, textBox, textDecorationLines, textLayout, type Box } from "./geom";
 import { gradLine, normalizeGradStops, radialGeom, renderGradStops, stopAlpha, strokePaint, strokeSolidColor } from "./paint";
 import { widthOutline } from "./width";
+import { strokeAlignLoops } from "./strokeAlign";
 import { brushById, brushPattern, brushStamps, calligraphyStamps } from "./brushes";
 import {
   noPaint,
@@ -244,6 +245,11 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
         })
         .join("\n");
       return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <g opacity="${round(node.stroke.opacity)}">\n${body}\n${indent}  </g>\n${indent}</g>\n${extra}`;
+    }
+    const alignLoops = strokeAlignLoops(node);
+    if (alignLoops) {
+      const band = fillAttrs(strokePaint(node.stroke), nodeBox(node), defs, `sa${id}`, doc, seq);
+      return `${indent}<g${op}${blend}>\n${indent}  <path d="${pathD(node)}"${fill} stroke="none"/>\n${indent}  <path d="${loopsD(alignLoops)}"${band} fill-rule="evenodd"/>\n${indent}</g>\n${extra}`;
     }
     const outline = widthOutline(node);
     if (outline && outline.length) {

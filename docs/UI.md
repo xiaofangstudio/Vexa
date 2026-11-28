@@ -403,6 +403,19 @@
 - 已知边界：默认裁剪，暂未做“显示画板外内容”开关；框选尚未排除画板外不可见对象；画板名、空板提示、画板工具手柄和阴影仍画在裁剪外。
 - 截图：该批截图已按清理惯例删除（原 `clip-board.png`、`clip-select.png`、`clip-marquee.png`、`clip-window.png`）。
 
+## 验收记录（2026-11-28，第六十九批：描边对齐）
+
+- `npx tsc --noEmit` 通过；`npm run tauri:build` 通过：172 modules，`index-BHyN4UE6.js` 648.08 kB / gzip 202.53，`index-CxG1iaRQ.js` 389.40 kB / gzip 162.53，`pdf-Kcq9kGr-.js` 26.65 kB / gzip 9.73，`index-hpDzrDkR.css` 75.09 kB / gzip 13.62。
+- 入口：属性坞“描边”模式组下新增“对齐”行，三个 chip 为“居中 / 内侧 / 外侧”；切回居中即删除字段。
+- 底层：矩形工具拖 180×130，填充设“无”、描边 20px；左矩形红色 `#E5484D` 选“内侧”，右矩形蓝色 `#0F76D6` 选“外侧”。
+- 画布：红色带完整落在路径内侧，蓝色带从路径向外扩 20px，两个选择框仍贴原路径；填充保持透明。
+- 回显：选中右矩形时对齐行“外侧”高亮，描边模式仍为“实色”、宽度 20px；节点 `stroke.align=outside`。
+- 布局：1600×1000 与 1200×900 下描边区、对齐行、色板与标签均 `overflow=false`；截图自检两个对象完整落在画板内、不被右侧面板裁切、无控制台异常。
+- 测试：`scripts/smoke.strokealign.mts` 21 项 PASS（内外双环与偏移量、SVG 环带、PDF 与渐变 PDF、`.vex` 往返/清洗、图形样式、开放路径/宽度点/无描边回退）；全部 37 个冒烟脚本复跑通过。
+- 已知边界：开放路径、带宽度的描边、无描边与画笔路径回退中心；文字描边、组与符号实例不支持；折线偏移在尖角/自交/极小内缩时不完美；SVG 导入不识别 Ai 的 stroke alignment。
+- 截图：`docs/shots/stroke-align.png`。
+- 第六十八批截图已按清理惯例删除。
+
 ## 验收记录（2026-11-28，第六十八批：渐变描边）
 
 - `npx tsc --noEmit` 通过；`npm run tauri:build` 通过：171 modules，`index-DT6w3Hmf.js` 646.90 kB / gzip 200.44，`index-CxG1iaRQ.js` 389.40 kB / gzip 161.95，`pdf-mHtUkLmf.js` 26.40 kB / gzip 9.60，`index-hpDzrDkR.css` 75.09 kB / gzip 13.56。

@@ -33,7 +33,7 @@ function cleanRing(pts: Pt[]): Pt[] {
 }
 
 /** 闭合环沿法线偏移；distance 为正即向环外扩。 */
-function offsetRing(raw: Pt[], distance: number): Pt[] {
+export function offsetRingPolygon(raw: Pt[], distance: number): Pt[] {
   const pts = cleanRing(raw);
   if (pts.length < 3) return pts;
   const ccw = signedArea(pts) > 0;
@@ -86,7 +86,7 @@ export function offsetPathNode(node: PathNode, distance: number, steps = 10): Pa
   for (const sub of node.subpaths) {
     const pts = flatten(sub, steps);
     if (sub.closed) {
-      const ring = offsetRing(pts, d);
+      const ring = offsetRingPolygon(pts, d);
       if (ring.length >= 3) subpaths.push(toSub(ring, true));
     } else {
       // 开口：按顶点平均法线向一侧偏移，保持开口
@@ -121,8 +121,8 @@ export function outlineStrokeNode(node: PathNode, steps = 12): PathNode | null {
     if (pts.length < 2) continue;
     if (sub.closed) {
       if (pts.length < 3) continue;
-      const outer = offsetRing(pts, hw);
-      const inner = offsetRing(pts, -hw);
+      const outer = offsetRingPolygon(pts, hw);
+      const inner = offsetRingPolygon(pts, -hw);
       if (outer.length >= 3) subpaths.push(toSub(outer, true));
       if (inner.length >= 3) subpaths.push(toSub(reverse(inner), true));
     } else {

@@ -5,6 +5,7 @@ import { AREA_INSET, nodeBox, pathTextLayout, textBox, textDecorationLines, text
 import { gradLine, radialGeom, renderGradStops, stopAlpha, strokePaint, strokeSolidColor } from "./paint";
 import type { Artboard, GradStop, Node, Paint, PathNode, Stroke, TextNode, VexaDoc } from "./types";
 import { widthOutline } from "./width";
+import { strokeAlignLoops } from "./strokeAlign";
 import { brushById, brushPattern, brushStamps, calligraphyStamps } from "./brushes";
 
 export interface PdfExportOptions {
@@ -709,40 +710,58 @@ class PdfBuilder {
     if (stroke && stroke.kind !== "none" && stroke.width > 0) {
       const strokeAlpha = alpha * (stroke.opacity ?? 1);
       const gradient = stroke.kind === "linear" || stroke.kind === "radial";
-      const outlineNode = gradient && !node.stroke.widthPoints && !stroke.dash.length && stroke.width <= 160
-        ? { ...node, stroke: { ...stroke, widthPoints: [
-          { t: 0, left: stroke.width / 2, right: stroke.width / 2 },
-          { t: 1, left: stroke.width / 2, right: stroke.width / 2 },
-        ] } }
-        : node;
-      const outline = widthOutline(outlineNode);
-      if (outline) {
-        const rings = outline.map((loop) => loop.map((p) => [p.x, p.y] as [number, number]));
-        const ops = ringOps(rings);
+      const alignLoops = strokeAlignLoops(node, stroke);
+      if (alignLoops) {
+        const ops = ringOps(alignLoops.map((loop) => loop.map((p) => [p.x, p.y] as [number, number])));
         if (ops.length) {
           if (gradient) {
-            this.gradientFillOps(c, ops, strokePaint(stroke), nodeBox(node), strokeAlpha, blend);
+            this.gradientFillOps(c, ops, strokePaint(stroke), nodeBox(node), strokeAlpha, blend, true);
           } else {
             c.q();
             c.gs(strokeAlpha, blend);
             c.path(ops);
             const col = parseColor(stroke.color);
             c.fillColor(col.r, col.g, col.b);
-            c.op("f");
+            c.op("f*");
             c.Q();
           }
         }
       } else {
-        const ops = pathOps(node);
-        if (ops.length) {
-          c.q();
-          c.gs(strokeAlpha, blend);
-          c.strokeSettings(stroke.width, stroke.cap ?? "butt", stroke.join ?? "miter", stroke.dash);
-          c.path(ops);
-          const col = parseColor(gradient ? strokeSolidColor(stroke) : stroke.color);
-          c.strokeColor(col.r, col.g, col.b);
-          c.op("S");
-          c.Q();
+        const outlineNode = gradient && !node.stroke.widthPoints && !stroke.dash.length && stroke.width <= 160
+          ? { ...node, stroke: { ...stroke, widthPoints: [
+            { t: 0, left: stroke.width / 2, right: stroke.width / 2 },
+            { t: 1, left: stroke.width / 2, right: stroke.width / 2 },
+          ] } }
+          : node;
+        const outline = widthOutline(outlineNode);
+        if (outline) {
+          const rings = outline.map((loop) => loop.map((p) => [p.x, p.y] as [number, number]));
+          const ops = ringOps(rings);
+          if (ops.length) {
+            if (gradient) {
+              this.gradientFillOps(c, ops, strokePaint(stroke), nodeBox(node), strokeAlpha, blend);
+            } else {
+              c.q();
+              c.gs(strokeAlpha, blend);
+              c.path(ops);
+              const col = parseColor(stroke.color);
+              c.fillColor(col.r, col.g, col.b);
+              c.op("f");
+              c.Q();
+            }
+          }
+        } else {
+          const ops = pathOps(node);
+          if (ops.length) {
+            c.q();
+            c.gs(strokeAlpha, blend);
+            c.strokeSettings(stroke.width, stroke.cap ?? "butt", stroke.join ?? "miter", stroke.dash);
+            c.path(ops);
+            const col = parseColor(gradient ? strokeSolidColor(stroke) : stroke.color);
+            c.strokeColor(col.r, col.g, col.b);
+            c.op("S");
+            c.Q();
+          }
         }
       }
       if (stroke.arrow && stroke.arrow !== "none") {
@@ -760,11 +779,11 @@ class PdfBuilder {
     this.gradientFillOps(c, ops, paint, box, alpha, blend);
   }
 
-  private gradientFillOps(c: Content, ops: string[], paint: Paint, box: Box, alpha: number, blend: string): void {
+  private gradientFillOps(c: Content, ops: string[], paint: Paint, box: Box, alpha: number, blend: string, evenOdd = false): void {
     const sh = this.shadingFor(paint, box);
     c.q();
     c.path(ops);
-    c.op("W n");
+    c.op(evenOdd ? "W* n" : "W n");
     if (sh.mask !== null) c.op(`/${this.softGsName(alpha, blend, sh.mask)} gs`);
     else c.gs(alpha, blend);
     c.op(`/${sh.name} sh`);
