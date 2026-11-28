@@ -70,7 +70,9 @@ export function parseVex(text: string): VexaDoc {
       if (typeof n.hScale !== "number" || !(n.hScale > 0)) delete n.hScale;
       if (typeof n.vScale !== "number" || !(n.vScale > 0)) delete n.vScale;
       if (typeof n.baseline !== "number" || !Number.isFinite(n.baseline)) delete n.baseline;
+      if (n.textDirection !== "vertical") delete n.textDirection;
       if (n.textMode === "path" && Array.isArray(n.pathSubpaths) && n.pathSubpaths.length) {
+        delete n.textDirection;
         if (typeof n.pathStart !== "number" || !Number.isFinite(n.pathStart) || n.pathStart < 0) delete n.pathStart;
         if (n.pathSide !== "left" && n.pathSide !== "right") delete n.pathSide;
         delete n.boxW;

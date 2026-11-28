@@ -161,6 +161,23 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
         .join("\n");
       return `${indent}<g${fill}${op}${blend} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style} text-anchor="start">\n${body}\n${indent}</g>\n`;
     }
+    if (lay.vertical) {
+      const clipId = lay.mode === "area" ? `tc${seq.n++}` : "";
+      if (clipId) {
+        defs.push(
+          `<clipPath id="${clipId}"><rect x="${round(lay.box.x)}" y="${round(lay.box.y)}" width="${round(lay.box.w)}" height="${round(lay.box.h)}"/></clipPath>`,
+        );
+      }
+      const body = lay.vertical.chars
+        .filter((c) => c.ch.trim())
+        .map((c) => {
+          const t = `translate(${round(c.x)} ${round(c.y + c.advance / 2)})${c.rotate ? " rotate(90)" : ""} scale(${round(hs)} ${round(vs)})`;
+          return `${indent}  <text transform="${t}" text-anchor="middle" dominant-baseline="central" xml:space="preserve">${esc(c.ch)}</text>`;
+        })
+        .join("\n");
+      const open = clipId ? `${indent}<g clip-path="url(#${clipId})">\n${indent}<g` : `${indent}<g`;
+      return `${open}${fill}${op}${blend} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}>\n${body}\n${indent}</g>${clipId ? `\n${indent}</g>` : ""}\n`;
+    }
     if (lay.mode === "area") {
       const clipId = `tc${seq.n++}`;
       defs.push(

@@ -477,6 +477,14 @@ export default function EditorShell(props: Props) {
     (align: "left" | "center" | "right") => patchText((n) => { n.align = align; }),
     [patchText],
   );
+  const setTextDirection = useCallback(
+    (dir: "horizontal" | "vertical") => patchText((n) => {
+      if (n.textMode === "path") return;
+      if (dir === "vertical") n.textDirection = "vertical";
+      else delete n.textDirection;
+    }),
+    [patchText],
+  );
   const setTextMode = useCallback(
     (mode: "point" | "area") => patchText((n) => convertTextMode(n, mode)),
     [patchText],
@@ -565,6 +573,7 @@ export default function EditorShell(props: Props) {
       delete text.paraSpace;
       delete text.columns;
       delete text.columnGutter;
+      delete text.textDirection;
       removeNode(d, pathId);
     });
     if (!madeId) {
@@ -1583,6 +1592,9 @@ export default function EditorShell(props: Props) {
         { label: "左对齐", run: () => setTextAlign("left"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => (n.align ?? "left") === "left") },
         { label: "居中对齐", run: () => setTextAlign("center"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => n.align === "center") },
         { label: "右对齐", run: () => setTextAlign("right"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => n.align === "right") },
+        { label: "", sep: true },
+        { label: "直排文字", run: () => setTextDirection("vertical"), disabled: !textNodes.some((n) => n.textMode !== "path"), checked: textNodes.length > 0 && textNodes.every((n) => n.textDirection === "vertical") },
+        { label: "横排文字", run: () => setTextDirection("horizontal"), disabled: !textNodes.some((n) => n.textMode !== "path"), checked: textNodes.length > 0 && textNodes.every((n) => n.textDirection !== "vertical") },
         { label: "", sep: true },
         { label: "转区域文字", run: () => setTextMode("area"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => n.textMode === "area") },
         { label: "转单点文字", run: () => setTextMode("point"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => (n.textMode ?? "point") === "point") },
@@ -2686,6 +2698,22 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       title="用本机字体轮廓替换文字，转为可编辑路径（Ctrl+Shift+O）"
                     >转路径</button>
                   </div>
+                  {single.textMode !== "path" && (
+                    <div className="char-row">
+                      <span className="faint">方向</span>
+                      <button
+                        className={"char-btn" + (single.textDirection !== "vertical" ? " is-on" : "")}
+                        onClick={() => setNode((n) => { if (n.kind === "text") delete n.textDirection; })}
+                        title="横排文字"
+                      >横排</button>
+                      <button
+                        className={"char-btn" + (single.textDirection === "vertical" ? " is-on" : "")}
+                        onClick={() => setNode((n) => { if (n.kind === "text") n.textDirection = "vertical"; })}
+                        title="直排文字：逐字向下，换列向左"
+                      >直排</button>
+                      <span className="faint">{single.textDirection === "vertical" ? "逐字向下 · 列向左" : "逐行向右 · 列向下"}</span>
+                    </div>
+                  )}
                   <div className="char-row">
                     <span className="faint">字体</span>
                     <select
@@ -2771,25 +2799,29 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                           unit="px"
                           onCommit={(v) => setNode((n) => { if (n.kind === "text") n.paraSpace = Math.max(0, v); })}
                         />
-                        <NumField
-                          label="分栏"
-                          value={Math.round(single.columns ?? 1)}
-                          min={1}
-                          unit="栏"
-                          onCommit={(v) => setNode((n) => {
-                            if (n.kind !== "text") return;
-                            const c = Math.max(1, Math.min(6, Math.round(v)));
-                            if (c > 1) n.columns = c;
-                            else { delete n.columns; delete n.columnGutter; }
-                          })}
-                        />
-                        <NumField
-                          label="栏距"
-                          value={Math.round(single.columnGutter ?? 0)}
-                          min={0}
-                          unit="px"
-                          onCommit={(v) => setNode((n) => { if (n.kind === "text") n.columnGutter = Math.max(0, v); })}
-                        />
+                        {single.textDirection !== "vertical" && (
+                          <>
+                            <NumField
+                              label="分栏"
+                              value={Math.round(single.columns ?? 1)}
+                              min={1}
+                              unit="栏"
+                              onCommit={(v) => setNode((n) => {
+                                if (n.kind !== "text") return;
+                                const c = Math.max(1, Math.min(6, Math.round(v)));
+                                if (c > 1) n.columns = c;
+                                else { delete n.columns; delete n.columnGutter; }
+                              })}
+                            />
+                            <NumField
+                              label="栏距"
+                              value={Math.round(single.columnGutter ?? 0)}
+                              min={0}
+                              unit="px"
+                              onCommit={(v) => setNode((n) => { if (n.kind === "text") n.columnGutter = Math.max(0, v); })}
+                            />
+                          </>
+                        )}
                       </>
                     )}
                     {single.textMode === "path" && (
@@ -2846,18 +2878,22 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       onClick={() => setNode((n) => { if (n.kind === "text") n.italic = !n.italic; })}
                       title="斜体"
                     >I</button>
-                    <span className="char-divider" />
-                    <span className="faint">对齐</span>
-                    {(["left", "center", "right"] as const).map((a) => (
-                      <button
-                        key={a}
-                        className={"char-btn" + ((single.align ?? "left") === a ? " is-on" : "")}
-                        onClick={() => setNode((n) => { if (n.kind === "text") n.align = a; })}
-                        title={a === "left" ? "左对齐" : a === "center" ? "居中" : "右对齐"}
-                      >
-                        {a === "left" ? "左" : a === "center" ? "中" : "右"}
-                      </button>
-                    ))}
+                    {single.textDirection !== "vertical" && (
+                      <>
+                        <span className="char-divider" />
+                        <span className="faint">对齐</span>
+                        {(["left", "center", "right"] as const).map((a) => (
+                          <button
+                            key={a}
+                            className={"char-btn" + ((single.align ?? "left") === a ? " is-on" : "")}
+                            onClick={() => setNode((n) => { if (n.kind === "text") n.align = a; })}
+                            title={a === "left" ? "左对齐" : a === "center" ? "居中" : "右对齐"}
+                          >
+                            {a === "left" ? "左" : a === "center" ? "中" : "右"}
+                          </button>
+                        ))}
+                      </>
+                    )}
                   </div>
                 </section>
               )}

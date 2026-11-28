@@ -1,5 +1,5 @@
 /** 文字转路径：用本机字体文件的真实字形轮廓生成可编辑贝塞尔路径。 */
-import { dist, textLayout } from "./geom";
+import { dist, textLayout, verticalTextLayout } from "./geom";
 import { groupNodes, containerOf } from "./vectorOps";
 import { anchorAt, noStroke, type Anchor, type PathNode, type SubPath, type TextNode, type VexaDoc } from "./types";
 import type { Font, FontCollection } from "fontkit";
@@ -152,6 +152,36 @@ export function outlineText(node: TextNode, face: OutlineFace): SubPath[][] {
       const commands = (glyph.path?.commands ?? []) as Array<{ command: string; args: number[] }>;
       const subs = glyphSubpaths(commands, tx);
       if (synthBold > 0) subs.push(...glyphSubpaths(commands, tx, Math.abs(synthBold)));
+      if (subs.length) out.push(subs);
+    }
+    return out;
+  }
+
+  if (node.textDirection === "vertical") {
+    const vertical = verticalTextLayout(node);
+    for (const c of vertical.chars) {
+      if (!c.ch.trim()) continue;
+      let glyph;
+      try {
+        glyph = font.glyphForCodePoint(c.ch.codePointAt(0) ?? 0);
+      } catch {
+        glyph = font.glyphForCodePoint(0);
+      }
+      const cx = c.x;
+      const cy = c.y + c.advance / 2;
+      const tx = (x: number, y: number, shift = 0): GlyphPoint => {
+        const gx = (x * scale + y * scale * synthItalic) * hs + shift;
+        const gy = y * scale * vs;
+        if (c.rotate) {
+          const dx = -c.advance / 2 + gx;
+          const dy = node.size * 0.35 - gy;
+          return { x: cx - dy, y: cy + dx };
+        }
+        return { x: cx - c.advance / 2 + gx, y: cy + node.size * 0.35 - gy };
+      };
+      const commands = (glyph.path?.commands ?? []) as Array<{ command: string; args: number[] }>;
+      const subs = glyphSubpaths(commands, tx);
+      if (synthBold > 0) subs.push(...glyphSubpaths(commands, (x, y) => tx(x, y, Math.abs(synthBold))));
       if (subs.length) out.push(subs);
     }
     return out;

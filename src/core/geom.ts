@@ -146,6 +146,24 @@ export interface TextLayout {
   box: Box;
   overflow: boolean;
   path?: PathTextLayout;
+  vertical?: VerticalTextLayout;
+}
+
+/** 直排文字中的一个字符；y 为字格顶端，x 为列中心线。 */
+export interface VerticalTextChar {
+  ch: string;
+  x: number;
+  y: number;
+  advance: number;
+  /** 拉丁等窄字符随列旋转 90°，汉字保持正立。 */
+  rotate: boolean;
+}
+
+export interface VerticalTextLayout {
+  chars: VerticalTextChar[];
+  box: Box;
+  overflow: boolean;
+  columns: number;
 }
 
 interface PathSample {
@@ -244,7 +262,119 @@ export function pathTextLayout(node: TextNode): PathTextLayout {
   return { chars: placed, length, start, end: Math.min(pen, length), overflow };
 }
 
-/** 路径文字的包围盒：路径本身 + 每个字符的前进矩形，选择框不会漏字。 */
+/** 直排里保持正立的字符（汉字、假名、谚文、全角标点）；拉丁与数字随列旋转。 */
+export function isVerticalUpright(ch: string): boolean {
+  const c = ch.codePointAt(0) ?? 0;
+  return (
+    (c >= 0x2e80 && c <= 0x9fff) ||
+    (c >= 0xac00 && c <= 0xd7af) ||
+    (c >= 0xf900 && c <= 0xfaff) ||
+    (c >= 0xff00 && c <= 0xffef) ||
+    (c >= 0x3000 && c <= 0x303f) ||
+    (c >= 0x3040 && c <= 0x30ff)
+  );
+}
+
+/** 直排字格高度：正立字占一个字身，旋转拉丁按原字宽前进。 */
+function verticalAdvance(node: TextNode, ch: string): number {
+  const hs = Math.abs((node.hScale ?? 100) / 100) || 1;
+  const base = isVerticalUpright(ch) ? node.size : textEmWidth(ch) * node.size;
+  return Math.max(1, base * hs) + (node.tracking ?? 0);
+}
+
+/** 直排排版：逐字向下，换行/换列向左；区域文字按框高自动换列。 */
+export function verticalTextLayout(node: TextNode): VerticalTextLayout {
+  const lh = node.size * (node.lineHeight ?? 1.25);
+  const area = (node.textMode ?? "point") === "area";
+  const box: Box = area
+    ? { x: node.x, y: node.y, w: Math.max(1, node.boxW ?? 120), h: Math.max(1, node.boxH ?? 60) }
+    : { x: node.x, y: node.y, w: lh, h: node.size };
+  const chars: VerticalTextChar[] = [];
+  const paras = node.text.split("\n");
+  let overflow = false;
+
+  if (!area) {
+    let maxH = node.size;
+    const ncols = Math.max(1, paras.length);
+    paras.forEach((para, li) => {
+      const colX = node.x - li * lh;
+      let penY = node.y;
+      for (const ch of Array.from(para)) {
+        const adv = verticalAdvance(node, ch);
+        chars.push({ ch, x: colX, y: penY, advance: adv, rotate: !isVerticalUpright(ch) });
+        penY += adv;
+      }
+      maxH = Math.max(maxH, penY - node.y);
+    });
+    const b: Box = {
+      x: node.x - (ncols - 1) * lh - lh / 2,
+      y: node.y,
+      w: ncols * lh,
+      h: Math.max(node.size, maxH),
+    };
+    return { chars, box: { x: b.x, y: b.y, w: Math.max(1, b.w), h: Math.max(1, b.h) }, overflow: false, columns: ncols };
+  }
+
+  const inset = AREA_INSET;
+  const colStep = Math.max(1, lh);
+  const cols = Math.max(1, Math.floor((box.w - inset * 2) / colStep));
+  const rightX = box.x + box.w - inset - colStep / 2;
+  const topY = box.y + inset;
+  const maxBottom = box.y + box.h - inset;
+  const used: number[] = new Array(cols).fill(topY);
+  let col = 0;
+  let penY = topY;
+
+  for (let pi = 0; pi < paras.length; pi++) {
+    if (pi > 0) {
+      col++;
+      penY = topY + Math.max(0, node.paraSpace ?? 0);
+      if (col >= cols) {
+        if (Array.from(paras[pi]).length) overflow = true;
+        break;
+      }
+    }
+    const para = Array.from(paras[pi]);
+    if (!para.length) {
+      used[col] = Math.max(used[col], penY);
+      continue;
+    }
+    penY += Math.max(0, node.firstIndent ?? 0);
+    for (const ch of para) {
+      const adv = verticalAdvance(node, ch);
+      if (penY + adv > maxBottom + 0.01) {
+        col++;
+        penY = topY;
+        if (col >= cols) {
+          overflow = true;
+          break;
+        }
+      }
+      const x = rightX - col * colStep;
+      chars.push({ ch, x, y: penY, advance: adv, rotate: !isVerticalUpright(ch) });
+      penY += adv;
+      used[col] = Math.max(used[col], penY);
+    }
+    if (overflow) break;
+  }
+
+  let shift = 0;
+  if (chars.length) {
+    const last = Math.max(...used);
+    const free = maxBottom - last;
+    const v = node.areaVAlign ?? "top";
+    if (free > 0) shift = v === "middle" ? free / 2 : v === "bottom" ? free : 0;
+  }
+  if (shift) for (const c of chars) c.y += shift;
+  return {
+    chars,
+    box,
+    overflow,
+    columns: cols,
+  };
+}
+
+
 function pathTextBox(node: TextNode, path: PathTextLayout): Box {
   const pts: Pt[] = [];
   for (const sub of node.pathSubpaths ?? []) for (const p of flatten(sub, 18)) pts.push(p);
@@ -271,6 +401,9 @@ function pathTextBox(node: TextNode, path: PathTextLayout): Box {
 export function textBox(node: TextNode): Box {
   if ((node.textMode ?? "point") === "path") {
     return pathTextBox(node, pathTextLayout(node));
+  }
+  if (node.textDirection === "vertical") {
+    return verticalTextLayout(node).box;
   }
   if ((node.textMode ?? "point") === "area") {
     return {
@@ -412,6 +545,10 @@ export function textLayout(node: TextNode): TextLayout {
     const path = pathTextLayout(node);
     return { mode, lines: [], box: textBox(node), overflow: path.overflow, path };
   }
+  if (node.textDirection === "vertical") {
+    const vertical = verticalTextLayout(node);
+    return { mode, lines: [], box: vertical.box, overflow: vertical.overflow, vertical };
+  }
   const lh = node.size * (node.lineHeight ?? 1.25);
   const align = node.align ?? "left";
   const hs = Math.abs((node.hScale ?? 100) / 100) || 1;
@@ -485,6 +622,7 @@ export function convertTextMode(node: TextNode, mode: "point" | "area"): void {
     delete node.pathSubpaths;
     delete node.pathStart;
     delete node.pathSide;
+    delete node.textDirection;
     node.baseline = 0;
     if (mode === "area") {
       node.textMode = "area";

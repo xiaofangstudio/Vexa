@@ -391,37 +391,53 @@ function drawNode(
           ctx.restore();
         }
       } else {
-      ctx.save();
-      if (lay.mode === "area") {
-        ctx.beginPath();
-        ctx.rect(lay.box.x, lay.box.y, lay.box.w, lay.box.h);
-        ctx.clip();
-      }
-      lay.lines.forEach((line) => {
-        const chars = Array.from(line.text);
-        const widths = chars.map((ch) => ctx.measureText(ch).width);
         ctx.save();
-        ctx.translate(line.x, line.baseline);
-        ctx.scale(hs, vs);
-        if (tracking === 0) {
-          ctx.fillText(line.text, 0, 0);
+        if (lay.mode === "area") {
+          ctx.beginPath();
+          ctx.rect(lay.box.x, lay.box.y, lay.box.w, lay.box.h);
+          ctx.clip();
+        }
+        if (lay.vertical) {
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          for (const c of lay.vertical.chars) {
+            if (!c.ch.trim()) continue;
+            ctx.save();
+            ctx.translate(c.x, c.y + c.advance / 2);
+            if (c.rotate) ctx.rotate(Math.PI / 2);
+            ctx.scale(hs, vs);
+            ctx.fillText(c.ch, 0, 0);
+            ctx.restore();
+          }
         } else {
-          let x = 0;
-          chars.forEach((ch, k) => {
-            ctx.fillText(ch, x, 0);
-            x += widths[k] + tracking;
+          ctx.textAlign = "left";
+          ctx.textBaseline = "alphabetic";
+          lay.lines.forEach((line) => {
+            const chars = Array.from(line.text);
+            const widths = chars.map((ch) => ctx.measureText(ch).width);
+            ctx.save();
+            ctx.translate(line.x, line.baseline);
+            ctx.scale(hs, vs);
+            if (tracking === 0) {
+              ctx.fillText(line.text, 0, 0);
+            } else {
+              let x = 0;
+              chars.forEach((ch, k) => {
+                ctx.fillText(ch, x, 0);
+                x += widths[k] + tracking;
+              });
+            }
+            ctx.restore();
           });
         }
         ctx.restore();
-      });
-      ctx.restore();
-      if (lay.mode === "area" && lay.overflow) {
-        const ox = lay.box.x + lay.box.w - 11;
-        const oy = lay.box.y + lay.box.h - 11;
-        ctx.fillStyle = "#e5484d";
-        ctx.fillRect(ox - 3, oy - 0.6, 6, 1.2);
-        ctx.fillRect(ox - 0.6, oy - 3, 1.2, 6);
-      }
+        if (lay.mode === "area" && lay.overflow) {
+          const ox = lay.box.x + lay.box.w - 11;
+          const oy = lay.box.y + lay.box.h - 11;
+          ctx.fillStyle = "#e5484d";
+          ctx.fillRect(ox - 3, oy - 0.6, 6, 1.2);
+          ctx.fillRect(ox - 0.6, oy - 3, 1.2, 6);
+        }
       }
     }
   } else if (node.kind === "image") {

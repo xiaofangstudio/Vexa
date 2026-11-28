@@ -115,7 +115,7 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 - 可变宽度描边已支持宽度点、单侧加宽、余弦过渡与 SVG/`.vex` 往返；均匀描边已支持平/圆/方端帽与尖角/圆角/斜角连接，但可变宽度轮廓不跟随这些设置，仍按平头外框绘制；虚线暂不随轮廓走（有宽度点时按实线轮廓输出），箭头仍按基础线宽；宽度手柄只画在第一条子路径，复合路径各子路径共用同一 `t` 轮廓
 - 渐变支持线性/径向多色标、独立透明度、插值中点与画布轴线/色标直拖；径向渐变的圆心固定在 bbox 中心、半径固定为半对角线，画布手柄只沿右侧半径显示；尚缺网格/自由渐变、渐变描边、图案填充、符号、画笔、图形样式
 - SVG 导入已覆盖基础图形、变换、线性/径向渐变、色标透明度、`href` 继承、`fill/stroke-opacity`、`<use>` / 嵌套 use、`<clipPath>` 嵌套交集裁切、symbol viewBox/width 缩放与 `<text>` / `<tspan>` 可编辑文字；尚缺图案、滤镜、`mask`、`objectBoundingBox` 剪裁、`gradientTransform` / `spreadMethod` 的完整语义，文本旋转/斜切只映射位置与缩放、不旋转字形
-- 文字已支持单点文字 + 字符面板（字重/字形/行距/字距/对齐/横纵缩放/基线），但还没有段落文字、区域文字、沿路径排版、避头尾、文字转路径
+- 文字已支持单点/区域/路径文字、1–6 栏分栏、文字转路径与横/直排切换；直排为逐字向下、换列向左，汉字正立、拉丁随列旋转 90°，区域直排按框高自动换列，SVG/PDF/轮廓/`.vex` 同步；仍缺避头尾、悬挂缩进、OpenType 特性与更细的直排标点挤压
 - 旋转/翻转对文本与位图只做位置级变换（没有旋转属性，见 `docs/PARITY.md`）；第三十六批斜切同样只变换路径锚点与手柄，纯文字/位图不参与，组内混排文字跳过，角度限 ±80°，不生成 SVG 斜切矩阵，导出为变形后的路径坐标
 - 拖拽撤销粒度较粗（一次拖拽一步）
 - 图层树已支持组内排序、把子层拖出组、把顶层拖入组、Ctrl/Shift 多选与批量显隐/锁定，第二十八批补了名称/类型搜索、6 色标记和按标记筛选；折叠组内的子层需先展开才能拖动。颜色标记不参与导出，搜索不搜节点内文字。
@@ -130,15 +130,16 @@ node mcp/smoke.mjs                 # MCP 端到端冒烟
 
 ## 发布构建
 
-- 版本：`0.1.0`（第四十九批：区域文字分栏）
+- 版本：`0.1.0`（第五十批：直排文字）
 - 文件：`release\Vexa.exe`
-- 大小：`7,816,704 B`
-- SHA256：`DFCDC405BEA17BB5FD56D4A32E72C5574809CF8C70938C59446B41E42A724A57`
-- 构建时间：`2026-11-27 23:40:02`
+- 大小：`7,817,728 B`
+- SHA256：`92474B604DF7379571246A7CD6000FDDB228E04FC3E26B361D601DA62A028505`
+- 构建时间：`2026-11-28 08:23:50`
 - 命令：`npm run tauri:build`（内含 `tsc --noEmit && vite build`）→ 复制 `src-tauri\target\release\vexa.exe` 到 `release\Vexa.exe`
-- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,376,364 B`，SHA256 `AEC09D84F5073CF6F903292D7BFB9D3AA4B86E077D711ABCDF50FB185DA663C1`
-- 前端产物：`dist/assets/pdf-BQHMxDJd.js` 19.65 kB / gzip 7.89；`dist/assets/index-CxG1iaRQ.js` 389.40 kB / gzip 161.95；`dist/assets/index-N7ZWlOp6.js` 555.13 kB / gzip 175.59；`dist/assets/index-DApU8VOk.css` 61.88 kB / gzip 11.56；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
-- 区域文字分栏验收（第四十九批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.area-text.mts` 通过（`300×100` 两栏、栏距 10 时首栏 x=104、第二栏 x=255，行宽不超 141；跨栏拼回原文不丢字，两栏内排完 `overflow=false`，四栏仍有余字 `overflow=true`；`.vex` 往返保留 `columns/columnGutter`）。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：文字工具拖框后输入三段长文，设 22px、`520×370`、分栏 2、栏距 24、首行 24、段距 12；第一栏填满后余字流入第二栏，跨栏顺序不丢字；属性坞显示“分栏 2 / 栏距 24”，撤销回单栏、重做恢复两栏，窗口无横向溢出。全部 24 个冒烟脚本复跑通过。截图 `docs/shots/text-columns.png`。
+- 安装包：`src-tauri\target\release\bundle\nsis\Vexa_0.1.0_x64-setup.exe`，`2,377,195 B`，SHA256 `7DA94FDFDE9E363DF4D829B3B8F104EE7EF2BEEE4434A9FB388BC462A1005F25`
+- 前端产物：`dist/assets/pdf-L2iBvB9w.js` 21.12 kB / gzip 8.01；`dist/assets/index-CxG1iaRQ.js` 389.40 kB / gzip 161.95；`dist/assets/index-BuYko78a.js` 559.67 kB / gzip 176.86；`dist/assets/index-DApU8VOk.css` 61.88 kB / gzip 11.56；`dist/assets/splash-bg-DgncLeTt.jpg` 86.90 kB
+- 直排文字验收（第五十批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.vertical-text.mts` 通过（单点直排首列以锚点为中心、同列逐字向下、换列向左；拉丁 `A` 旋转、汉字正立；区域 `60×70` 自动两列并贴右内框，排完 `overflow=false`、超长文本 `overflow=true`；底对齐下移；SVG 每字 `dominant-baseline="central"` + 拉丁 `rotate(90)`；PDF `warnings 0`；`.vex` 往返保留 `textDirection=vertical`，横排不写方向；四点转轮廓得到 4 个字形）。真实 Tauri/WebView2 1600×1000 窗口：文字工具点出单点文字，输入三列样本，设 30px / 行距 40px，属性坞“方向”切“直排”；汉字逐字向下、换列向左，拉丁 `ABC` 随列旋转 90°，属性坞显示“单点 / 直排 / 逐字向下 · 列向左”，撤销回横排、重做恢复直排；窗口无横向溢出。全部 25 个冒烟脚本复跑通过。截图 `docs/shots/vertical-text.png`。
+- 区域文字分栏验收（第四十九批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.area-text.mts` 通过（`300×100` 两栏、栏距 10 时首栏 x=104、第二栏 x=255，行宽不超 141；跨栏拼回原文不丢字，两栏内排完 `overflow=false`，四栏仍有余字 `overflow=true`；`.vex` 往返保留 `columns/columnGutter`）。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：文字工具拖框后输入三段长文，设 22px、`520×340`、分栏 2、栏距 24、首行 24、段距 12；第一栏填满后余字流入第二栏，跨栏顺序不丢字；属性坞显示“分栏 2 / 栏距 24”，撤销回单栏、重做恢复两栏，窗口无横向溢出。截图 `docs/shots/text-columns.png`。
 - 路径文字验收（第四十八批）：`npx tsc --noEmit` 通过；`npm run build` 159 modules 通过；`npx tsx scripts/smoke.path-text.mts` 通过（320px 水平路径 6 字全部落点，首字 x=100；`pathStart=50` 首字 x=150；左右侧基线 y=88/112；包围盒盖住路径与字形；SVG 首字 `translate(100 88) rotate(0)`；PDF `warnings 0`；`.vex` 往返保留 `textMode/pathSubpaths/pathStart/pathSide`；路径文字转轮廓得到 6 个字形）。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：`Shift` 椭圆拖出路径后，文字菜单出现“转为路径文字”，转换后路径消失、路径文字对象出现并继承 `#0f76d6` 实色填充；`Ctrl+Z` 恢复原路径、`Ctrl+Y` 恢复路径文字；切回选择工具点击路径文字可重新选中，输入 34px 文本后逐字绕椭圆切线旋转，属性坞显示“路径”类型、“起点”与“路径侧 上/下”，改起点 10 后画面同步；窗口无横向溢出。截图 `docs/shots/path-text.png`。
 - 区域文字段落验收（第四十六批）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.area-text.mts` 通过（首行缩进 30px 时首行 x=134、第二行 x=104；段距 20px 时两段基线差 = 25+20；垂直居中首基线比顶对齐下移；`.vex` 往返保留 `areaVAlign/firstIndent/paraSpace`；SVG/PDF 通过）。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：`360×230` 区域框，输入两段文字，属性坞设首行 24px、段距 12px、垂直“中”；画布两段之间出现 12px 段距，文本块在框内垂直居中，单点/区域菜单互转与 `Ctrl+Z` 恢复通过；窗口无横向溢出。截图 `docs/shots/area-text.png`。
 - 区域文字验收（第四十五批）：`npx tsc --noEmit` 通过；`npm run build` 158 modules 通过；`npx tsx scripts/smoke.area-text.mts` 通过（180×80 框、20px 字断 5 行，行宽不越内框；框高压到 28px 检出溢出；模式互转与 `.vex` 往返保留 `textMode/boxW/boxH`）。真实 Tauri/WebView2 1600×1000 窗口 100% 视图：文字工具拖出 `360×170` 区域框，输入 34 字后自动 3 行；属性坞显示“类型 单点 [区域] 自动换行”与“框宽/框高”；文字菜单提供“转区域文字 / 转单点文字”，转单点后框字段清空，`Ctrl+Z` 恢复。该批截图已按清理惯例删除，当前合并到第四十六批截图。

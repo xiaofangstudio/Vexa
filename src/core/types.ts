@@ -179,6 +179,8 @@ export interface TextNode {
   columns?: number;
   /** 分栏之间的栏距，单位 px；仅区域文字。 */
   columnGutter?: number;
+  /** 文字方向：缺省横排；vertical 为直排（逐字向下、换列向左）。 */
+  textDirection?: "horizontal" | "vertical";
   fill: Paint;
   opacity: number;
   visible: boolean;
