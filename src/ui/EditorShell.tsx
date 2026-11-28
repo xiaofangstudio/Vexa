@@ -485,6 +485,20 @@ export default function EditorShell(props: Props) {
     }),
     [patchText],
   );
+  const toggleTextDecoration = useCallback(
+    (kind: "underline" | "strike") => patchText((n) => {
+      if (n.textMode === "path") return;
+      if (kind === "underline") {
+        if (n.underline) delete n.underline;
+        else n.underline = true;
+      } else if (n.strike) {
+        delete n.strike;
+      } else {
+        n.strike = true;
+      }
+    }),
+    [patchText],
+  );
   const setTextMode = useCallback(
     (mode: "point" | "area") => patchText((n) => convertTextMode(n, mode)),
     [patchText],
@@ -1588,6 +1602,8 @@ export default function EditorShell(props: Props) {
       items: [
         { label: "粗体", key: "Ctrl+B", run: () => toggleTextStyle("bold"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => !!n.bold) },
         { label: "斜体", key: "Ctrl+I", run: () => toggleTextStyle("italic"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => !!n.italic) },
+        { label: "下划线", run: () => toggleTextDecoration("underline"), disabled: !textNodes.some((n) => n.textMode !== "path"), checked: textNodes.length > 0 && textNodes.every((n) => !!n.underline) },
+        { label: "删除线", run: () => toggleTextDecoration("strike"), disabled: !textNodes.some((n) => n.textMode !== "path"), checked: textNodes.length > 0 && textNodes.every((n) => !!n.strike) },
         { label: "", sep: true },
         { label: "左对齐", run: () => setTextAlign("left"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => (n.align ?? "left") === "left") },
         { label: "居中对齐", run: () => setTextAlign("center"), disabled: !textNodes.length, checked: textNodes.length > 0 && textNodes.every((n) => n.align === "center") },
@@ -2231,6 +2247,18 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
       if (n) fn(n);
     });
   };
+
+  const toggleDecoration = (kind: "underline" | "strike") => setNode((n) => {
+    if (n.kind !== "text" || n.textMode === "path") return;
+    if (kind === "underline") {
+      if (n.underline) delete n.underline;
+      else n.underline = true;
+    } else if (n.strike) {
+      delete n.strike;
+    } else {
+      n.strike = true;
+    }
+  });
 
   const beginLive = () => {
     if (!liveBeforeRef.current) liveBeforeRef.current = store.snapshot();
@@ -2878,6 +2906,20 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
                       onClick={() => setNode((n) => { if (n.kind === "text") n.italic = !n.italic; })}
                       title="斜体"
                     >I</button>
+                    {single.textMode !== "path" && (
+                      <>
+                        <button
+                          className={"char-btn char-underline" + (single.underline ? " is-on" : "")}
+                          onClick={() => toggleDecoration("underline")}
+                          title="下划线"
+                        >U</button>
+                        <button
+                          className={"char-btn char-strike" + (single.strike ? " is-on" : "")}
+                          onClick={() => toggleDecoration("strike")}
+                          title="删除线"
+                        >S</button>
+                      </>
+                    )}
                     {single.textDirection !== "vertical" && (
                       <>
                         <span className="char-divider" />

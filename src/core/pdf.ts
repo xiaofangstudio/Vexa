@@ -1,7 +1,7 @@
 /** PDF 导出：纯本地、矢量优先。路径/渐变/文字轮廓/位图都写成 PDF 内容流，不联网。 */
 import { create as createFont, type Font, type FontCollection, type Glyph } from "fontkit";
 import { zlibSync } from "fflate";
-import { AREA_INSET, nodeBox, pathTextLayout, textBox, textLayout, verticalTextLayout, type Box } from "./geom";
+import { AREA_INSET, nodeBox, pathTextLayout, textBox, textDecorationLines, textLayout, verticalTextLayout, type Box } from "./geom";
 import { gradLine, radialGeom, renderGradStops, stopAlpha } from "./paint";
 import type { Artboard, GradStop, Node, Paint, PathNode, TextNode, VexaDoc } from "./types";
 import { widthOutline } from "./width";
@@ -585,6 +585,22 @@ class PdfBuilder {
       c.path(glyphs.ops);
       c.fillColor(col.r, col.g, col.b);
       c.op("f");
+      c.Q();
+    }
+    const decor = textDecorationLines(node);
+    if (decor.length) {
+      const col = parseColor(node.fill.color);
+      c.q();
+      c.gs(fillAlpha, blend);
+      for (const line of decor) {
+        const dx = line.x2 - line.x1;
+        const dy = line.y2 - line.y1;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          c.fillRect(Math.min(line.x1, line.x2), line.y1 - line.thickness / 2, Math.abs(dx), line.thickness, col.r, col.g, col.b);
+        } else {
+          c.fillRect(line.x1 - line.thickness / 2, Math.min(line.y1, line.y2), line.thickness, Math.abs(dy), col.r, col.g, col.b);
+        }
+      }
       c.Q();
     }
     if (area) c.Q();

@@ -1,5 +1,5 @@
 /** 画面渲染：粘贴板点阵、画板、矢量对象、选择框与锚点手柄。 */
-import { flatten, nodeBox, textLayout, unionBox, type Box } from "../core/geom";
+import { flatten, nodeBox, textDecorationLines, textLayout, unionBox, type Box } from "../core/geom";
 import { canvasPaint, gradAxis, gradHandlePoints, paintStops, stopAlpha, stopCssColor } from "../core/paint";
 import { widthHandles, widthOutline, widthPreview } from "../core/width";
 import { pointInArtboards } from "../core/artboards";
@@ -431,6 +431,22 @@ function drawNode(
           });
         }
         ctx.restore();
+        const decor = textDecorationLines(node, lay);
+        if (decor.length) {
+          ctx.save();
+          ctx.globalAlpha *= node.fill.opacity;
+          ctx.strokeStyle = node.fill.color;
+          ctx.lineWidth = 1;
+          ctx.lineCap = "butt";
+          for (const line of decor) {
+            ctx.lineWidth = line.thickness;
+            ctx.beginPath();
+            ctx.moveTo(line.x1, line.y1);
+            ctx.lineTo(line.x2, line.y2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
         if (lay.mode === "area" && lay.overflow) {
           const ox = lay.box.x + lay.box.w - 11;
           const oy = lay.box.y + lay.box.h - 11;

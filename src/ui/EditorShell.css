@@ -1201,6 +1201,8 @@
 
 .char-bold { font-weight: 800; }
 .char-italic { font-style: italic; font-family: Georgia, serif; }
+.char-underline { text-decoration: underline; text-underline-offset: 2px; }
+.char-strike { text-decoration: line-through; }
 
 .char-divider {
   width: 1px;

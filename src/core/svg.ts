@@ -1,5 +1,5 @@
 /** SVG 导出与 SVG → Vexa 节点解析（描摹结果走这里）。 */
-import { pathD, parseD, textBox, textLayout } from "./geom";
+import { pathD, parseD, textBox, textDecorationLines, textLayout } from "./geom";
 import { gradLine, normalizeGradStops, radialGeom, renderGradStops, stopAlpha } from "./paint";
 import { widthOutline } from "./width";
 import {
@@ -13,6 +13,7 @@ import {
   type PathNode,
   type Stroke,
   type SubPath,
+  type TextNode,
   type VexaDoc,
 } from "./types";
 
@@ -128,6 +129,18 @@ function strokeAttrs(stroke: Stroke, defs: string[], id: string): string {
   return s;
 }
 
+function textDecorationSVG(node: TextNode, lay: ReturnType<typeof textLayout>, indent: string): string {
+  if (node.fill.kind === "none") return "";
+  const lines = textDecorationLines(node, lay);
+  if (!lines.length) return "";
+  return lines
+    .map(
+      (l) =>
+        `${indent}<line x1="${round(l.x1)}" y1="${round(l.y1)}" x2="${round(l.x2)}" y2="${round(l.y2)}" stroke="${node.fill.color}" stroke-opacity="${round(node.fill.opacity)}" stroke-width="${round(l.thickness)}" stroke-linecap="butt"/>`,
+    )
+    .join("\n");
+}
+
 function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: { n: number }): string {
   if (!node.visible) return "";
   const op = node.opacity < 1 ? ` opacity="${round(node.opacity)}"` : "";
@@ -175,8 +188,9 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
           return `${indent}  <text transform="${t}" text-anchor="middle" dominant-baseline="central" xml:space="preserve">${esc(c.ch)}</text>`;
         })
         .join("\n");
+      const decor = textDecorationSVG(node, lay, `${indent}  `);
       const open = clipId ? `${indent}<g clip-path="url(#${clipId})">\n${indent}<g` : `${indent}<g`;
-      return `${open}${fill}${op}${blend} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}>\n${body}\n${indent}</g>${clipId ? `\n${indent}</g>` : ""}\n`;
+      return `${open}${fill}${op}${blend} font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}>\n${body}${decor ? `\n${decor}` : ""}\n${indent}</g>${clipId ? `\n${indent}</g>` : ""}\n`;
     }
     if (lay.mode === "area") {
       const clipId = `tc${seq.n++}`;
@@ -186,13 +200,18 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
       const body = lay.lines
         .map((l) => `${indent}  <tspan x="${round(l.x / hs)}" y="${round(l.baseline / vs)}">${esc(l.text)}</tspan>`)
         .join("\n");
-      return `${indent}<g clip-path="url(#${clipId})">\n${indent}<text transform="scale(${round(hs)} ${round(vs)})" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="start"${fill}${op}${blend}>\n${body}\n${indent}</text>\n${indent}</g>\n`;
+      const decor = textDecorationSVG(node, lay, `${indent}  `);
+      return `${indent}<g clip-path="url(#${clipId})"${op}${blend}>\n${indent}<text transform="scale(${round(hs)} ${round(vs)})" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="start"${fill}>\n${body}\n${indent}</text>${decor ? `\n${decor}` : ""}\n${indent}</g>\n`;
     }
     const body = lay.lines
       .map((l, i) => `${indent}  <tspan x="0" dy="${i === 0 ? 0 : round(node.size * (node.lineHeight ?? 1.25))}">${esc(l.text)}</tspan>`)
       .join("\n");
     const scale = hs !== 1 || vs !== 1 ? ` scale(${round(hs)} ${round(vs)})` : "";
     const anchor = node.align === "center" ? "middle" : node.align === "right" ? "end" : "start";
+    const decor = textDecorationSVG(node, lay, `${indent}  `);
+    if (decor) {
+      return `${indent}<g${op}${blend}>\n${indent}  <text transform="translate(${round(node.x)} ${round(node.y - (node.baseline ?? 0))})${scale}" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="${anchor}"${fill}>\n${body}\n${indent}  </text>\n${decor}\n${indent}</g>\n`;
+    }
     return `${indent}<text transform="translate(${round(node.x)} ${round(node.y - (node.baseline ?? 0))})${scale}" font-family="${esc(node.font)}" font-size="${round(node.size)}"${weight}${style}${tracking} text-anchor="${anchor}"${fill}${op}${blend}>\n${body}\n${indent}</text>\n`;
   }
   if (node.kind === "image") {

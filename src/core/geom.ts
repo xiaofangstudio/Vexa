@@ -936,3 +936,45 @@ export function moveNodePoints(node: Node, dx: number, dy: number): void {
     node.y += dy;
   }
 }
+
+/** 文字装饰线（画布 / SVG / PDF 共用）；路径文字暂不装饰。 */
+export interface TextDecorationLine {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  thickness: number;
+}
+
+export function textDecorationLines(node: TextNode, layout = textLayout(node)): TextDecorationLine[] {
+  if (!node.underline && !node.strike) return [];
+  if (layout.mode === "path") return [];
+  const thickness = Math.max(0.5, node.size * 0.06);
+  const out: TextDecorationLine[] = [];
+  if (layout.vertical) {
+    const hs = Math.abs((node.hScale ?? 100) / 100);
+    const cols = new Map<number, { x: number; top: number; bottom: number }>();
+    for (const c of layout.vertical.chars) {
+      if (!c.ch.trim()) continue;
+      const key = Math.round(c.x * 100) / 100;
+      const item = cols.get(key) ?? { x: c.x, top: c.y, bottom: c.y + c.advance };
+      item.top = Math.min(item.top, c.y);
+      item.bottom = Math.max(item.bottom, c.y + c.advance);
+      cols.set(key, item);
+    }
+    for (const col of cols.values()) {
+      if (node.underline) out.push({ x1: col.x + node.size * 0.45 * hs, y1: col.top, x2: col.x + node.size * 0.45 * hs, y2: col.bottom, thickness });
+      if (node.strike) out.push({ x1: col.x, y1: col.top, x2: col.x, y2: col.bottom, thickness });
+    }
+    return out;
+  }
+  const hs = Math.abs((node.hScale ?? 100) / 100);
+  const vs = Math.abs((node.vScale ?? 100) / 100);
+  for (const line of layout.lines) {
+    const width = line.width * hs;
+    if (width <= 0.01) continue;
+    if (node.underline) out.push({ x1: line.x, y1: line.baseline + node.size * 0.12 * vs, x2: line.x + width, y2: line.baseline + node.size * 0.12 * vs, thickness });
+    if (node.strike) out.push({ x1: line.x, y1: line.baseline - node.size * 0.3 * vs, x2: line.x + width, y2: line.baseline - node.size * 0.3 * vs, thickness });
+  }
+  return out;
+}
