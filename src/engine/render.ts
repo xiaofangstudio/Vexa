@@ -403,7 +403,7 @@ function drawNode(
           for (const c of lay.vertical.chars) {
             if (!c.ch.trim()) continue;
             ctx.save();
-            ctx.translate(c.x, c.y + c.advance / 2);
+            ctx.translate(c.x + (c.dx ?? 0), c.y + c.advance / 2 + (c.dy ?? 0));
             if (c.rotate) ctx.rotate(Math.PI / 2);
             ctx.scale(hs, vs);
             ctx.fillText(c.ch, 0, 0);

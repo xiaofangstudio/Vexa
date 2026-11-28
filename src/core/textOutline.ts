@@ -167,8 +167,8 @@ export function outlineText(node: TextNode, face: OutlineFace): SubPath[][] {
       } catch {
         glyph = font.glyphForCodePoint(0);
       }
-      const cx = c.x;
-      const cy = c.y + c.advance / 2;
+      const cx = c.x + (c.dx ?? 0);
+      const cy = c.y + c.advance / 2 + (c.dy ?? 0);
       const tx = (x: number, y: number, shift = 0): GlyphPoint => {
         const gx = (x * scale + y * scale * synthItalic) * hs + shift;
         const gy = y * scale * vs;

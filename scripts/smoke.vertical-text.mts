@@ -47,6 +47,17 @@ assert.equal(ll.chars[0].rotate, true, "拉丁字母随列旋转");
 assert.equal(ll.chars[1].rotate, false, "汉字保持正立");
 assert.ok(ll.chars[1].y > 100, "后一字沿列继续向下");
 
+const punct: TextNode = { ...point, text: "，。「」（）", textDirection: "vertical" };
+const ptl = verticalTextLayout(punct);
+assert.equal(ptl.chars.length, 6);
+assert.ok(Math.abs((ptl.chars[0].dx ?? 0) - 4.4) < 0.01, "逗号在字格内向右上偏");
+assert.ok(Math.abs((ptl.chars[0].dy ?? 0) + 3.6) < 0.01, "逗号上移 0.18em");
+assert.ok(Math.abs((ptl.chars[1].dx ?? 0) - 4.4) < 0.01, "句号同样右上偏");
+assert.equal(ptl.chars[2].dx ?? 0, 0, "引号保持居中");
+assert.equal(ptl.chars[2].rotate, false, "引号不旋转");
+assert.equal(ptl.chars[4].rotate, true, "左括号旋转 90°");
+assert.equal(ptl.chars[5].rotate, true, "右括号旋转 90°");
+
 const area: TextNode = {
   ...point,
   text: "区域直排文字",
@@ -97,6 +108,18 @@ assert.match(svg, /text-anchor="middle"/);
 const roundtrip = parseVex(serializeVex(doc));
 const rt = roundtrip.nodes.t1 as TextNode;
 assert.equal(rt.textDirection, "vertical");
+
+const punctDoc: VexaDoc = createDoc("竖排标点", 400, 300);
+punctDoc.nodes.t1 = { ...punct, y: 100 };
+punctDoc.root.push("t1");
+const punctSvg = docToSVG(punctDoc);
+assert.match(punctSvg, /translate\(204\.4 /, "SVG 标点按偏移落点");
+assert.match(punctSvg, /rotate\(90\)/, "SVG 括号旋转");
+const punctPdf = await exportPDF(punctDoc, {
+  fontLoader: () => new Uint8Array(fs.readFileSync("C:/Windows/Fonts/simhei.ttf")),
+});
+assert.equal(punctPdf.warnings.length, 0, "标点 PDF 不应有字体警告");
+assert.ok(punctPdf.bytes.length > 1000, `标点 PDF 应写出内容，实际 ${punctPdf.bytes.length} 字节`);
 const horizontal: TextNode = { ...saved, textDirection: "horizontal" };
 const hdoc: VexaDoc = createDoc("横排", 400, 300);
 hdoc.nodes.t1 = horizontal;

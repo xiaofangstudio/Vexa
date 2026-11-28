@@ -159,6 +159,9 @@ export interface VerticalTextChar {
   rotate: boolean;
   /** 所在列序号（从右往左 0 起），用于逐列垂直对齐。 */
   col: number;
+  /** 竖排标点的字格内偏移（px）；正值向右/向下。 */
+  dx?: number;
+  dy?: number;
 }
 
 export interface VerticalTextLayout {
@@ -277,6 +280,14 @@ export function isVerticalUpright(ch: string): boolean {
   );
 }
 
+/** 直排标点的字格内定位：逗号/句号右上移，括号旋转 90°。 */
+function verticalGlyphOffset(ch: string, size: number): { dx?: number; dy?: number; rotate?: boolean } {
+  if ("，。、".includes(ch)) return { dx: size * 0.22, dy: -size * 0.18 };
+  if ("：；".includes(ch)) return { dx: size * 0.08, dy: -size * 0.1 };
+  if ("（）()".includes(ch)) return { rotate: true };
+  return {};
+}
+
 /** 直排字格高度：正立字占一个字身，旋转拉丁按原字宽前进。 */
 function verticalAdvance(node: TextNode, ch: string): number {
   const hs = Math.abs((node.hScale ?? 100) / 100) || 1;
@@ -303,7 +314,8 @@ export function verticalTextLayout(node: TextNode): VerticalTextLayout {
       let penY = node.y;
       for (const ch of Array.from(para)) {
         const adv = verticalAdvance(node, ch);
-        chars.push({ ch, x: colX, y: penY, advance: adv, rotate: !isVerticalUpright(ch), col: li });
+        const adj = verticalGlyphOffset(ch, node.size);
+        chars.push({ ch, x: colX, y: penY, advance: adv, rotate: adj.rotate ?? !isVerticalUpright(ch), col: li, dx: adj.dx, dy: adj.dy });
         penY += adv;
       }
       maxH = Math.max(maxH, penY - node.y);
@@ -353,7 +365,8 @@ export function verticalTextLayout(node: TextNode): VerticalTextLayout {
         }
       }
       const x = rightX - col * colStep;
-      chars.push({ ch, x, y: penY, advance: adv, rotate: !isVerticalUpright(ch), col });
+      const adj = verticalGlyphOffset(ch, node.size);
+      chars.push({ ch, x, y: penY, advance: adv, rotate: adj.rotate ?? !isVerticalUpright(ch), col, dx: adj.dx, dy: adj.dy });
       penY += adv;
       used[col] = Math.max(used[col], penY);
     }

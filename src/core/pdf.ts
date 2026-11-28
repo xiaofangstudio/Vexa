@@ -842,8 +842,8 @@ function layoutVerticalText(node: TextNode, font: Font, gotBold: boolean, gotIta
     } catch {
       g = font.glyphForCodePoint(0);
     }
-    const cx = c.x;
-    const cy = c.y + c.advance / 2;
+    const cx = c.x + (c.dx ?? 0);
+    const cy = c.y + c.advance / 2 + (c.dy ?? 0);
     const emit = (offShift: number) => {
       let px = 0;
       let py = 0;

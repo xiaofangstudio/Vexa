@@ -184,7 +184,7 @@ function nodeSVG(doc: VexaDoc, node: Node, indent: string, defs: string[], seq: 
       const body = lay.vertical.chars
         .filter((c) => c.ch.trim())
         .map((c) => {
-          const t = `translate(${round(c.x)} ${round(c.y + c.advance / 2)})${c.rotate ? " rotate(90)" : ""} scale(${round(hs)} ${round(vs)})`;
+          const t = `translate(${round(c.x + (c.dx ?? 0))} ${round(c.y + c.advance / 2 + (c.dy ?? 0))})${c.rotate ? " rotate(90)" : ""} scale(${round(hs)} ${round(vs)})`;
           return `${indent}  <text transform="${t}" text-anchor="middle" dominant-baseline="central" xml:space="preserve">${esc(c.ch)}</text>`;
         })
         .join("\n");
