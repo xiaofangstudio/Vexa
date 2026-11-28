@@ -38,6 +38,16 @@ export interface Swatch {
   kind: SwatchKind;
 }
 
+/** 文档级图形样式：记录填充、描边、透明度与混合模式；套用后可继续更新链接对象。 */
+export interface GraphicStyle {
+  id: string;
+  name: string;
+  fill: Paint;
+  stroke?: Stroke;
+  opacity: number;
+  blend?: BlendMode;
+}
+
 /** 宽度点：t 为沿子路径长度的比例；left / right 是相对描边宽度的倍数。 */
 export interface WidthPoint {
   t: number;
@@ -129,6 +139,8 @@ export interface PathNode {
   subpaths: SubPath[];
   fill: Paint;
   stroke: Stroke;
+  /** 链接的图形样式 id；样式面板更新时同步外观。 */
+  graphicStyle?: string;
   opacity: number;
   visible: boolean;
   locked: boolean;
@@ -202,6 +214,8 @@ export interface TextNode {
   /** 直排标点挤压：收尾/起首标点的字格缩到 0.55em；缺省关闭。 */
   punctCompress?: boolean;
   fill: Paint;
+  /** 链接的图形样式 id；样式面板更新时同步外观。 */
+  graphicStyle?: string;
   opacity: number;
   visible: boolean;
   locked: boolean;
@@ -266,6 +280,8 @@ export interface VexaDoc {
   seq: number;
   /** 文档级色板；老工程可缺省。 */
   swatches?: Swatch[];
+  /** 文档级图形样式；老工程可缺省。 */
+  styles?: GraphicStyle[];
 }
 
 export const solid = (color: string, opacity = 1): Paint => ({ kind: "solid", color, opacity });

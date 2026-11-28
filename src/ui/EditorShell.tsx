@@ -65,6 +65,7 @@ import AboutDialog from "./AboutDialog";
 import BoardPresetDialog from "./BoardPresetDialog";
 import DocumentDialog from "./DocumentDialog";
 import SwatchesDialog from "./SwatchesDialog";
+import GraphicStylesPanel from "./GraphicStylesPanel";
 import "./EditorShell.css";
 
 const BLEND_LABELS: Record<BlendMode, string> = {
@@ -370,7 +371,7 @@ export default function EditorShell(props: Props) {
   const [vp, setVp] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View | null>(null);
   const [space, setSpace] = useState(false);
-  const [tab, setTab] = useState<"props" | "layers">("props");
+  const [tab, setTab] = useState<"props" | "layers" | "styles">("props");
   const [dockOpen, setDockOpen] = useState(true);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const [ctxShift, setCtxShift] = useState(0);
@@ -1640,9 +1641,10 @@ export default function EditorShell(props: Props) {
     {
       label: zh.menu.window,
       items: [
-        { label: "右侧属性 / 图层面板", checked: dockOpen, run: () => setDockOpen((v) => !v) },
+        { label: "右侧属性 / 图层 / 样式面板", checked: dockOpen, run: () => setDockOpen((v) => !v) },
         { label: "打开属性面板", run: () => { setTab("props"); setDockOpen(true); } },
         { label: "打开图层面板", run: () => { setTab("layers"); setDockOpen(true); } },
+        { label: "打开图形样式面板", run: () => { setTab("styles"); setDockOpen(true); } },
         { label: "文档色板…", run: () => setSwatchesOpen(true) },
         { label: "", sep: true },
         { label: "恢复默认工作区", run: () => { setTab("props"); setDockOpen(true); fit(); } },
@@ -2173,8 +2175,8 @@ export default function EditorShell(props: Props) {
 interface DockProps {
   doc: VexaDoc;
   ids: string[];
-  tab: "props" | "layers";
-  onTab: (t: "props" | "layers") => void;
+  tab: "props" | "layers" | "styles";
+  onTab: (t: "props" | "layers" | "styles") => void;
   store: ReturnType<typeof useDocStore>;
   onSelect: (ids: string[]) => void;
   onToast: (msg: string) => void;
@@ -2421,6 +2423,8 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
     return (
       <Fragment key={id}>
         <li
+          key={id}
+          data-layer-id={id}
           className={
             "layer-row"
             + (ids.includes(id) ? " is-on" : "")
@@ -2639,10 +2643,19 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
         <button className={"dock-tab" + (tab === "layers" ? " is-on" : "")} onClick={() => onTab("layers")}>
           <Icon name="layers" size={14} /> {zh.dock.layers}
         </button>
+        <button className={"dock-tab" + (tab === "styles" ? " is-on" : "")} onClick={() => onTab("styles")}>
+          <Icon name="grid" size={14} /> {zh.dock.styles}
+        </button>
         <button type="button" className="dock-collapse" title="收起右侧面板" onClick={onCollapse}>
           <Icon name="chevron" size={14} />
         </button>
       </div>
+
+      {tab === "styles" && (
+        <div className="dock-body" key="styles">
+          <GraphicStylesPanel doc={doc} store={store} ids={ids} onSay={onToast} />
+        </div>
+      )}
 
       {tab === "props" ? (
         <div className="dock-body" key="props">
@@ -3459,7 +3472,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
             <div className="info-row"><span>格式</span><span className="info-val">.vex · Vexa 0.1.0</span></div>
           </section>
         </div>
-      ) : (
+      ) : tab === "layers" ? (
         <div className="dock-body layers-body" key="layers">
           <div className="layers-head">
             <span>{zh.dock.objects}</span>
@@ -3574,7 +3587,7 @@ function Dock({ doc, ids, tab, onTab, store, onSelect, onToast, boardIndex, onBo
             </button>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { BLEND_MODES, LAYER_TAGS } from "./types";
 import { normalizeGradStops } from "./paint";
 import { normalizeWidthPoints } from "./width";
 import { normalizeSwatches } from "./swatches";
+import { normalizeGraphicStyles } from "./graphicStyles";
 
 export interface VexFile {
   format: "vexa";
@@ -39,6 +40,8 @@ export function parseVex(text: string): VexaDoc {
   doc.unit = "px";
   doc.swatches = normalizeSwatches(doc.swatches);
   const swatchIds = new Set(doc.swatches.map((s) => s.id));
+  doc.styles = normalizeGraphicStyles(doc.styles, swatchIds);
+  const styleIds = new Set(doc.styles.map((s) => s.id));
   const layerTagIds = new Set(LAYER_TAGS.map((t) => t.id));
   for (const [id, n] of Object.entries(doc.nodes as Record<string, Node>)) {
     if (!n.id) n.id = id;
@@ -47,6 +50,7 @@ export function parseVex(text: string): VexaDoc {
     if (n.opacity === undefined) n.opacity = 1;
     if (n.blend && !BLEND_MODES.includes(n.blend)) delete n.blend;
     if (n.tag !== undefined && !layerTagIds.has(n.tag)) delete n.tag;
+    if ((n.kind === "path" || n.kind === "text") && n.graphicStyle && !styleIds.has(n.graphicStyle)) delete n.graphicStyle;
     if (n.kind === "group" && n.clip && !doc.nodes[n.clip]) delete n.clip;
     if (n.kind === "path" || n.kind === "text") {
       if (!n.fill || typeof n.fill !== "object") n.fill = { kind: "none", color: "#000000", opacity: 1 };
